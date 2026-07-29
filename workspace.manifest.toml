@@ -1,0 +1,63 @@
+# ============================================================================
+# UserApp workspace 级配置（最复杂测试场景：3 前端 + 4 后端多语言）
+# ============================================================================
+# file-server POST /api/userapp/build 读 [[projects]] 遍历各子项目打包；
+# app-cli 运行时读本文件 + 各 project.manifest.toml 编排（启服务 + pingap 路由）。
+# 端口由 app-cli 按 [[projects]] 顺序自动分配 4000+i。
+
+[workspace]
+name = "userapp-workspace-template"
+
+# ── 前端（3 个）──────────────────────────────────────────────────────────────
+[[projects]]
+name = "frontend-next"
+path = "userapp-next-template"
+proxy_path = "/"                      # catch-all（/ → Next.js SSR）
+
+[[projects]]
+name = "frontend-react"
+path = "frontend-react-vite"
+proxy_path = "/react"                 # /react/* → React Vite SPA
+proxy_strip_prefix = true             # 去前缀（vite base="/react/"，strip 后 static-server 收 /assets/...）
+
+[[projects]]
+name = "frontend-vue"
+path = "frontend-vue3-vite"
+proxy_path = "/vue"                   # /vue/* → Vue3 Vite SPA
+proxy_strip_prefix = true
+
+# ── 后端（4 种语言）─────────────────────────────────────────────────────────
+[[projects]]
+name = "backend-go"
+path = "backend-go"
+proxy_path = "/api/go/"               # /api/go/* → Go HTTP API
+proxy_strip_prefix = true             # 去前缀（后端收到 /health 而非 /api/go/health）
+
+[[projects]]
+name = "backend-java"
+path = "backend-java"
+proxy_path = "/api/java/"
+proxy_strip_prefix = true
+
+[[projects]]
+name = "backend-python"
+path = "backend-python"
+proxy_path = "/api/python/"
+proxy_strip_prefix = true
+
+[[projects]]
+name = "backend-rust"
+path = "backend-rust"
+proxy_path = "/api/rust/"
+proxy_strip_prefix = true
+
+# ── 部署配置（Java create_app 用）───────────────────────────────────────────
+[deploy]
+image = "nuwax-docker-images-registry.cn-hangzhou.cr.aliyuncs.com/nuwax-k8s-test/app-runtime:latest"
+command = ["/usr/local/bin/app-cli"]
+ports = [
+  { name = "app", port = 9080, expose_type = "Http" },   # pingap 统一入口
+  { name = "pgweb", port = 8081, expose_type = "Http" },
+]
+env = { NODE_ENV = "production", POSTGRES_USER = "app", POSTGRES_PASSWORD = "app", POSTGRES_DB = "app" }
+resources = { cpu = "2", memory = "2Gi" }

@@ -1,0 +1,10 @@
+[project]
+name = "backend-go"
+type = "go"
+
+[build]
+cmd = "sh scripts/build-standalone.sh"
+artifact = "artifact.zip"
+
+[run]
+command = ["./server"]

@@ -1,0 +1,10 @@
+[project]
+name = "frontend-vue3-vite"
+type = "node"
+
+[build]
+cmd = "sh scripts/build-standalone.sh"
+artifact = "artifact.zip"
+
+[run]
+command = ["node", "static-server.cjs"]

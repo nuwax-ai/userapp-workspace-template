@@ -1,0 +1,10 @@
+[project]
+name = "backend-rust"
+type = "rust"
+
+[build]
+cmd = "sh scripts/build-standalone.sh"
+artifact = "artifact.zip"
+
+[run]
+command = ["./server"]

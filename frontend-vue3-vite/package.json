@@ -1,0 +1,65 @@
+{
+  "name": "@xagi-templates/vue3-vite",
+  "version": "1.2.2",
+  "description": "Vue 3 + Vite + TypeScript starter template for modern web apps",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:production": "NODE_ENV=production vite build",
+    "preview": "vite preview",
+    "preview:production": "NODE_ENV=production vite preview",
+    "lint": "eslint src --ext .ts,.vue --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext .ts,.vue --report-unused-disable-directives --max-warnings 0 --fix",
+    "type-check": "vue-tsc --noEmit",
+    "type-check:watch": "vue-tsc --noEmit --watch",
+    "check": "pnpm run type-check && pnpm run lint",
+    "clean": "rm -rf dist",
+    "prebuild": "pnpm run clean",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "@microsoft/fetch-event-source": "2.0.1",
+    "@vee-validate/zod": "^4.15.1",
+    "axios": "^1.6.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^0.542.0",
+    "radix-vue": "^1.9.17",
+    "tailwind-merge": "^3.3.1",
+    "vee-validate": "^4.15.1",
+    "vue": "^3.3.11",
+    "vue-router": "^4.6.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "@vitejs/plugin-vue": "^4.5.2",
+    "autoprefixer": "^10.4.21",
+    "eslint": "8",
+    "eslint-plugin-vue": "^9.30.0",
+    "postcss": "^8.5.6",
+    "prettier": "^3.0.0",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8",
+    "vue-eslint-parser": "^9.4.3",
+    "vue-tsc": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "vue",
+    "vite",
+    "typescript",
+    "template",
+    "starter"
+  ],
+  "author": "XAGI Team",
+  "license": "MIT"
+}

@@ -1,0 +1,26 @@
+# ============================================================================
+# UserApp 子项目 manifest（workspace 两级 manifest 的下层）
+# ============================================================================
+# file-server POST /api/userapp/build 遍历 workspace.manifest.toml 的 [[projects]]，
+# 对每个子项目读本文件，跑 [build].cmd → 产 [build].artifact。
+#
+# 本子项目 = canonical userapp-next-template（Next.js + Drizzle），build:standalone 原样
+# 不改：产物 userapp-next-standalone.zip（zip 根 = server.js + migrate.js + 静态资源）。
+# 详见 docs/userapp-development-design.md §4.3。
+
+[project]
+name = "userapp-next-template"
+type = "node"                       # node（初期）/ java / python / rust（后续）
+
+[build]
+# native build 命令（agent-runner/rcoder 主容器内跑）。next build + esbuild migrate。
+cmd = "npm run build:standalone"
+# 产物相对路径（cwd = 子项目目录 = workspace/{path}）。
+# zip 根直接是 server.js（无顶层目录）；file-server 组装时加 userapp-next-template/ 前缀。
+artifact = "userapp-next-standalone.zip"
+
+[run]
+# 子项目启动命令（app-cli 读它启子项目，语言无关）。node standalone：node server.js。
+command = ["node", "server.js"]
+# 可选：启动前迁移命令（Drizzle esbuild bundle，自包含）。
+migrate = ["node", "migrate.js"]

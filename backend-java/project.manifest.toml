@@ -1,0 +1,10 @@
+[project]
+name = "backend-java"
+type = "java"
+
+[build]
+cmd = "sh scripts/build-standalone.sh"
+artifact = "artifact.zip"
+
+[run]
+command = ["java", "Main"]

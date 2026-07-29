@@ -1,0 +1,10 @@
+[project]
+name = "backend-python"
+type = "python"
+
+[build]
+cmd = "sh scripts/build-standalone.sh"
+artifact = "artifact.zip"
+
+[run]
+command = ["python3", "main.py"]
