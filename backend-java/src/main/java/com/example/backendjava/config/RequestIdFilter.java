@@ -14,9 +14,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
+/** 透传/生成 X-Request-Id，并写 access 日志（避免与 Boot 自带 requestContextFilter 同名）。 */
+@Component("appRequestIdFilter")
 @Order(Ordered.HIGHEST_PRECEDENCE)
-public class RequestContextFilter extends OncePerRequestFilter {
+public class RequestIdFilter extends OncePerRequestFilter {
     public static final String REQUEST_ID_HEADER = "X-Request-Id";
     private static final Logger ACCESS = LoggerFactory.getLogger("access");
 

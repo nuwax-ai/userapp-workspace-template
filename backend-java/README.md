@@ -9,7 +9,19 @@ Spring Boot 3.5 + MyBatis-Plus 后端模板。监听 `0.0.0.0:$PORT`，连接内
 ```sh
 # 需 JDK 25+ 与可用的 Postgres（默认 localhost:5432 / app:app/app）
 export PORT=8080 POSTGRES_USER=app POSTGRES_PASSWORD=app POSTGRES_DB=app
-mvn spring-boot:run
+export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home   # Homebrew 示例
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# macOS 若开启系统代理，JDBC 连 127.0.0.1 可能失败，建议加上下面 JVM 参数
+mvn -DskipTests package && cp target/*.jar app.jar
+java -Djava.net.useSystemProxies=false -jar app.jar
+```
+
+验证：
+
+```sh
+curl -s localhost:8080/health
+curl -s -X POST localhost:8080/items -H 'Content-Type: application/json' -d '{"name":"demo"}'
 ```
 
 ## 构建产物
