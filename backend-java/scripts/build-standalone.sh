@@ -1,5 +1,6 @@
 #!/bin/sh
 set -e
-javac Main.java
-zip artifact.zip Main.class
+mvn clean package -DskipTests
+cp target/*.jar app.jar
+zip artifact.zip app.jar
 echo "✅ artifact.zip 已生成"

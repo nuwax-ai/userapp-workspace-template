@@ -7,7 +7,7 @@ cmd = "sh scripts/build-standalone.sh"
 artifact = "artifact.zip"
 
 [run]
-command = ["java", "Main"]
+command = ["java", "-jar", "app.jar"]
 
 [proxy]
 path = "/api/java/"

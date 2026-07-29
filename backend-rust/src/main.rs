@@ -1,30 +1,36 @@
-//! Rust 后端最小 API（stdlib，零外部依赖）。
-use std::io::{Read, Write};
-use std::net::TcpListener;
+mod config;
+mod db;
+mod domain;
+mod error;
+mod extract;
+mod handlers;
+mod logging;
+mod middleware;
+mod repository;
+mod routes;
+mod service;
+mod state;
 
-fn main() {
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".into());
-    let addr = format!("0.0.0.0:{port}");
-    let listener = TcpListener::bind(&addr).expect("bind");
-    eprintln!("[rust-backend] :{port}");
-    for stream in listener.incoming() {
-        let mut stream = match stream {
-            Ok(s) => s,
-            Err(_) => continue,
-        };
-        let mut buf = [0u8; 1024];
-        let _ = stream.read(&mut buf);
-        let req = String::from_utf8_lossy(&buf);
-        let body = if req.contains("GET /health ") {
-            r#"{"status":"ok","service":"rust"}"#.to_string()
-        } else {
-            format!(r#"{{"service":"rust-backend","port":{port}}}"#)
-        };
-        let _ = write!(
-            stream,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
-    }
+use state::AppState;
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let cfg = config::Config::from_env();
+
+    // WorkerGuard 必须活到进程结束，否则滚动日志缓冲可能丢数据
+    let _log_guard = logging::init(&cfg)?;
+
+    let pool = db::connect(&cfg).await?;
+    db::ensure_schema(&pool).await?;
+
+    let state = AppState::new(pool);
+    let app = routes::build_router(state, &cfg);
+
+    let addr: SocketAddr = format!("0.0.0.0:{}", cfg.port).parse()?;
+    let listener = TcpListener::bind(addr).await?;
+    tracing::info!(%addr, "listening");
+    axum::serve(listener, app).await?;
+    Ok(())
 }

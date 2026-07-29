@@ -7,8 +7,9 @@
 **/dist/
 **/.next/
 
-# Go
-**/server
+# Go / Rust 二进制产物（勿用 **/server，会误伤 cmd/server/）
+backend-go/server
+backend-rust/server
 
 # Java
 **/*.class

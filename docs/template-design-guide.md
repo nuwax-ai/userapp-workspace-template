@@ -112,7 +112,7 @@ env = { NODE_ENV = "production", POSTGRES_USER = "app", POSTGRES_PASSWORD = "app
 
 ```toml
 [project]
-name = "backend-spring"          # 可选，缺省=目录名
+name = "backend-java"            # 可选，缺省=目录名
 type = "java"                    # node / java / python / go / rust
 
 [build]
@@ -164,17 +164,34 @@ app-cli 设 `PORT` 环境变量（4000+i），**模板必须从 `PORT` 读端口
 2. **监听 `0.0.0.0:$PORT`**：不要 `127.0.0.1`（pingap 从容器内另一进程拨号）。
 3. **`scripts/build-standalone.sh`**：build + 打 zip。每个语言不同（见下）。
 4. **`project.manifest.toml`**：完整配置（[project]+[build]+[run]+[proxy]）。
-5. **PG 连接示例**：连内置 PG（`localhost:5432`，`app/app/app`），展示如何用。
-6. **示例数据接口**：至少一个 CRUD 示例（如 `/api/items` GET/POST），连 PG 做读写。
+5. **PG 连接示例**：连内置 PG（`localhost:5432`，`app/app/app`），展示如何用；**显式配置连接池**。
+6. **示例数据接口（全 CRUD + 逻辑删除）**：
+   - `GET/POST /items`，`GET/PUT/DELETE /items/{id}`
+   - 错误体 `{ "error": "..." }`；校验失败 400；不存在 404
+   - 统一示例表结构（**注意**：多语言共享同一 PG 的 `items` 表，同时跑多个 backend 会互相读写；生产请分表/分库）：
+     ```sql
+     CREATE TABLE IF NOT EXISTS items (
+       id BIGSERIAL PRIMARY KEY,
+       name TEXT NOT NULL,
+       deleted INT NOT NULL DEFAULT 0
+     );
+     ```
+   - DELETE = 逻辑删除（`deleted=1`），列表自动过滤
+   - 同时提供 `/api/items` 别名（`strip_prefix` 未生效时的兜底）
+   - 中间件对齐：`X-Request-Id` + 访问日志
+7. **分层架构**：`config` / `model` / `repository|mapper` / `service` / `handler|router|controller`；入口只做组装。
+8. **建表策略**：启动幂等 `CREATE/ALTER IF NOT EXISTS`（开箱即用）；注释标明生产可换正式迁移工具。
+9. **单文件体量**：业务/入口源文件建议 **≤150 行**；超过则按职责拆（logging、router、middleware、hooks）。专用生成物（如 Tailwind safelist）可单独成文件，不必硬塞进 config。
 
-### 4.1 Java（Spring Boot + Maven）⚠️ 当前模板不合格，需重写
+### 4.1 Java（Spring Boot + MyBatis-Plus + HikariCP）
 
 **要求**：
-- Spring Boot 3.x（Java 25 LTS）
-- Maven 构建（`pom.xml`）
-- 包含 `spring-boot-starter-web` + `spring-boot-starter-data-jpa` + PostgreSQL 驱动
-- `application.yml` 从环境变量读 DB 连接（`POSTGRES_*` / `PORT`）
-- JPA Entity + Repository + Controller 示例（如 Item CRUD）
+- Spring Boot **3.5.x**（Java 25 LTS）+ Maven（`pom.xml`）；暂不跟 Boot 4（等 MP Boot4 starter 成熟）
+- `mybatis-plus-spring-boot3-starter` **3.5.17+** + 显式 `mybatis-plus-extension` / `mybatis-plus-jsqlparser` + PostgreSQL + validation + actuator
+- `application.yml`：`PORT` / `POSTGRES_*` / `PGHOST` / `PGPORT` + **HikariCP 显式池参数** + 滚动文件日志
+- 分层：`model` / `mapper` / `service(+impl)` / `web`(Controller+DTO) / `config`
+- **Service 注入 Mapper**，不要继承已弃用方向的 `IService`/`ServiceImpl`（MP 3.5.9+ 建议业务层与通用 CRUD 基类解耦）
+- Item 全 CRUD + `@TableLogic` 逻辑删除；启动 `SchemaInitializer` 幂等建表
 - `scripts/build-standalone.sh`：
   ```sh
   mvn clean package -DskipTests
@@ -182,88 +199,46 @@ app-cli 设 `PORT` 环境变量（4000+i），**模板必须从 `PORT` 读端口
   zip artifact.zip app.jar
   ```
 - `[run].command = ["java", "-jar", "app.jar"]`
-- `[run].migrate`：Spring Boot `spring.jpa.hibernate.ddl-auto=update` 自动建表，不需额外 migrate。
 
-**pom.xml 要点**：
-```xml
-<parent>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.0</version>  <!-- 或最新 3.x -->
-</parent>
-<properties>
-    <java.version>25</java.version>
-</properties>
-<dependencies>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>org.postgresql</groupId>
-        <artifactId>postgresql</artifactId>
-    </dependency>
-</dependencies>
-```
-
-**application.yml**：
-```yaml
-server:
-  port: ${PORT:8080}
-spring:
-  datasource:
-    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${POSTGRES_DB:app}
-    username: ${POSTGRES_USER:app}
-    password: ${POSTGRES_PASSWORD:app}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-```
-
-### 4.2 Go（标准 HTTP 服务 + modules）
+### 4.2 Go（Gin + GORM）
 
 **要求**：
-- `go.mod`（module + go 1.21+）
-- 标准库 `net/http` 或轻量框架（Gin / Echo 任选，标准库最简）
-- 连 PG 示例（`database/sql` + `lib/pq` 或 `pgx`）
-- `/health` + CRUD 示例（如 items）
+- `go.mod`（与镜像 Go 版本对齐）；**Gin** + **GORM** + `gorm.io/driver/postgres`
+- 分层：`cmd/server` + `internal/{config,db,model,repository,service,handler,middleware,logging}`
+- 中间件：`X-Request-Id`、访问日志、Recover；`slog` + lumberjack 日滚日志
+- `/health` + items 全 CRUD（逻辑删除）；显式 sql.DB 连接池参数
 - `scripts/build-standalone.sh`：
   ```sh
-  go build -o server .
+  go build -o server ./cmd/server
   zip artifact.zip server
   ```
 - `[run].command = ["./server"]`
 
-### 4.3 Python（FastAPI + uv）
+### 4.3 Python（FastAPI + SQLAlchemy 2 async）
 
 **要求**：
-- FastAPI + uvicorn（或 Flask，FastAPI 更现代）
-- `requirements.txt`（fastapi, uvicorn, asyncpg 或 psycopg2-binary, pydantic）
-- `main.py`：FastAPI app + `/health` + CRUD 示例
-- 连 PG（asyncpg 异步 或 psycopg2 同步）
+- FastAPI + uvicorn + **SQLAlchemy 2.0 asyncio** + asyncpg + pydantic-settings（钉死较新稳定版）
+- 包结构：`main.py`（薄入口）+ `app/{config,db,models,schemas,repositories,services,routers,middleware}`
+- lifespan 管理 engine + 日滚文件日志；`X-Request-Id` 中间件
+- `/health` + items 全 CRUD（逻辑删除）
 - `scripts/build-standalone.sh`：
   ```sh
   pip install -t deps/ -r requirements.txt
-  zip -r artifact.zip main.py deps/
+  zip -r artifact.zip main.py app/ deps/
   ```
-  运行时 `PYTHONPATH=deps python3 main.py`（或 zip 里放 deps/ + 改 [run] 加 PYTHONPATH）
-- `[run].command = ["python3", "main.py"]`（main.py 内部 `uvicorn.run(app, host="0.0.0.0", port=PORT)`）
+- `[run].command = ["python3", "main.py"]`（内部 `uvicorn.run(..., host="0.0.0.0", port=PORT)`；`sys.path` 注入 `deps/`）
 
-### 4.4 Rust（Axum + tokio）
+### 4.4 Rust（Axum + sqlx）
 
 **要求**：
-- `Cargo.toml`（axum, tokio, sqlx 或 tokio-postgres）
-- `src/main.rs`：Axum router + `/health` + CRUD 示例
-- 连 PG（sqlx 或 tokio-postgres）
+- `Cargo.toml`：axum 0.8 + tokio + sqlx(postgres) + serde + tracing + tower-http 0.7
+- 分层：`config` / `db` / `domain` / `repository` / `service` / `handlers` / `routes` / `middleware` / `logging`；`AppState` 持有 `ItemService`
+- 中间件：Request-Id、Trace、Timeout、Compression；`tracing-appender` 日滚日志
+- `/health` + items 全 CRUD（逻辑删除）；`PgPoolOptions` 显式池参数；路径参数用 `{id}`（Axum 0.8）
 - `scripts/build-standalone.sh`：
   ```sh
   cargo build --release
-  cp target/release/<binary_name> server
+  cp target/release/server .
   zip artifact.zip server
   ```
 - `[run].command = ["./server"]`
@@ -272,7 +247,7 @@ spring:
 ### 4.5 Node.js 前端（Vite SPA）
 
 **要求**：
-- Vite + React/Vue/Svelte
+- Vite + React/Vue
 - `vite.config.ts` 设 `base: '/<route>/'`（对应 [proxy].path）
 - `static-server.cjs`（10 行 Node 内置 http 静态服务器 + SPA fallback）
 - `scripts/build-standalone.sh`：
@@ -304,7 +279,7 @@ spring:
 |---|---|---|---|
 | 全栈 catch-all | `/` | false | 兜底（Next.js 全栈，其余未匹配的都到它） |
 | 前端子应用 | `/react`, `/vue` | true | Vite SPA 子路径（vite base 对应） |
-| 后端 API | `/api/go/`, `/api/java/` | true | 去 `/api/xxx/` 前缀，后端收到 `/health` |
+| 后端 API | `/api/go/` `/api/java/` `/api/python/` `/api/rust/` | true | 去前缀，后端收到 `/health`、`/items` |
 
 ### 5.2 pingap 默认插件（零配置，每个 location 自动带）
 
@@ -343,7 +318,9 @@ backend-xxx/
 - [ ] `[run].command` 启动后监听 `0.0.0.0:$PORT`
 - [ ] `/health` 返回 200 JSON
 - [ ] 能连 PG（`localhost:5432`, `app/app/app`）
-- [ ] 有至少一个 CRUD 示例接口
+- [ ] 有至少一个 CRUD 示例接口（GET/POST/PUT/DELETE `/items`，逻辑删除）
+- [ ] 分层目录齐全（config / model / repo|mapper / service / handler|router）
+- [ ] 连接池参数显式配置（可用 env 覆盖）
 - [ ] `bash -n scripts/build-standalone.sh` 语法通过
 - [ ] 删掉 `artifact.zip` + 构建产物后 `.gitignore` 生效
 

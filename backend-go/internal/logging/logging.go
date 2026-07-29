@@ -1,0 +1,41 @@
+package logging
+
+import (
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+// Setup 初始化 slog：stdout + 按大小滚动文件。
+// LOG_DIR 默认 logs，LOG_FILE 默认 backend-go.log。
+func Setup() (*slog.Logger, error) {
+	dir := getenv("LOG_DIR", "logs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	fileName := getenv("LOG_FILE", "backend-go.log")
+
+	roller := &lumberjack.Logger{
+		Filename:   filepath.Join(dir, fileName),
+		MaxSize:    50, // MB
+		MaxBackups: 14,
+		MaxAge:     14, // days
+		Compress:   true,
+	}
+
+	w := io.MultiWriter(os.Stdout, roller)
+	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New(handler)
+	slog.SetDefault(logger)
+	return logger, nil
+}
+
+func getenv(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}

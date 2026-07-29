@@ -1,0 +1,9 @@
+artifact.zip
+app.jar
+
+/target/
+/*.class
+
+# Logs
+/logs/
+
