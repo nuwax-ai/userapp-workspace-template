@@ -8,3 +8,7 @@ artifact = "artifact.zip"
 
 [run]
 command = ["java", "Main"]
+
+[proxy]
+path = "/api/java/"
+strip_prefix = true

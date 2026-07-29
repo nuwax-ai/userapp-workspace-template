@@ -8,3 +8,7 @@ artifact = "artifact.zip"
 
 [run]
 command = ["python3", "main.py"]
+
+[proxy]
+path = "/api/python/"
+strip_prefix = true

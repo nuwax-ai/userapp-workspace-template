@@ -8,3 +8,7 @@ artifact = "artifact.zip"
 
 [run]
 command = ["node", "static-server.cjs"]
+
+[proxy]
+path = "/react"
+strip_prefix = true

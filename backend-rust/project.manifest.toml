@@ -8,3 +8,7 @@ artifact = "artifact.zip"
 
 [run]
 command = ["./server"]
+
+[proxy]
+path = "/api/rust/"
+strip_prefix = true

@@ -24,3 +24,6 @@ artifact = "userapp-next-standalone.zip"
 command = ["node", "server.js"]
 # 可选：启动前迁移命令（Drizzle esbuild bundle，自包含）。
 migrate = ["node", "migrate.js"]
+
+[proxy]
+path = "/"
