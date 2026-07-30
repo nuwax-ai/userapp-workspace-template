@@ -7,13 +7,15 @@ Axum + sqlx 后端模板。分层：`domain → repository → service → handl
 ```sh
 cargo build --release
 export PORT=8080 POSTGRES_USER=app POSTGRES_PASSWORD=app POSTGRES_DB=app
-export LOG_LEVEL=info LOG_DIR=logs
+export LOG_LEVEL=info APP_LOG_DIR=logs      # 平台注入 APP_LOG_DIR；LOG_DIR 为本地兜底
 ./target/release/server
 ```
 
 日志：
 - stdout：可读文本
-- `logs/backend-rust.YYYY-MM-DD.log`：JSON，按天轮转
+- `$APP_LOG_DIR/backend-rust.log.YYYY-MM-DD`：JSON，按天轮转（启动时清理 14 天前的滚动文件）
+
+OpenAPI：`/api-docs/openapi.json`（Swagger UI 见 `/docs`）
 
 ## 构建产物
 

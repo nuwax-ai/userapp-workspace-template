@@ -12,7 +12,7 @@ import (
 // Setup 初始化 slog：stdout + 按大小滚动文件。
 // LOG_DIR 默认 logs，LOG_FILE 默认 backend-go.log。
 func Setup() (*slog.Logger, error) {
-	dir := getenv("LOG_DIR", "logs")
+	dir := getenv("APP_LOG_DIR", getenv("LOG_DIR", "logs"))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}

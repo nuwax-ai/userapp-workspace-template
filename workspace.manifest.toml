@@ -1,21 +1,8 @@
-# ============================================================================
-# UserApp workspace 级配置（最复杂测试场景：3 前端 + 4 后端多语言）
-# ============================================================================
-# 项目列表由自动发现得出：workspace 根下含 project.manifest.toml 的一级子目录即为项目。
-# 增删项目 = 增删目录（含 project.manifest.toml），无需改本文件。
-# 端口由 app-cli 按目录名字母序自动分配 4000+i。
+schema_version = 1
 
 [workspace]
 name = "userapp-workspace-template"
+description = "Multi-language UserApp workspace example"
 
-# ── 部署配置（Java create_app 用）───────────────────────────────────────────
-# 以下字段由平台自动填充或使用默认值，用户通常不需要改：
-# - image：平台按环境选择（test/prod 命名空间）
-# - resources：平台按配额分配（CPU/内存）
-# - command/ports：固定值（app-cli + 9080 + pgweb 8081）
-[deploy]
-ports = [
-  { name = "app", port = 9080, expose_type = "Http" },
-  { name = "pgweb", port = 8081, expose_type = "Http" },
-]
-env = { NODE_ENV = "production", POSTGRES_USER = "app", POSTGRES_PASSWORD = "app", POSTGRES_DB = "app" }
+[pingap]
+mode = "managed"

@@ -32,6 +32,12 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
+    <!-- DB 健康指标：readiness group 的 db 指标依赖 JdbcTemplate（spring-jdbc）。
+         显式声明，避免依赖 MyBatis-Plus 的传递是否带 spring-jdbc。 -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
     <!-- MyBatis-Plus（国内主流 ORM 增强库）+ 内置 HikariCP 数据源 -->
     <dependency>
       <groupId>com.baomidou</groupId>
@@ -54,6 +60,11 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 

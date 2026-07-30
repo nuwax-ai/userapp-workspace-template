@@ -17,7 +17,12 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("config load failed", "err", err)
+		os.Exit(1)
+	}
+
 	if _, err := logging.Setup(); err != nil {
 		slog.Error("logging setup failed", "err", err)
 		os.Exit(1)
@@ -36,7 +41,14 @@ func main() {
 	itemRepo := repository.NewItemRepository(gdb)
 	itemSvc := service.NewItemService(itemRepo)
 	itemH := handler.NewItemHandler(itemSvc)
-	healthH := handler.NewHealthHandler()
+
+	// readiness 探针用裸 *sql.DB 做 SELECT 1，不依赖 gorm。
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		slog.Error("get sql.DB failed", "err", err)
+		os.Exit(1)
+	}
+	healthH := handler.NewHealthHandler(sqlDB)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()

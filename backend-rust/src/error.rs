@@ -8,6 +8,8 @@ pub enum AppError {
     BadRequest(String),
     NotFound(String),
     Internal(String),
+    /// 服务暂不可用（如 readiness 探针发现依赖不可用）。映射 503。
+    ServiceUnavailable(String),
 }
 
 #[derive(Serialize)]
@@ -21,10 +23,12 @@ impl IntoResponse for AppError {
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m.clone()),
+            AppError::ServiceUnavailable(m) => (StatusCode::SERVICE_UNAVAILABLE, m.clone()),
         };
 
         match &self {
             AppError::Internal(m) => tracing::error!(error = %m, "internal error"),
+            AppError::ServiceUnavailable(m) => tracing::warn!(error = %m, "service unavailable"),
             AppError::BadRequest(m) => tracing::warn!(error = %m, "bad request"),
             AppError::NotFound(m) => tracing::debug!(error = %m, "not found"),
         }

@@ -1,14 +1,35 @@
+schema_version = 1
+
 [project]
-name = "backend-python"
+service_id = "backend-python"
+name = "Python Backend"
 type = "python"
+kind = "web"
+enabled = true
 
 [build]
-cmd = "sh scripts/build-standalone.sh"
+command = ["sh", "scripts/build-standalone.sh"]
 artifact = "artifact.zip"
 
 [run]
 command = ["python3", "main.py"]
+migrate = []
+depends_on = []
+shutdown_timeout_seconds = 30
+
+[health]
+startup_path = "/health"
+readiness_path = "/ready"
+liveness_path = "/health"
 
 [proxy]
 path = "/api/python/"
 strip_prefix = true
+plugins = []
+upstream_includes = []
+
+[[logs.sources]]
+id = "application"
+glob = "backend-python.log*"
+format = "text"
+multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"

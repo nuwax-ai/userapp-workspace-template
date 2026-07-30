@@ -23,27 +23,27 @@ public class ItemController {
         this.itemService = itemService;
     }
 
-    @GetMapping({"/items", "/api/items"})
+    @GetMapping("/items")
     public List<Item> listItems() {
         return itemService.listActive();
     }
 
-    @PostMapping({"/items", "/api/items"})
+    @PostMapping("/items")
     public Item createItem(@Valid @RequestBody ItemCreateRequest body) {
         return itemService.create(body.getName());
     }
 
-    @GetMapping({"/items/{id}", "/api/items/{id}"})
+    @GetMapping("/items/{id}")
     public Item getItem(@PathVariable Long id) {
         return itemService.requireById(id);
     }
 
-    @PutMapping({"/items/{id}", "/api/items/{id}"})
+    @PutMapping("/items/{id}")
     public Item updateItem(@PathVariable Long id, @Valid @RequestBody ItemUpdateRequest body) {
         return itemService.update(id, body.getName());
     }
 
-    @DeleteMapping({"/items/{id}", "/api/items/{id}"})
+    @DeleteMapping("/items/{id}")
     public Map<String, Object> deleteItem(@PathVariable Long id) {
         itemService.softDelete(id);
         return Map.of("deleted", true, "id", id);

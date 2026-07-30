@@ -39,7 +39,16 @@ management:
         include: health,info
   endpoint:
     health:
+      # 显式启用 liveness/readiness 探针组：否则非 K8s 环境下
+      # /actuator/health/readiness 与 /liveness 不注册（404），平台永远判不了健康。
+      probes:
+        enabled: true
       show-details: when_authorized
+      group:
+        # readiness 覆盖必需依赖（数据库）：DB 异常时 readiness 降级，摘除流量。
+        # liveness 维持只含 livenessState，避免 DB 抖动触发 pod 重启风暴。
+        readiness:
+          include: readinessState, db
 
 logging:
   level:
@@ -47,11 +56,13 @@ logging:
     com.example.backendjava: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{36} - %msg%n"
+    # 文件日志复用 console pattern，确保落盘行带 traceId（平台采集的是文件）。
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{36} - %msg%n"
   file:
-    name: ${LOG_FILE:logs/backend-java.log}
+    name: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java.log}
   logback:
     rollingpolicy:
-      file-name-pattern: ${LOG_FILE:logs/backend-java}.%d{yyyy-MM-dd}.%i.gz
+      file-name-pattern: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java}.%d{yyyy-MM-dd}.%i.gz
       max-file-size: 50MB
       max-history: 14
       total-size-cap: 1GB

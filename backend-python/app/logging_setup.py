@@ -5,7 +5,7 @@ from logging.handlers import TimedRotatingFileHandler
 
 def setup_logging() -> None:
     level = os.environ.get("LOG_LEVEL", "INFO").upper()
-    log_dir = os.environ.get("LOG_DIR", "logs")
+    log_dir = os.environ.get("APP_LOG_DIR", os.environ.get("LOG_DIR", "logs"))
     os.makedirs(log_dir, exist_ok=True)
 
     root = logging.getLogger()

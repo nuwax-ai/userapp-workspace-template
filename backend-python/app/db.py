@@ -24,7 +24,8 @@ def init_engine(settings: Settings) -> None:
 
 async def ensure_schema() -> None:
     """启动幂等建表。生产可改为 Alembic。"""
-    assert engine is not None
+    if engine is None:
+        raise RuntimeError("engine not initialized; call init_engine() first")
     async with engine.begin() as conn:
         await conn.execute(
             text(
@@ -43,7 +44,8 @@ async def ensure_schema() -> None:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    assert SessionLocal is not None
+    if SessionLocal is None:
+        raise RuntimeError("SessionLocal not initialized; call init_engine() first")
     async with SessionLocal() as session:
         yield session
 

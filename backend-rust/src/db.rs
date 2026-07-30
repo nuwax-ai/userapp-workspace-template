@@ -1,4 +1,5 @@
 use crate::config::Config;
+use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
 
@@ -10,7 +11,8 @@ pub async fn connect(cfg: &Config) -> anyhow::Result<PgPool> {
         .idle_timeout(cfg.idle_timeout)
         .max_lifetime(cfg.max_lifetime)
         .connect(&cfg.database_url)
-        .await?;
+        .await
+        .context("connect to postgres")?;
     tracing::info!(
         max_connections = cfg.max_connections,
         "postgres pool ready"
@@ -28,10 +30,8 @@ pub async fn ensure_schema(pool: &PgPool) -> anyhow::Result<()> {
         )"#,
     )
     .execute(pool)
-    .await?;
-    sqlx::query("ALTER TABLE items ADD COLUMN IF NOT EXISTS deleted INT NOT NULL DEFAULT 0")
-        .execute(pool)
-        .await?;
+    .await
+    .context("create items table")?;
     tracing::info!("schema ready: items");
     Ok(())
 }

@@ -27,7 +27,7 @@ type itemBody struct {
 func (h *ItemHandler) List(c *gin.Context) {
 	items, err := h.svc.List()
 	if err != nil {
-		WriteError(c, http.StatusInternalServerError, "db query failed")
+		serverError(c, "db query failed", err)
 		return
 	}
 	if items == nil {
@@ -48,10 +48,10 @@ func (h *ItemHandler) Create(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		WriteError(c, http.StatusInternalServerError, "db insert failed")
+		serverError(c, "db insert failed", err)
 		return
 	}
-	c.JSON(http.StatusOK, item)
+	c.JSON(http.StatusCreated, item)
 }
 
 func (h *ItemHandler) Get(c *gin.Context) {
@@ -65,7 +65,7 @@ func (h *ItemHandler) Get(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		WriteError(c, http.StatusInternalServerError, "db query failed")
+		serverError(c, "db query failed", err)
 		return
 	}
 	c.JSON(http.StatusOK, item)
@@ -91,7 +91,7 @@ func (h *ItemHandler) Update(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		WriteError(c, http.StatusInternalServerError, "db update failed")
+		serverError(c, "db update failed", err)
 		return
 	}
 	c.JSON(http.StatusOK, item)
@@ -108,7 +108,7 @@ func (h *ItemHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		WriteError(c, http.StatusInternalServerError, "db delete failed")
+		serverError(c, "db delete failed", err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "id": id})

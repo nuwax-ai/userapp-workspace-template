@@ -1,14 +1,34 @@
+schema_version = 1
+
 [project]
-name = "backend-go"
+service_id = "backend-go"
+name = "Go Backend"
 type = "go"
+kind = "web"
+enabled = true
 
 [build]
-cmd = "sh scripts/build-standalone.sh"
+command = ["sh", "scripts/build-standalone.sh"]
 artifact = "artifact.zip"
 
 [run]
 command = ["./server"]
+migrate = []
+depends_on = []
+shutdown_timeout_seconds = 30
+
+[health]
+startup_path = "/health"
+readiness_path = "/ready"
+liveness_path = "/health"
 
 [proxy]
 path = "/api/go/"
 strip_prefix = true
+plugins = []
+upstream_includes = []
+
+[[logs.sources]]
+id = "application"
+glob = "backend-go*.log*"
+format = "jsonl"

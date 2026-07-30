@@ -11,5 +11,5 @@ import uvicorn  # noqa: E402
 
 if __name__ == "__main__":
     settings = get_settings()
-    print(f"[python] :{settings.port}")
+    print(f"[python] :{settings.port}", file=sys.stderr)
     uvicorn.run(app, host="0.0.0.0", port=settings.port)
