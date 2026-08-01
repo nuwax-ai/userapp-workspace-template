@@ -6,3 +6,17 @@ description = "Multi-language UserApp workspace example"
 
 [pingap]
 mode = "managed"
+
+# workspace 级健康策略(可选,默认不配 = app-cli 自给自足)。
+#
+# 默认(不写 [health] 段):app-runtime 容器的 /health(liveness)+ /ready(readiness)
+#   由 app-cli 自身提供,不强依赖任何后端 app —— 后端有 bug 起不来时容器仍 Ready、
+#   用户可进容器排查。静态前端 / 无后端 app 也无需实现 /ready。
+#
+# 显式桥接(多后端挑一个):取消注释,填 service_id,app-cli 把 /ready 代理到该后端的
+#   project.manifest.toml [health].readiness_path 深检查;后端不 ready 摘流(NotReady),
+#   但 liveness /health 仍 200(容器不重启,可排查)。
+#
+# [health]
+# bridge_service = "backend-go"   # 填某个 project 的 service_id
+
