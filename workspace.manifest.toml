@@ -2,21 +2,14 @@ schema_version = 1
 
 [workspace]
 name = "userapp-workspace-template"
-description = "Multi-language UserApp workspace example"
+description = "多语言 UserApp workspace 示例"
 
-[pingap]
-mode = "managed"
-
-# workspace 级健康策略(可选,默认不配 = app-cli 自给自足)。
+# [pingap] 默认即为 managed（平台按各 web 服务的 [proxy] 自动生成路由），无需声明。
+# 需要切 extend/custom 反代模式、或把 /ready 桥接到某后端时，再按需打开下面的段：
 #
-# 默认(不写 [health] 段):app-runtime 容器的 /health(liveness)+ /ready(readiness)
-#   由 app-cli 自身提供,不强依赖任何后端 app —— 后端有 bug 起不来时容器仍 Ready、
-#   用户可进容器排查。静态前端 / 无后端 app 也无需实现 /ready。
-#
-# 显式桥接(多后端挑一个):取消注释,填 service_id,app-cli 把 /ready 代理到该后端的
-#   project.manifest.toml [health].readiness_path 深检查;后端不 ready 摘流(NotReady),
-#   但 liveness /health 仍 200(容器不重启,可排查)。
+# [pingap]
+# mode = "managed"              # managed / extend / custom
+# config = "pingap/"            # 仅 extend/custom
 #
 # [health]
-# bridge_service = "backend-go"   # 填某个 project 的 service_id
-
+# bridge_service = "backend-go" # 把整个 workspace 的 /ready 桥接到该后端深检查

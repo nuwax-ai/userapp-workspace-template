@@ -1,0 +1,264 @@
+# Manifest 完整字段参考
+
+这篇是 `workspace.manifest.toml` 和 `project.manifest.toml` 的**权威字段参考**。每个字段的
+**类型、是否必填、默认值、说明**都在这里,并配有**带逐行注释的完整示例**。
+
+> 写配置时,优先参考这篇。两个 manifest 都是**严格模式**(`deny_unknown_fields`):多写一个没列在这里
+> 的字段会直接报错。不确定某个字段是不是该写,查这篇。
+
+---
+
+## 目录
+
+- [一、`workspace.manifest.toml`](#一workspacemanifesttoml)
+  - [完整示例(带注释)](#完整示例带注释)
+  - [字段表](#字段表)
+- [二、`project.manifest.toml`](#二projectmanifesttoml)
+  - [完整示例(带注释)](#完整示例带注释-1)
+  - [字段表:`[project]`](#字段表project)
+  - [字段表:`[build]`](#字段表build)
+  - [字段表:`[run]`](#字段表run)
+  - [字段表:`[health]`](#字段表health)
+  - [字段表:`[proxy]`](#字段表proxy)
+  - [字段表:`[[logs.sources]]`](#字段表logssources)
+  - [字段表:`[env]`](#字段表env)
+- [三、枚举值速查](#三枚举值速查)
+- [四、校验规则完整清单](#四校验规则完整清单)
+
+---
+
+## 一、`workspace.manifest.toml`
+
+workspace 级声明,全仓库**只有一个**,放根目录。
+
+### 完整示例(带注释)
+
+```toml
+# ─── 顶层 ──────────────────────────────────────────────────────
+schema_version = 1                  # 【必填】配置版本号,当前是 1。供平台升级时判断兼容/迁移;向前兼容——你现有配置不会因平台升级而失效,照写 1 即可
+
+# ─── workspace 元信息 ──────────────────────────────────────────
+[workspace]
+name = "my-app"                     # 【必填】workspace 名,非空。会写进 release.lock
+description = "一句话描述"           # 【可选】默认无
+
+# ─── 反向代理模式 ──────────────────────────────────────────────
+[pingap]
+mode = "managed"                    # 【可选,默认 managed】managed / extend / custom
+# config = "pingap/"                # 【仅 extend/custom】指向 pingap 配置文件或目录(相对路径)
+                                   #   ⚠️ managed 模式下写 config 会报错
+
+# ─── workspace 级健康策略(整段可选)─────────────────────────────
+# 不写 [health](默认):平台自动提供 /health + /ready,不依赖任何后端。
+#   后端有 bug 起不来时,容器依然 Ready,可进容器排查;纯前端也无需关心。
+# 想让"某个后端就绪 = 整个 workspace 就绪":填 bridge_service。
+#   平台把 /ready 代理到该后端的 [health].readiness_path 深检查;
+#   后端不 ready 会摘流(NotReady),但 /health 仍 200(不重启容器)。
+[health]
+bridge_service = "api"              # 【可选】填某个 service 的 service_id;不写 = 不桥接
+```
+
+### 字段表
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|:---:|---|---|
+| `schema_version` | 整数 | ✅ | — | 配置版本号,当前 `= 1`。供平台升级时判断兼容/迁移,向前兼容;照写 `= 1` 即可。 |
+| `workspace.name` | 字符串 | ✅ | — | workspace 名,非空。 |
+| `workspace.description` | 字符串 | ❌ | — | 一句话描述。 |
+| `pingap.mode` | 枚举 | ❌ | `managed` | `managed` / `extend` / `custom`。详见 [反向代理与路由](04-pingap-routing.md)。 |
+| `pingap.config` | 字符串(相对路径) | ❌ | — | extend/custom 下指向 pingap 配置;**managed 下禁止**。 |
+| `health.bridge_service` | 字符串(service_id) | ❌ | 不桥接 | 把整个 workspace 的 `/ready` 桥接到该后端深检查。 |
+
+> workspace manifest **不保存**:镜像、CPU/内存、端口暴露方式、版本保留数。这些是平台策略。
+
+---
+
+## 二、`project.manifest.toml`
+
+每个一级子目录放一个,描述**一个 service**。
+
+### 完整示例(带注释)
+
+```toml
+# ─── 顶层 ──────────────────────────────────────────────────────
+schema_version = 1                  # 【必填】配置版本号,当前 = 1(用途见上)
+
+# ─── 服务身份 ──────────────────────────────────────────────────
+[project]
+service_id = "api"                  # 【必填】稳定身份,DNS-1123,workspace 内唯一
+name = "My API"                     # 【必填】人类可读名,非空
+type = "go"                         # 【必填】node/java/python/go/rust/static
+kind = "web"                        # 【可选,默认 web】web / worker(worker 不监听 HTTP、不能声明 [proxy])
+enabled = true                      # 【可选,默认 true】false 则不参与构建/启动
+
+# ─── 构建 ──────────────────────────────────────────────────────
+[build]
+command = ["sh", "scripts/build.sh"]  # 【必填】argv 数组,直接执行不走 shell;需 shell 用 ["sh","-c","..."]
+artifact = "artifact.zip"           # 【必填】构建产物在项目目录内的相对路径(不能绝对/含 ..)
+
+# ─── 运行 ──────────────────────────────────────────────────────
+[run]
+command = ["./server"]              # 【必填】启动 argv;服务必须监听 0.0.0.0:$PORT
+migrate = ["./migrate"]             # 【可选,默认 []】迁移 argv;启动前按拓扑序执行,必须幂等
+depends_on = ["worker"]             # 【可选,默认 []】依赖的其他 service_id;控制启动/迁移顺序
+shutdown_timeout_seconds = 30       # 【可选,默认 30】优雅关闭超时秒数,必须 > 0
+
+# ─── 健康检查(整段可选,三路径默认 /health)──────────────────────
+[health]
+startup_path = "/health"            # 【可选,默认 /health】启动探针
+readiness_path = "/ready"           # 【可选,默认 /health】就绪探针:不 ready 摘流,不重启
+liveness_path = "/health"           # 【可选,默认 /health】存活探针:连续失败重启容器
+
+# ─── 反向代理路由(managed 模式由平台读取;worker 禁止)──────────
+[proxy]
+path = "/api/"                      # 【必填(若有本段)】绝对 URL 路径,workspace 内唯一
+strip_prefix = true                 # 【可选,默认 false】true=转发前剥掉 path 前缀
+plugins = []                        # 【可选,默认 []】extend 模式引用的 pingap 插件名
+upstream_includes = []              # 【可选,默认 []】extend 模式引用的 upstream 片段名
+
+# ─── 文件日志源(可重复,整段可选)──────────────────────────────
+[[logs.sources]]
+id = "application"                  # 【必填】DNS-1123,本 service 内唯一;查询时用它定位
+glob = "app*.jsonl"                 # 【必填】文件名 glob,相对 $APP_LOG_DIR,不含 / 或 \
+format = "jsonl"                    # 【必填】jsonl / text
+multiline_start_pattern = "^\\d+"   # 【可选,仅 text】多行日志起始正则;jsonl 下写它会报错
+
+[[logs.sources]]                    # 一个 service 可声明多个 source
+id = "access"
+glob = "access*.log"
+format = "text"
+
+# ─── 服务环境变量(整段可选)────────────────────────────────────
+[env]
+LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_*/RCODER_*)
+# DATABASE_URL = "postgres://..."     # 敏感配置直接写这里(明文随源码/发布包保存)
+```
+
+### 字段表:`[project]`
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|:---:|---|---|
+| `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
+| `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
+| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。 |
+| `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台任务,**不能**声明 `[proxy]`)。 |
+| `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。整个 workspace 至少要有一个 enabled 服务。 |
+
+### 字段表:`[build]`
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `command` | 字符串数组(argv) | ✅ | 构建命令,**直接执行不经过 shell**。需要 shell 功能显式 `["sh","-c","..."]`。不能为空数组,每个参数非空、不含 NUL。工作目录 = 子项目目录。 |
+| `artifact` | 字符串(相对路径) | ✅ | 构建产物路径(在项目目录内)。不能绝对、不能含 `..`。会被打入发布包。 |
+
+### 字段表:`[run]`
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|:---:|---|---|
+| `command` | 字符串数组(argv) | ✅ | — | 启动命令。**服务必须监听 `0.0.0.0:$PORT`**。 |
+| `migrate` | 字符串数组(argv) | ❌ | `[]` | 数据迁移命令。**启动前**按拓扑顺序执行。必须幂等。 |
+| `depends_on` | 字符串数组(service_id) | ❌ | `[]` | 依赖的其他服务。驱动 migrate/启动顺序:被依赖者先。不能自依赖、不能引用不存在/disabled 的服务、不能成环。 |
+| `shutdown_timeout_seconds` | 整数 | ❌ | `30` | 收到停止信号后给多久优雅退出(SIGTERM → 等本值 → SIGKILL)。必须 `> 0`。 |
+
+### 字段表:`[health]`
+
+整段可选。三个路径默认都是 `/health`。平台探活发 `GET` 期望 2xx。路径必须以 `/` 开头,不含 `..`/`?`/`#`。
+
+| 字段 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `startup_path` | 字符串 | `/health` | 启动探针。 |
+| `readiness_path` | 字符串 | `/health` | 就绪探针:不 ready **摘流**(不转发请求),不重启容器。 |
+| `liveness_path` | 字符串 | `/health` | 存活探针:连续失败**重启容器**。 |
+
+> 纯静态前端可用 `"/"`。是否把"后端 ready"上升为"整个 app ready",由 workspace 的 `[health].bridge_service` 控制。
+
+### 字段表:`[proxy]`
+
+可选。**仅 `pingap.mode = managed` 时由平台读取生成路由**。`kind = worker` 的服务**禁止**声明。
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|:---:|---|---|
+| `path` | 字符串(绝对 URL 路径) | ✅(若有本段) | — | 路由前缀,以 `/` 开头。**workspace 内唯一**;**全 workspace 最多一个 `/`**(catch-all)。不含 `..`/`?`/`#`。 |
+| `strip_prefix` | 布尔 | ❌ | `false` | `true` = 转发前剥掉 `path` 前缀;`false` = 原样转发。 |
+| `plugins` | 字符串数组 | ❌ | `[]` | extend 模式引用的 pingap 插件名。managed 留空。 |
+| `upstream_includes` | 字符串数组 | ❌ | `[]` | extend 模式引用的 upstream 片段名。managed 留空。 |
+
+### 字段表:`[[logs.sources]]`
+
+可选,可重复(每个 service 可声明多个 source)。整段 `[logs]` 默认为空。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `id` | 字符串 | ✅ | source 标识,DNS-1123,**本 service 内唯一**。日志查询用 `serviceId + sourceIds` 定位。 |
+| `glob` | 字符串 | ✅ | 文件名 glob,**相对 `$APP_LOG_DIR`**(`/app/logs/<service_id>`)。**不能含 `/` 或 `\`**——只匹配文件名,不跨目录。如 `app*.jsonl`、`runtime.*.log`。 |
+| `format` | 枚举 | ✅ | `jsonl`(每行一个 JSON 对象,推荐)/ `text`(普通文本)。 |
+| `multiline_start_pattern` | 字符串(正则) | ❌ | 标记一条多行日志的起始行(如 Java 堆栈)。**仅 `text` 可用**;`jsonl` 下写它会报错。 |
+
+### 字段表:`[env]`
+
+可选。平铺的 `key = "value"` 表,运行时注入给本服务。
+
+| 约束 | 说明 |
+|---|---|
+| key 不能是保留键 | `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、`APP_RELEASE_ID` 禁用。 |
+| key 不能以 `RCODER_` 开头 | 平台保留前缀。 |
+| 明文保存 | 环境变量的值(含敏感配置)以明文随源码和发布包保存;只有能访问应用源码/版本的人可见,按此范围评估敏感度。 |
+
+---
+
+## 三、枚举值速查
+
+| 字段 | 取值 |
+|---|---|
+| `[project].type` | `node` / `java` / `python` / `go` / `rust` / `static` |
+| `[project].kind` | `web`(默认)/ `worker` |
+| `[pingap].mode` | `managed`(默认)/ `extend` / `custom` |
+| `[[logs.sources]].format` | `jsonl` / `text` |
+
+> 枚举写错(如 `type = "golang"` 或 `kind = "background"`)会**直接失败**。上面是全部合法取值。
+
+---
+
+## 四、校验规则完整清单
+
+以下任一条件触发,**构建立即失败**并报清楚原因:
+
+**Schema / 版本**
+- `schema_version` 当前须为 `1`(配置版本号;平台用它做升级兼容/迁移判断,向前兼容——现有配置无需改动);
+- 每个配置段严格模式,**未知字段**直接失败。
+
+**身份 / 唯一性**
+- `service_id` 必须是 DNS-1123 label(小写/数字/`-`,1–63,首尾字母数字);
+- `service_id` 在 enabled 服务间**唯一**;
+- `logs.sources.id` 是 DNS-1123 且**本 service 内唯一**;
+- 至少一个 `enabled = true` 的服务。
+
+**命令(argv)**
+- `build.command` / `run.command` 非空 argv,每个参数非空、不含 NUL;
+- `run.migrate` 若非空,同样校验。
+
+**路径安全**
+- `build.artifact`、`pingap.config`、`logs.sources.glob`:**禁止绝对路径、`..`、符号链接逃逸**;
+- `logs.sources.glob` 额外**禁止含 `/` 或 `\`**(只匹配文件名);
+- `proxy.path` 和三个 health path:必须以 `/` 开头,不含 `..`/`?`/`#`。
+
+**路由**
+- `proxy.path` 在 enabled 服务间**唯一**;
+- **全 workspace 最多一个 `/`**(catch-all)。
+
+**服务类型约束**
+- `kind = "worker"` 的服务**不能**声明 `[proxy]`。
+
+**依赖**
+- `depends_on` 引用必须是**已存在且 enabled**的 `service_id`(不是目录名);
+- 不能自依赖;不能成环(有拓扑序)。
+
+**其他**
+- `run.shutdown_timeout_seconds` 必须 `> 0`;
+- `multiline_start_pattern` 仅 `text` 格式可用,`jsonl` 下禁止;
+- `[env]` 的 key 不能是保留键或 `RCODER_*`;
+- `pingap.mode = managed` 时**不能**写 `pingap.config`。
+
+---
+
+下一篇:[反向代理与路由](04-pingap-routing.md)

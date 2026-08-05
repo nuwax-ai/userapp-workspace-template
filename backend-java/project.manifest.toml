@@ -4,8 +4,6 @@ schema_version = 1
 service_id = "backend-java"
 name = "Java Backend"
 type = "java"
-kind = "web"
-enabled = true
 
 [build]
 command = ["sh", "scripts/build-standalone.sh"]
@@ -13,10 +11,8 @@ artifact = "artifact.zip"
 
 [run]
 command = ["java", "-jar", "app.jar"]
-migrate = []
-depends_on = []
-shutdown_timeout_seconds = 30
 
+# Spring Boot Actuator 三件套（均非默认 /health，需显式声明）。
 [health]
 startup_path = "/actuator/health"
 readiness_path = "/actuator/health/readiness"
@@ -25,8 +21,6 @@ liveness_path = "/actuator/health/liveness"
 [proxy]
 path = "/api/java/"
 strip_prefix = true
-plugins = []
-upstream_includes = []
 
 [[logs.sources]]
 id = "application"

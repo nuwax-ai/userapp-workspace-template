@@ -4,8 +4,6 @@ schema_version = 1
 service_id = "frontend-react-vite"
 name = "React Vite Frontend"
 type = "node"
-kind = "web"
-enabled = true
 
 [build]
 command = ["sh", "scripts/build-standalone.sh"]
@@ -13,20 +11,12 @@ artifact = "artifact.zip"
 
 [run]
 command = ["node", "static-server.cjs"]
-migrate = []
-depends_on = []
-shutdown_timeout_seconds = 30
 
-[health]
-startup_path = "/"
-readiness_path = "/"
-liveness_path = "/"
-
+# 纯静态 SPA：static-server 对任意无扩展名路径 fallback 到 index.html（200），
+# 故默认探针 /health 即可，无需声明 [health]。
 [proxy]
 path = "/react"
 strip_prefix = true
-plugins = []
-upstream_includes = []
 
 [[logs.sources]]
 id = "runtime"

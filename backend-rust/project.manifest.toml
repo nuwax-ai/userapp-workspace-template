@@ -4,8 +4,6 @@ schema_version = 1
 service_id = "backend-rust"
 name = "Rust Backend"
 type = "rust"
-kind = "web"
-enabled = true
 
 [build]
 command = ["sh", "scripts/build-standalone.sh"]
@@ -13,20 +11,14 @@ artifact = "artifact.zip"
 
 [run]
 command = ["./server"]
-migrate = []
-depends_on = []
-shutdown_timeout_seconds = 30
 
+# startup/liveness 用默认 /health；readiness 走更深的 /ready。
 [health]
-startup_path = "/health"
 readiness_path = "/ready"
-liveness_path = "/health"
 
 [proxy]
 path = "/api/rust/"
 strip_prefix = true
-plugins = []
-upstream_includes = []
 
 [[logs.sources]]
 id = "application"

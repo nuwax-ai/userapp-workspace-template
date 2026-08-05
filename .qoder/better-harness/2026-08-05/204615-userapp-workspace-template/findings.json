@@ -1,0 +1,140 @@
+{
+  "summary": {
+    "projectName": "userapp-workspace-template",
+    "locale": "zh-CN",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 25,
+    "overview": "该模板工作区的环境就绪声明清晰（manifest 体系、嵌套 AGENTS.md），但变更验证与交付验收链路存在明显断点：唯一测试被交付构建跳过、构建契约只证明可编译、仓库内没有机械化验收门。窗口内没有可用会话片段，行为与学习效果按未观察处理。",
+    "aiAgentPractice": {
+      "inspectedSurfaces": [],
+      "coverageRows": [
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 0
+        }
+      ]
+    },
+    "assignmentSummaries": [],
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "任务理解",
+        "score": 62,
+        "summary": "前端模板的 AGENTS.md 契约结构化程度高，README 与设计指南补充任务边界；但约 28% 源文件所在的后端核心模块缺少 scoped 指导。",
+        "findingRefs": [
+          "backend-guidance-coverage-gap"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "可控执行",
+        "score": 65,
+        "summary": "project.manifest.toml 与 build-standalone.sh 声明了构建、运行与健康检查路由，环境就绪意图表达充分，但本次均未实际执行验证。",
+        "findingRefs": []
+      },
+      {
+        "id": "change-validation",
+        "label": "改动验证",
+        "score": 45,
+        "summary": "唯一测试在交付构建中被跳过，构建契约无验证步骤，变更验证目前基本停留在编译层面。",
+        "findingRefs": [
+          "java-build-skips-only-test"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "可靠交付",
+        "score": 40,
+        "summary": "仓库内没有 CI、CODEOWNERS 或可执行的 manifest 校验器等验收门，也无回滚/恢复证据；交付验收边界停留在声明。",
+        "findingRefs": [
+          "build-contract-compile-only",
+          "no-repo-acceptance-gate"
+        ]
+      },
+      {
+        "id": "learning-capture",
+        "label": "经验沉淀",
+        "score": 35,
+        "summary": "有界评审完成但无可用会话片段，memory 标题级审查为空，重复工作与学习效果均不可判定，仅记录证据边界。",
+        "findingRefs": [
+          "session-evidence-gap"
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "java-build-skips-only-test",
+      "title": "仓库唯一测试被交付构建脚本跳过",
+      "severity": "Medium",
+      "reason": "backend-java/scripts/build-standalone.sh 以 mvn clean package -DskipTests 作为唯一声明的交付构建命令，ItemServiceImplTest（全仓库唯一测试文件）在生成 artifact.zip 的路径上完全不执行，'构建成功'不携带任何回归信号。事实：脚本内容已打开核实；推断：模板向下游复制时该缺口随之传播；不确定性：未实际运行构建确认 surefire 行为。",
+      "expectedOutput": [
+        "backend-java 的交付构建命令执行既有测试，且测试通过后才生成 artifact.zip。"
+      ],
+      "expectedArtifact": "构建脚本",
+      "aiFixPrompt": "/better-harness fix this issue\n\n移除 backend-java/scripts/build-standalone.sh 中 mvn clean package 的 -DskipTests（或改为先执行测试再打包），让唯一测试 ItemServiceImplTest 在交付构建中被执行。\n\n## Validation\n\n- 运行 sh backend-java/scripts/build-standalone.sh\n- 确认输出中出现测试执行阶段与结果\n- 确认 artifact.zip 仅在测试通过后生成",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "build-contract-compile-only",
+      "title": "模板构建契约只证明可编译，无验证步骤",
+      "severity": "Medium",
+      "reason": "7 个子项目的 scripts/build-standalone.sh（project.manifest.toml 与 docs/template-design-guide.md 要求的交付形态）仅包含编译/打包命令：backend-go 只有 go build，backend-java 为 -DskipTests。全仓库 109 个源文件仅 1 个测试文件，前端 pnpm check 类命令未接入交付路径，模板将'可编译即可交付'固化为下游标准。事实：Go/Java 脚本已抽样核实；推断：下游复制使该缺口制度化；不确定性：其余脚本未逐一核实。",
+      "expectedOutput": [
+        "build-standalone.sh 或 manifest 构建命令约定包含可执行的最小验证步骤，并在设计指南中说明。"
+      ],
+      "expectedArtifact": "模板设计指南与构建脚本契约",
+      "aiFixPrompt": "/better-harness fix this issue\n\n为各子项目的 build-standalone.sh 契约增加最小验证步骤（后端：单元测试或至少编译加静态检查；前端：pnpm check），并同步更新 docs/template-design-guide.md 的必需文件约定。\n\n## Validation\n\n- 抽样运行一个后端与一个前端的 build-standalone.sh\n- 确认输出中打包前出现验证阶段\n- 确认 template-design-guide.md 的约定与脚本一致",
+      "dimensionRefs": [
+        "reliable-delivery"
+      ]
+    },
+    {
+      "id": "no-repo-acceptance-gate",
+      "title": "manifest 约定在仓库内没有机械化执行点",
+      "severity": "Low",
+      "reason": "workspace.manifest.toml 与各 project.manifest.toml 声明的约定（健康端点、日志 glob、幂等迁移等）在本仓库内没有机械校验：不存在 .github/CI 与 CODEOWNERS（已检查确认），设计指南引用的 workspace-manifest 校验器位于外部仓库、本仓库无法直接执行。违反约定的变更在本仓库内无门可拦。不确定性：外部校验器可用性未验证，仓库之外可能存在外部 CI 系统。",
+      "expectedOutput": [
+        "manifest 约定有一个可在仓库内直接执行的机械化校验入口。"
+      ],
+      "expectedArtifact": "CI 或本地校验脚本",
+      "aiFixPrompt": "/better-harness fix this issue\n\n为 manifest 约定提供一个可在本仓库直接执行的机械化校验入口：添加运行 workspace-manifest 校验器的 CI workflow，或提供本地校验脚本，并在 docs/template-design-guide.md 记录调用方式。\n\n## Validation\n\n- 在仓库内运行新增校验入口一次\n- 确认其对当前 manifest 正常通过或给出可读失败原因\n- 确认调用方式已写入 template-design-guide.md",
+      "dimensionRefs": [
+        "reliable-delivery"
+      ]
+    },
+    {
+      "id": "backend-guidance-coverage-gap",
+      "title": "核心后端模块缺少 scoped agent 指导",
+      "severity": "Low",
+      "reason": "三个前端子项目均有完整 AGENTS.md 任务契约，但 backend-python/app（19 个源文件）、backend-go/internal（10 个）等约 31 个源文件未被任何嵌套指导覆盖（嵌套覆盖 72%，evidence-pack agentInstructions.suggestedScopes 输出）。这些后端模块同时缺少测试，agent 在这些路径上修改时只能依赖 README 与推断。事实：evidence-pack 确定性输出加目录核实；不确定性：历史仅 7 次提交、跨度 3 天，热点路径判断置信度低。",
+      "expectedOutput": [
+        "backend-go 与 backend-python 拥有与前端模板形态一致的 scoped 任务入口指导。"
+      ],
+      "expectedArtifact": "AGENTS.md",
+      "aiFixPrompt": "/better-harness fix this issue\n\n参照 frontend-react-vite/AGENTS.md 的结构，为 backend-go 与 backend-python 分别添加 scoped AGENTS.md，覆盖构建/运行/测试命令、模块结构映射与提交前检查清单。\n\n## Validation\n\n- 重跑 core-change-watch evidence-pack，确认 backend 目录不再出现在 agentInstructions.suggestedScopes\n- 核对新 AGENTS.md 中列出的命令在对应 README 或 manifest 中存在",
+      "dimensionRefs": [
+        "task-understanding"
+      ]
+    },
+    {
+      "id": "session-evidence-gap",
+      "title": "评审窗口无可用会话片段，行为与学习效果无法判定",
+      "severity": "Low",
+      "reason": "2026-07-06 至 2026-08-05 窗口内 eligible sessions 为 0，5 个会话来源根仅 1 个启用且存在（disabled-source-root、missing-optional-root），变更、验证、摩擦等事件均未被规范化；2 条被计数的 memory 未进入标题级审查。生命周期与重复工作评审无法得出干净窗口或有候选的结论，本报告因此仅评审静态机制。不确定性：采集受限不能证明工作未发生。",
+      "expectedOutput": [
+        "会话来源启用并积累可比任务片段后重跑分析，补全本窗口的行为与学习效果判定。"
+      ],
+      "expectedArtifact": "证据边界记录",
+      "aiFixPrompt": "/better-harness fix this issue\n\n这是证据缺口而非代码缺陷：确认该工作区的会话来源根已启用可用，在积累若干完整任务会话后重新运行分析。\n\n## Validation\n\n- 重跑 session-analysis facts，确认 eligibleSessions 大于 0\n- 重跑 /better-harness，确认 Loop Effectiveness 判定基于实际片段",
+      "dimensionRefs": [
+        "learning-capture"
+      ]
+    }
+  ]
+}

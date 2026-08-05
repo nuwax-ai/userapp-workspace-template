@@ -4,8 +4,6 @@ schema_version = 1
 service_id = "userapp-next"
 name = "Next.js Full-stack App"
 type = "node"
-kind = "web"
-enabled = true
 
 [build]
 command = ["npm", "run", "build:standalone"]
@@ -14,9 +12,8 @@ artifact = "userapp-next-standalone.zip"
 [run]
 command = ["node", "server.js"]
 migrate = ["node", "migrate.js"]
-depends_on = []
-shutdown_timeout_seconds = 30
 
+# 全栈单体：启动/存活探首页 "/"，就绪探 /api/health（均非默认 /health）。
 [health]
 startup_path = "/"
 readiness_path = "/api/health"
@@ -24,9 +21,6 @@ liveness_path = "/"
 
 [proxy]
 path = "/"
-strip_prefix = false
-plugins = []
-upstream_includes = []
 
 [[logs.sources]]
 id = "runtime"
