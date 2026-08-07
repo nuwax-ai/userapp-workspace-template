@@ -17,6 +17,7 @@ backend-rust/server
 
 # Python
 **/__pycache__/
+**/deps/
 
 # Rust
 **/target/
