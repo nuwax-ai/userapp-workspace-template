@@ -23,7 +23,10 @@ const ZIP = join(ROOT, 'userapp-next-standalone.zip');
 const log = (m) => console.log(m);
 
 async function main() {
-  log('📦 [1/5] next build (output: standalone)...');
+  log('📦 [0/6] npm ci（消费 package-lock.json 可重现安装）...');
+  execSync('npm ci', { stdio: 'inherit', cwd: ROOT });
+
+  log('📦 [1/6] next build (output: standalone)...');
   execSync('npm run build', { stdio: 'inherit', cwd: ROOT });
 
   log('📦 [2/5] esbuild bundle migrate.js（自包含 drizzle-orm/pg，cjs）...');
