@@ -11,6 +11,10 @@ const types = {
 };
 http.createServer((req, res) => {
   let url = req.url.split('?')[0];
+  if (url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ status: 'ok', service: 'react' }));
+  }
   let file = path.join('.', url);
   if (!path.extname(url)) file = 'index.html'; // SPA fallback
   fs.readFile(file, (err, data) => {

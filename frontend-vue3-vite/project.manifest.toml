@@ -12,8 +12,10 @@ artifact = "artifact.zip"
 [run]
 command = ["node", "static-server.cjs"]
 
-# 纯静态 SPA：static-server 对任意无扩展名路径 fallback 到 index.html（200），
-# 故默认探针 /health 即可，无需声明 [health]。
+# static-server.cjs 显式处理 /health（返 JSON 200），不再靠 SPA fallback 当探针。
+[health]
+readiness_path = "/health"
+
 [proxy]
 path = "/vue"
 strip_prefix = true
