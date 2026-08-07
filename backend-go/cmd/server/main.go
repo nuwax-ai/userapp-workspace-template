@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"backend-go/internal/config"
 	"backend-go/internal/db"
@@ -61,8 +66,26 @@ func main() {
 
 	addr := net.JoinHostPort("0.0.0.0", cfg.Port)
 	slog.Info("listening", "addr", addr)
-	if err := r.Run(addr); err != nil {
-		slog.Error("listen failed", "err", err)
-		os.Exit(1)
+	// 手动 http.Server + 信号监听：SIGTERM 时 srv.Shutdown 排空 in-flight 请求，
+	// 再关 DB pool（r.Run 直接 ListenAndServe 收到 SIGTERM 即被杀，会丢请求）。
+	srv := &http.Server{Addr: addr, Handler: r}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("listen failed", "err", err)
+			os.Exit(1)
+		}
+	}()
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	slog.Info("shutdown signal received, draining in-flight requests")
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("graceful shutdown failed", "err", err)
 	}
+	if err := sqlDB.Close(); err != nil {
+		slog.Error("close db pool failed", "err", err)
+	}
+	slog.Info("shutdown complete")
 }

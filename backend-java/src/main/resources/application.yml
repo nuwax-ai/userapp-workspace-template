@@ -1,6 +1,7 @@
 server:
   address: 0.0.0.0
   port: ${PORT:8080}
+  shutdown: graceful
 
 spring:
   datasource:
@@ -19,6 +20,9 @@ spring:
       keepalive-time: 300000
   application:
     name: backend-java
+  lifecycle:
+    # 平台 SIGTERM 后给 25s 排空 in-flight（< app-cli 30s force-kill），避免被强杀丢请求。
+    timeout-per-shutdown-phase: 25s
 
 # MyBatis-Plus
 mybatis-plus:
