@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @nuwax-ai/cli 入口
+ * @nuwax-ai/template-cli 入口
  *
  * UserApp workspace 模板脚手架。
  * 按需组合多语言前后端模板,生成可发布的 workspace 结构。

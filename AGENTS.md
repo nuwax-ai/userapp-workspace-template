@@ -14,7 +14,7 @@ userapp-workspace-template/
 ├── frontend-react-vite/             # React 18 + Vite 前端模板源
 ├── frontend-vue3-vite/              # Vue 3 + Vite 前端模板源
 ├── userapp-next-template/           # Next.js 16 全栈单体模板源
-├── cli/                             # @nuwax-ai/cli 脚手架包
+├── cli/                             # @nuwax-ai/template-cli 脚手架包
 │   ├── src/                         # CLI 源码(TypeScript)
 │   ├── scripts/                     # pack-templates.mjs(打包) + release.mjs(发版)
 │   └── templates/                   # [pack 产物] 参数化模板(gitignore)
@@ -56,12 +56,12 @@ npx skills add . --agent zcode --copy
 
 ## CLI 脚手架
 
-用 `@nuwax-ai/cli` 按需组合模板生成 workspace:
+用 `@nuwax-ai/template-cli` 按需组合模板生成 workspace:
 
 ```bash
 # 发布在 npm(用户用)
-npx @nuwax-ai/cli init my-app --backend go --frontend react
-npx @nuwax-ai/cli add backend-rust
+npx @nuwax-ai/template-cli init my-app --backend go --frontend react
+npx @nuwax-ai/template-cli add backend-rust
 
 # 本地开发(改了 CLI 源码后)
 cd cli && npm run build && npm run pack

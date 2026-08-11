@@ -7,12 +7,12 @@ description: >
   注意:manifest 字段、路由规划、健康检查、日志、部署回滚等平台规范,
   请参考 userapp-dev-guide skill。
   触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
-  create-userapp、@nuwax-ai/cli、init、add、worker。
+  create-userapp、@nuwax-ai/template-cli、init、add、worker。
 ---
 
 # UserApp 模板脚手架
 
-用 `@nuwax-ai/cli` 按需组合多语言模板,创建 UserApp workspace。
+用 `@nuwax-ai/template-cli` 按需组合多语言模板,创建 UserApp workspace。
 
 ## 何时使用
 
@@ -27,38 +27,38 @@ description: >
 ### 查看可用模板
 
 ```bash
-npx @nuwax-ai/cli list
+npx @nuwax-ai/template-cli list
 ```
 
 ### 查看开发者文档
 
 ```bash
-npx @nuwax-ai/cli docs         # 列出随 CLI 分发的 7 篇开发者文档
-npx @nuwax-ai/cli docs --open  # 用系统默认程序打开文档目录(macOS)
+npx @nuwax-ai/template-cli docs         # 列出随 CLI 分发的 7 篇开发者文档
+npx @nuwax-ai/template-cli docs --open  # 用系统默认程序打开文档目录(macOS)
 ```
 
 ### 新建 workspace
 
 ```bash
 # 后端 + 前端
-npx @nuwax-ai/cli init <目录名> --backend <lang> --frontend <lang>
+npx @nuwax-ai/template-cli init <目录名> --backend <lang> --frontend <lang>
 
 # 纯后端
-npx @nuwax-ai/cli init <目录名> --backend go
+npx @nuwax-ai/template-cli init <目录名> --backend go
 
 # 纯前端
-npx @nuwax-ai/cli init <目录名> --frontend react
+npx @nuwax-ai/template-cli init <目录名> --frontend react
 
 # Next.js 全栈单体(独占 / 路由)
-npx @nuwax-ai/cli init <目录名> --next
+npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
 ### 往已有 workspace 追加 service
 
 ```bash
 cd <workspace根目录>
-npx @nuwax-ai/cli add <模板id>
-# 例: npx @nuwax-ai/cli add backend-rust
+npx @nuwax-ai/template-cli add <模板id>
+# 例: npx @nuwax-ai/template-cli add backend-rust
 ```
 
 ## 模板选择指南
@@ -112,7 +112,7 @@ CLI 自动分配默认路由,用户通常不用关心:
 默认 service_id = 模板 id(如 `backend-go`)。需要自定义时:
 
 ```bash
-npx @nuwax-ai/cli add backend-go --service-id my-api --path /api/v2/
+npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 ```
 
 自定义 service_id 时,身份相关变量自动派生:
@@ -128,7 +128,7 @@ npx @nuwax-ai/cli add backend-go --service-id my-api --path /api/v2/
 需要后台任务(定时任务、队列消费者等)时,用 `--kind worker` 添加 service:
 
 ```bash
-npx @nuwax-ai/cli add backend-python --kind worker --service-id my-worker
+npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-worker
 ```
 
 Worker 与 web 服务的区别:

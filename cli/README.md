@@ -1,4 +1,4 @@
-# @nuwax-ai/cli
+# @nuwax-ai/template-cli
 
 UserApp workspace 模板脚手架 CLI。按需组合多语言前后端模板,生成可发布的 workspace 结构。
 
@@ -6,10 +6,10 @@ UserApp workspace 模板脚手架 CLI。按需组合多语言前后端模板,生
 
 ```bash
 # 全局安装
-npm install -g @nuwax-ai/cli
+npm install -g @nuwax-ai/template-cli
 
 # 或直接用 npx(推荐)
-npx @nuwax-ai/cli <command>
+npx @nuwax-ai/template-cli <command>
 ```
 
 ## 命令

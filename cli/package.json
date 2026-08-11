@@ -1,11 +1,11 @@
 {
-  "name": "@nuwax-ai/cli",
+  "name": "@nuwax-ai/template-cli",
   "version": "0.1.0",
   "description": "UserApp workspace 模板脚手架 CLI — 按需组合多语言前后端模板",
   "type": "module",
   "bin": {
     "create-userapp": "./dist/index.js",
-    "userapp-cli": "./dist/index.js"
+    "template-cli": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "scripts": {

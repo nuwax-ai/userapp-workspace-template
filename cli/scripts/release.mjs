@@ -136,4 +136,4 @@ console.log('✅ 本地准备完成!推送以触发 CI 发布:');
 console.log();
 console.log(`  git push origin main --tags`);
 console.log();
-console.log(`  → CI 将自动发布 @nuwax-ai/cli@${nextVersion} (dist-tag: ${distTag})`);
+console.log(`  → CI 将自动发布 @nuwax-ai/template-cli@${nextVersion} (dist-tag: ${distTag})`);

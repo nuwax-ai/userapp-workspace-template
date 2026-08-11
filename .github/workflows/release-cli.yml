@@ -191,16 +191,16 @@ jobs:
 
           if [ "$PRERELEASE" = "true" ]; then
             BADGE="🧪 测试版"
-            INSTALL="npm install @nuwax-ai/cli@$DIST_TAG"
+            INSTALL="npm install @nuwax-ai/template-cli@$DIST_TAG"
           else
             BADGE="🚀 正式版"
-            INSTALL="npm install @nuwax-ai/cli"
+            INSTALL="npm install @nuwax-ai/template-cli"
           fi
 
-          echo "### $BADGE \`@nuwax-ai/cli@$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "### $BADGE \`@nuwax-ai/template-cli@$VERSION\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 属性 | 值 |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| npm dist-tag | \`$DIST_TAG\` |" >> $GITHUB_STEP_SUMMARY
           echo "| 安装命令 | \`$INSTALL\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| 使用 | \`npx @nuwax-ai/cli@$DIST_TAG list\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 使用 | \`npx @nuwax-ai/template-cli@$DIST_TAG list\` |" >> $GITHUB_STEP_SUMMARY

@@ -31,7 +31,7 @@ export function registerDocsCommand(program: Command): void {
       if (!docsDir) {
         console.error(k.red('✗ 找不到文档目录。'));
         console.error(k.gray('  如果是开发模式,docs 在仓库根;'));
-        console.error(k.gray('  如果是 npm 安装,docs 随包分发在 node_modules/@nuwax-ai/cli/docs/'));
+        console.error(k.gray('  如果是 npm 安装,docs 随包分发在 node_modules/@nuwax-ai/template-cli/docs/'));
         process.exit(1);
       }
 

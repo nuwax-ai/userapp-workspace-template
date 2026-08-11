@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_FILE = path.join(os.homedir(), '.userapp-cli-update.json');
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24h
-const PKG_NAME = '@nuwax-ai/cli';
+const PKG_NAME = '@nuwax-ai/template-cli';
 
 interface Cache {
   lastCheck: number;

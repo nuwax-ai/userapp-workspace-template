@@ -118,9 +118,9 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   console.log(k.gray('     npx skills add nuwax-ai/userapp-workspace-template'));
   console.log(k.cyan('\n  2. 检查各子目录的 project.manifest.toml'));
   console.log(k.cyan('\n  3. 用 add 命令追加更多 service:'));
-  console.log(k.gray('     npx @nuwax-ai/cli add <template-id>'));
+  console.log(k.gray('     npx @nuwax-ai/template-cli add <template-id>'));
   console.log(k.cyan('\n  4. 查看开发者文档:'));
-  console.log(k.gray('     npx @nuwax-ai/cli docs'));
+  console.log(k.gray('     npx @nuwax-ai/template-cli docs'));
 }
 
 /* ── 内部:解析模板组合 ─────────────────────────────────── */

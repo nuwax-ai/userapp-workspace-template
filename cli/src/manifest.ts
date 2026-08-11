@@ -145,7 +145,7 @@ export function generateAgentsMd(workspaceName: string, services: Array<{ name: 
 
   return `# ${workspaceName} — Agent Guide
 
-> 本 workspace 由 \`@nuwax-ai/cli\` 生成。开发前请先安装 AI skills。
+> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。开发前请先安装 AI skills。
 
 ## 安装 Skills(重要)
 
@@ -170,13 +170,13 @@ ${serviceLines}
 3. **严格校验,Fail Fast** — 配置错误构建立即失败
 4. **回滚不执行 down migration** — 迁移必须幂等
 
-> 完整规范参考 **userapp-dev-guide** skill 或 \`npx @nuwax-ai/cli docs\`。
+> 完整规范参考 **userapp-dev-guide** skill 或 \`npx @nuwax-ai/template-cli docs\`。
 
 ## 追加 Service
 
 \`\`\`bash
-npx @nuwax-ai/cli add backend-rust
-npx @nuwax-ai/cli add backend-python --kind worker --service-id my-worker
+npx @nuwax-ai/template-cli add backend-rust
+npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-worker
 \`\`\`
 `;
 }
