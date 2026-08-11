@@ -19,7 +19,7 @@ import type { Command } from 'commander';
 import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
-import { generateProjectManifest, generateWorkspaceManifest } from '../manifest.js';
+import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd } from '../manifest.js';
 import { buildReplaceMap, renderString, isTextFile } from '../render.js';
 import { checkConflicts } from '../validate.js';
 import { releaseTemplate } from './release.js';
@@ -100,13 +100,27 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
     });
   }
 
+  // 生成 AGENTS.md(让 Agent 知道项目结构 + 怎么装 skills)
+  const servicesInfo = plan.map((p) => ({
+    name: p.template.name,
+    dir: p.dirName,
+    type: p.template.type,
+  }));
+  const agentsContent = generateAgentsMd(wsName, servicesInfo);
+  fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
+  console.log(k.green('  ✓ ') + 'AGENTS.md');
+
   // 输出下一步提示
   console.log(k.green('\n✓ workspace 创建完成!\n'));
   console.log(k.bold('下一步:'));
   console.log(`  cd ${targetDir}`);
-  console.log(k.gray('  # 检查各子目录的 project.manifest.toml'));
-  console.log(k.gray('  # 用 add 命令追加更多 service:'));
-  console.log(k.gray('  npx @nuwax-ai/cli add <template-id>'));
+  console.log(k.cyan('\n  1. 安装 AI skills(推荐):'));
+  console.log(k.gray('     npx skills add nuwax-ai/userapp-workspace-template'));
+  console.log(k.cyan('\n  2. 检查各子目录的 project.manifest.toml'));
+  console.log(k.cyan('\n  3. 用 add 命令追加更多 service:'));
+  console.log(k.gray('     npx @nuwax-ai/cli add <template-id>'));
+  console.log(k.cyan('\n  4. 查看开发者文档:'));
+  console.log(k.gray('     npx @nuwax-ai/cli docs'));
 }
 
 /* ── 内部:解析模板组合 ─────────────────────────────────── */

@@ -134,6 +134,53 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
   return lines.join('\n');
 }
 
+/**
+ * 生成 workspace 根目录的 AGENTS.md。
+ *
+ * 这是一个精简的 Agent 指引,让 Agent 在用户用 CLI 创建的新 workspace 里工作时,
+ * 知道:项目结构、平台约束、怎么装 skills、怎么用 CLI 追加 service。
+ */
+export function generateAgentsMd(workspaceName: string, services: Array<{ name: string; dir: string; type: string }>): string {
+  const serviceLines = services.map((s) => `| ${s.dir}/ | ${s.type} |`).join('\n');
+
+  return `# ${workspaceName} — Agent Guide
+
+> 本 workspace 由 \`@nuwax-ai/cli\` 生成。开发前请先安装 AI skills。
+
+## 安装 Skills(重要)
+
+\`\`\`bash
+npx skills add nuwax-ai/userapp-workspace-template
+\`\`\`
+
+安装后 Agent 将获得:
+- **userapp-scaffold**: CLI 脚手架使用(init/add/list 命令)
+- **userapp-dev-guide**: 平台开发规范(manifest 字段/路由/健康检查/日志/部署/排错)
+
+## 项目结构
+
+| 目录 | 类型 |
+|---|---|
+${serviceLines}
+
+## 平台核心约束
+
+1. **服务必须监听 \`0.0.0.0:$PORT\`** — 不能硬编码端口
+2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个子目录 \`project.manifest.toml\`
+3. **严格校验,Fail Fast** — 配置错误构建立即失败
+4. **回滚不执行 down migration** — 迁移必须幂等
+
+> 完整规范参考 **userapp-dev-guide** skill 或 \`npx @nuwax-ai/cli docs\`。
+
+## 追加 Service
+
+\`\`\`bash
+npx @nuwax-ai/cli add backend-rust
+npx @nuwax-ai/cli add backend-python --kind worker --service-id my-worker
+\`\`\`
+`;
+}
+
 /* ── 内部:构建命令/产物/运行命令的 per-type 推断 ─────────── */
 
 interface BuildInfo {
