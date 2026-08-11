@@ -91,29 +91,42 @@ if (dryRun) {
 }
 
 // ── 执行:写版本 + git ────────────────────────────────────
+const REPO_ROOT = path.resolve(CLI_DIR, '..');
+
+// 0. 预检:tag 是否已存在(在写文件之前检查,避免产生不一致的中间态)
+try {
+  execSync(`git rev-parse "v${nextVersion}"`, { cwd: REPO_ROOT, stdio: 'pipe' });
+  console.error(`✗ tag v${nextVersion} 已存在。`);
+  console.error('  如果是想重发,请先 git tag -d v' + nextVersion + ' 删除后重试。');
+  process.exit(1);
+} catch {
+  // tag 不存在才是正常,继续
+}
+
 // 1. 写入 package.json
 pkg.version = nextVersion;
 fs.writeFileSync(PKG_PATH, JSON.stringify(pkg, null, 2) + '\n');
 console.log(`✓ package.json version → ${nextVersion}`);
 
-// 2. git add + commit
+// 2. git add + commit(commit 失败必须中止,否则 tag 会打到旧 HEAD)
 try {
-  execSync('git add cli/package.json', { stdio: 'inherit', cwd: path.resolve(CLI_DIR, '..') });
-  execSync(`git commit -m "release: cli v${nextVersion}"`, {
-    stdio: 'inherit',
-    cwd: path.resolve(CLI_DIR, '..'),
-  });
+  execSync('git add cli/package.json', { stdio: 'inherit', cwd: REPO_ROOT });
+  execSync(`git commit -m "release: cli v${nextVersion}"`, { stdio: 'inherit', cwd: REPO_ROOT });
   console.log(`✓ git commit`);
-} catch {
-  console.warn('⚠ git commit 跳过(可能没有变更或不在 git 仓库)');
+} catch (e) {
+  console.error(`✗ git commit 失败,中止发布。`);
+  console.error('  package.json 已改但未提交,请手动 git checkout cli/package.json 回滚。');
+  process.exit(1);
 }
 
 // 3. 打 tag
 try {
-  execSync(`git tag v${nextVersion}`, { stdio: 'inherit', cwd: path.resolve(CLI_DIR, '..') });
+  execSync(`git tag v${nextVersion}`, { stdio: 'inherit', cwd: REPO_ROOT });
   console.log(`✓ git tag v${nextVersion}`);
 } catch {
-  console.error(`✗ git tag 失败(tag v${nextVersion} 可能已存在)`);
+  console.error(`✗ git tag v${nextVersion} 失败。`);
+  console.error('  package.json 已提交但未打 tag,请手动处理:');
+  console.error(`    git tag v${nextVersion} && git push origin main --tags`);
   process.exit(1);
 }
 

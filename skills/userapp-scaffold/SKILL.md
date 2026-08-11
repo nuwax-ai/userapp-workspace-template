@@ -106,10 +106,13 @@ CLI 自动分配默认路由,用户通常不用关心:
 npx @nuwax-ai/cli add backend-go --service-id my-api --path /api/v2/
 ```
 
-自定义 service_id 时,**所有身份相关变量自动派生**:
-- Go module 名、Rust crate 名、Java artifactId → `<service_id>`
+自定义 service_id 时,身份相关变量自动派生:
+- Go module 名、Rust crate 名 → `<service_id>`(import 路径同步更新)
+- Java artifactId、Spring 应用名 → `<service_id>`
+- Python FastAPI title、Rust OpenAPI title → `<service_id>`
 - 日志文件名前缀 → `<service_id>`
-- import 路径、package 声明同步更新
+
+**注意:Java 的 package 名和源码目录不自动派生**。自定义 service_id 后,Java 的 `package com.example.backendjava;` 声明和 `src/main/java/com/example/backendjava/` 目录结构保持不变(只改 artifactId)。这能正常编译,但如果需要 package 名也跟着变,需手动 rename 目录和修改 package 声明。
 
 ## 生成后的典型操作
 
