@@ -19,6 +19,8 @@ python3 main.py
 sh scripts/build-standalone.sh   # → artifact.zip（main.py + app/ + deps/）
 ```
 
+> 构建脚本不跑 pytest 以加快打包。生产 CI 建议单独跑 `pytest tests/`。
+
 ## 如何加业务模块
 
 1. `app/models/` 实体  

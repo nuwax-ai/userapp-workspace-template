@@ -40,7 +40,7 @@ Workspace-level checks (run from monorepo root):
 
 ```bash
 pnpm check:templates  # Runs pnpm check for vue3-vite + react-vite
-pnpm check:versions   # Verifies package.json/meta.json/templates.json version alignment
+pnpm check:versions   # Verifies package.json version alignment across templates
 ```
 
 ## Project Layout (Isomorphic with Vue template)

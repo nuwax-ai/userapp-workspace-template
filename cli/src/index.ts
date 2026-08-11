@@ -20,6 +20,8 @@ import path from 'node:path';
 import { registerInitCommand } from './commands/init.js';
 import { registerAddCommand } from './commands/add.js';
 import { registerListCommand } from './commands/list.js';
+import { registerDocsCommand } from './commands/docs.js';
+import { checkUpdate } from './update-check.js';
 
 // 读取 package.json 版本(ESM 里不能用 require)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +38,10 @@ program
 registerListCommand(program);
 registerInitCommand(program);
 registerAddCommand(program);
+registerDocsCommand(program);
+
+// 更新检查(异步,不阻塞主流程;有新版时打印一行提示)
+checkUpdate().catch(() => {});
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(k.red('✗ '), err.message || err);

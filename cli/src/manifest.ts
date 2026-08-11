@@ -105,7 +105,8 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
 
 /**
  * 生成 workspace.manifest.toml(根目录)。
- * 极简:只有 schema_version + workspace 名。
+ * 包含生效的 workspace 声明 + 可选配置段的注释模板,
+ * 让用户拿到 workspace 后就知道有哪些可选项。
  */
 export function generateWorkspaceManifest(workspaceName: string, description?: string): string {
   const lines: string[] = [
@@ -117,7 +118,19 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
   if (description) {
     lines.push(`description = "${description}"`);
   }
-  lines.push('');
+  lines.push(
+    '',
+    '# [pingap] 默认即为 managed(平台按各 web 服务的 [proxy] 自动生成路由),无需声明。',
+    '# 需要切 extend/custom 反代模式、或把 /ready 桥接到某后端时,再按需打开下面的段:',
+    '#',
+    '# [pingap]',
+    '# mode = "managed"              # managed / extend / custom',
+    '# config = "pingap/"            # 仅 extend/custom',
+    '#',
+    '# [health]',
+    '# bridge_service = "backend-go" # 可选:把整个 workspace 的 /ready 桥接到该后端深检查',
+    '',
+  );
   return lines.join('\n');
 }
 

@@ -25,6 +25,8 @@ export interface AddOptions {
   serviceId?: string;
   path?: string;
   force?: boolean;
+  /** 覆盖 kind: web(默认) / worker(后台任务,不监听 HTTP,不声明 proxy) */
+  kind?: 'web' | 'worker';
 }
 
 export function registerAddCommand(program: Command): void {
@@ -33,6 +35,7 @@ export function registerAddCommand(program: Command): void {
     .description('往当前 workspace 追加一个 service')
     .option('--service-id <id>', '覆盖默认 service_id')
     .option('--path <path>', '覆盖默认 proxy.path')
+    .option('--kind <kind>', '服务类型: web(默认) / worker(后台任务,不声明 proxy)')
     .option('--force', '覆盖已存在的目录')
     .action(async (templateId: string, opts: AddOptions) => {
       await runAdd(templateId, opts);
@@ -65,14 +68,18 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
     process.exit(1);
   }
 
-  // 确定 proxyPath
-  const proxyPath = opts.path || template.defaults.proxyPath;
+  // 确定 kind(web 默认 / worker 后台任务)
+  const kind = opts.kind || 'web';
+  const isWorker = kind === 'worker';
+
+  // worker 不能声明 proxy.path
+  const proxyPath = isWorker ? '' : opts.path || template.defaults.proxyPath;
 
   // 扫描已有 service
   const existing = scanExistingServices(cwd);
 
-  // 校验冲突
-  const check = checkConflicts(serviceId, proxyPath, existing);
+  // 校验冲突(worker 不参与 proxy.path 校验)
+  const check = checkConflicts(serviceId, isWorker ? undefined : proxyPath, existing);
   if (!check.ok) {
     console.error(k.red('✗ 冲突校验失败:'));
     for (const e of check.errors) {
@@ -89,8 +96,13 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(k.cyan('▶ 追加 service: ') + k.bold(`${template.name} → ${serviceId}/`));
-  await releaseTemplate(template, targetDir, {
+  const kindLabel = isWorker ? k.yellow(' [worker]') : '';
+  console.log(k.cyan('▶ 追加 service: ') + k.bold(`${template.name} → ${serviceId}/`) + kindLabel);
+
+  // worker 覆盖模板的 kind 字段(用于 manifest 生成)
+  const templateForRelease = isWorker ? { ...template, kind: 'worker' as const } : template;
+
+  await releaseTemplate(templateForRelease, targetDir, {
     serviceId,
     proxyPath,
     force: opts.force,

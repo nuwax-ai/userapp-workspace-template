@@ -28,6 +28,13 @@ description: >
 npx @nuwax-ai/cli list
 ```
 
+### 查看开发者文档
+
+```bash
+npx @nuwax-ai/cli docs         # 列出随 CLI 分发的 7 篇开发者文档
+npx @nuwax-ai/cli docs --open  # 用系统默认程序打开文档目录(macOS)
+```
+
 ### 新建 workspace
 
 ```bash
@@ -61,7 +68,7 @@ npx @nuwax-ai/cli add <模板id>
 | 前后端分离 | 前端 SPA + 后端 API | `init <dir> --backend go --frontend react` |
 | 全栈单体(DB + 前端) | `userapp-next` | `init <dir> --next` |
 | 多个后端 | 主后端 + 追加 | init 后用 add 追加 |
-| 加后台 worker | 无(需手动配 kind=worker) | 见 workspace 文档 |
+| 加后台 worker | 任意后端模板 + `--kind worker` | `add backend-python --kind worker` |
 
 ### 语言/框架特性对比
 
@@ -113,6 +120,20 @@ npx @nuwax-ai/cli add backend-go --service-id my-api --path /api/v2/
 - 日志文件名前缀 → `<service_id>`
 
 **注意:Java 的 package 名和源码目录不自动派生**。自定义 service_id 后,Java 的 `package com.example.backendjava;` 声明和 `src/main/java/com/example/backendjava/` 目录结构保持不变(只改 artifactId)。这能正常编译,但如果需要 package 名也跟着变,需手动 rename 目录和修改 package 声明。
+
+## 后台 Worker
+
+需要后台任务(定时任务、队列消费者等)时,用 `--kind worker` 添加 service:
+
+```bash
+npx @nuwax-ai/cli add backend-python --kind worker --service-id my-worker
+```
+
+Worker 与 web 服务的区别:
+- **不监听 HTTP 端口**,不声明 `[proxy]`(平台禁止 worker 声明 proxy)
+- manifest 里输出 `kind = "worker"`,无 `[proxy]` 段
+- 仍参与拓扑排序/启动/日志,可在别的服务的 `depends_on` 里引用
+- 代码里需要自行实现任务循环(替代 HTTP server 的事件循环)
 
 ## 生成后的典型操作
 

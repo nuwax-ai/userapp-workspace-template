@@ -29,6 +29,8 @@ backend-rust/server
 cli/node_modules/
 cli/dist/
 cli/templates/
+cli/docs/
 
 # IDE 会话产物
 .zcode/
+.qoder/

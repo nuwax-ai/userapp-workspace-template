@@ -10,6 +10,35 @@ workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个�
 
 ---
 
+## 0. 快速开始:用 CLI 生成 workspace(推荐)
+
+不用手动复制和删目录。用 `@nuwax-ai/cli` 按需组合,一条命令生成干净的 workspace:
+
+```bash
+# 前后端分离:Go 后端 + React 前端
+npx @nuwax-ai/cli init my-app --backend go --frontend react
+
+# 纯后端 / 纯前端
+npx @nuwax-ai/cli init my-api --backend java
+npx @nuwax-ai/cli init my-web --frontend vue
+
+# Next.js 全栈单体(独占 / 路由)
+npx @nuwax-ai/cli init my-fullstack --next
+
+# 往已有 workspace 追加 service
+cd my-app && npx @nuwax-ai/cli add backend-rust
+```
+
+安装 Skill(让 AI Agent 自动使用):
+
+```bash
+npx skills add nuwax-ai/userapp-workspace-template
+```
+
+CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/cli list` 查看。
+
+---
+
 ## 1. 核心设计(先建立心智模型)
 
 理解以下 6 条原则,就能避免 90% 的配置错误:

@@ -297,6 +297,16 @@ function packAll() {
 
   console.log(`\n✓ 打包完成: ${Object.keys(TEMPLATE_SOURCES).length} 个模板, 共 ${total} 文件`);
   console.log(`  输出: ${path.relative(REPO_ROOT, TEMPLATES_OUT)}/`);
+
+  // 额外:拷贝 docs/ 到 cli/docs/(随 npm 包分发)
+  const docsSrc = path.join(REPO_ROOT, 'docs');
+  const docsDest = path.join(CLI_ROOT, 'docs');
+  if (fs.existsSync(docsSrc)) {
+    if (fs.existsSync(docsDest)) fs.rmSync(docsDest, { recursive: true });
+    fs.cpSync(docsSrc, docsDest, { recursive: true });
+    const docCount = countFiles(docsDest);
+    console.log(`  ✓ docs/ (${docCount} 篇文档 → cli/docs/)`);
+  }
 }
 
 function countFiles(dir) {

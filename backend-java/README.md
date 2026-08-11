@@ -30,6 +30,8 @@ curl -s -X POST localhost:8080/items -H 'Content-Type: application/json' -d '{"n
 sh scripts/build-standalone.sh   # → artifact.zip（根目录含 app.jar）
 ```
 
+> 构建脚本默认 `-DskipTests` 跳过测试以加快打包。生产 CI 建议单独跑 `./mvnw test`。
+
 ## 如何加业务模块
 
 1. `model/` 实体  
