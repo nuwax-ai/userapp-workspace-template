@@ -1,15 +1,26 @@
 ---
-name: userapp-template-scaffold
+name: userapp-scaffold
 description: >
   UserApp workspace 模板脚手架。当用户需要创建新的 UserApp workspace 项目、
   或往已有 workspace 添加 service 时使用。支持 Go/Java/Python/Rust 后端 +
   React/Vue 前端 + Next.js 全栈单体的任意组合。
-  触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板。
+  触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
+  create-userapp、@nuwax-ai/cli。
 ---
 
 # UserApp 模板脚手架
 
 用 `@nuwax-ai/cli` 按需组合多语言模板,创建 UserApp workspace。
+
+## 安装 Skill
+
+```bash
+# 方式一:通过 skills 工具安装(推荐,Agent 自动发现)
+npx skills add nuwax-ai/userapp-workspace-template
+
+# 方式二:全局安装 CLI 工具
+npm install -g @nuwax-ai/cli
+```
 
 ## 何时使用
 
