@@ -1,5 +1,5 @@
 {
-  "name": "@xagi-templates/react-vite",
+  "name": "@nuwax-ai/react-vite",
   "version": "1.2.3",
   "description": "React + Vite + TypeScript starter — modern React app template powered by Vite",
   "private": true,

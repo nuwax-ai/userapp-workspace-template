@@ -22,7 +22,7 @@ const LOG_RETENTION_DAYS: u64 = 14;
 pub fn init(cfg: &Config) -> anyhow::Result<WorkerGuard> {
     fs::create_dir_all(&cfg.log_dir)
         .with_context(|| format!("create log dir {}", cfg.log_dir))?;
-    cleanup_old_logs(&cfg.log_dir);
+    cleanup_old_logs(&cfg.log_dir, &cfg.log_file_prefix);
 
     let file_appender = RollingFileAppender::new(
         Rotation::DAILY,
@@ -62,7 +62,8 @@ pub fn init(cfg: &Config) -> anyhow::Result<WorkerGuard> {
 }
 
 /// 尽力清理超过 LOG_RETENTION_DAYS 天的滚动日志（best-effort，失败仅 warn）。
-fn cleanup_old_logs(dir: &str) {
+fn cleanup_old_logs(dir: &str, prefix: &str) {
+    let prefix = format!("{}.log", prefix);
     let cutoff = match SystemTime::now().checked_sub(Duration::from_secs(LOG_RETENTION_DAYS * 86400))
     {
         Some(t) => t,
@@ -78,7 +79,7 @@ fn cleanup_old_logs(dir: &str) {
     let mut removed = 0u32;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.starts_with("backend-rust.log") {
+        if !name.starts_with(&prefix) {
             continue;
         }
         let Ok(meta) = entry.metadata() else {

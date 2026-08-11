@@ -24,7 +24,7 @@ def setup_logging() -> None:
         sh.setFormatter(fmt)
         root.addHandler(sh)
 
-    file_path = os.path.join(log_dir, "backend-python.log")
+    file_path = os.path.join(log_dir, os.environ.get("LOG_FILE", "backend-python.log"))
     if not any(isinstance(h, TimedRotatingFileHandler) for h in root.handlers):
         fh = TimedRotatingFileHandler(
             file_path, when="midnight", interval=1, backupCount=14, encoding="utf-8"

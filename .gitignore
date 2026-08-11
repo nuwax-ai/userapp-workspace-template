@@ -24,3 +24,11 @@ backend-rust/server
 
 # 日志
 **/logs/
+
+# CLI 脚手架产物
+cli/node_modules/
+cli/dist/
+cli/templates/
+
+# IDE 会话产物
+.zcode/
