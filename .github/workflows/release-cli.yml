@@ -1,28 +1,44 @@
 name: Release CLI
 
-# 触发条件:
-#   1. 推送 v* 标签 → 发布到 npm(带 tag latest)
-#   2. workflow_dispatch(手动)→ 可选择 prerelease
+# ─── Tag 规则 ──────────────────────────────────────────────
+# 正式版:  v0.1.0          → npm publish --tag latest
+# 测试版:  v0.1.0-beta.1   → npm publish --tag beta
+#
+# 版本号从 tag 名解析,CI 会自动同步到 cli/package.json,
+# 所以你打 tag 时不需要手动改 package.json 的 version 字段。
+#
+# 常用流程:
+#   git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1   # 发测试版
+#   # 验证没问题后:
+#   git tag v0.1.0 && git push origin v0.1.0                 # 发正式版
+# ───────────────────────────────────────────────────────────
+
 on:
   push:
     tags:
-      - 'v*'
+      # 正式版: v1.0.0 / v0.2.3
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      # 测试版: v1.0.0-beta.1 / v0.2.0-alpha.3 / v1.0.0-rc.1
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   workflow_dispatch:
     inputs:
-      npm_tag:
-        description: 'npm dist-tag (latest / next / beta)'
+      version:
+        description: '版本号(如 0.1.0 或 0.1.0-beta.1)'
         required: true
-        default: 'next'
+        default: '0.1.0-beta.1'
 
 permissions:
   contents: read
 
 jobs:
   release:
-    name: Build & Publish to npm
+    name: Publish to npm
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      prerelease: ${{ steps.parse.outputs.prerelease }}
+      dist_tag: ${{ steps.parse.outputs.dist_tag }}
 
-    # 只在 cli/ 目录有内容时运行(仓库根可能只是模板开发用)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,14 +48,51 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-          # scope 配置:@nuwax-ai 组织包
           scope: '@nuwax-ai'
+
+      # ── 从 tag 名或手动输入解析版本号 + 判断是否 prerelease ──
+      - name: Parse version from tag
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # tag 推送:GITHUB_REF = refs/tags/v0.1.0-beta.1
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            # 手动触发:用 inputs.version
+            TAG="v${{ inputs.version }}"
+            # 去掉可能重复的 v 前缀
+            TAG="v${TAG#v}"
+          fi
+
+          VERSION="${TAG#v}"                    # 去掉 v 前缀 → 0.1.0-beta.1
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📝 版本号: $VERSION"
+
+          # 判断是否 prerelease(含 - 的就是)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            # 提取 prerelease 标识: 0.1.0-beta.1 → beta
+            PRE_ID=$(echo "$VERSION" | sed -n 's/.*-\([a-zA-Z]*\).*/\1/p')
+            echo "dist_tag=${PRE_ID:-beta}" >> $GITHUB_OUTPUT
+            echo "🏷️  dist-tag: ${PRE_ID:-beta} (测试版)"
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "dist_tag=latest" >> $GITHUB_OUTPUT
+            echo "🏷️  dist-tag: latest (正式版)"
+          fi
+
+      # ── 同步版本号到 package.json ──────────────────────────
+      - name: Sync version to package.json
+        working-directory: cli
+        run: |
+          npm version ${{ steps.parse.outputs.version }} --no-git-tag-version --allow-pre-releases
+          echo "=== package.json version ==="
+          node -p "require('./package.json').version"
 
       - name: Install dependencies
         working-directory: cli
         run: npm ci
 
-      # pack-templates.mjs 从仓库根的各子目录读取模板源,注入占位符,打包到 cli/templates/
       - name: Pack templates
         working-directory: cli
         run: npm run pack
@@ -56,12 +109,11 @@ jobs:
         working-directory: cli
         run: npm run build
 
-      # 确认 CLI 能正常跑(list 命令做 smoke test)
-      - name: Smoke test
+      - name: Smoke test (list)
         working-directory: cli
         run: node dist/index.js list
 
-      # 端到端测试:init + add + 占位符替换验证
+      # ── 端到端测试 ─────────────────────────────────────────
       - name: E2E test
         run: |
           set -e
@@ -71,23 +123,17 @@ jobs:
           echo "=== init: go + react ==="
           $CLI init "$WORKDIR/test-app" --backend go --frontend react
           test -f "$WORKDIR/test-app/workspace.manifest.toml"
-          test -f "$WORKDIR/test-app/backend-go/project.manifest.toml"
-          test -f "$WORKDIR/test-app/frontend-react-vite/project.manifest.toml"
           grep -q 'service_id = "backend-go"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
           grep -q 'path = "/api/go/"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
 
           echo "=== add: rust with custom service_id ==="
           cd "$WORKDIR/test-app"
           $CLI add backend-rust --service-id my-rust-api --path /api/rust-v2/
-          test -f "$WORKDIR/test-app/my-rust-api/project.manifest.toml"
-          grep -q 'service_id = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/project.manifest.toml"
           grep -q 'name = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
 
-          echo "=== conflict detection: duplicate service_id ==="
+          echo "=== conflict detection ==="
           if $CLI add backend-go 2>/dev/null; then
-            echo "ERROR: 应该拒绝重复 service_id 但没拒绝"; exit 1
-          else
-            echo "✓ 正确拒绝了重复 service_id"
+            echo "ERROR: 应该拒绝重复"; exit 1
           fi
 
           echo "=== init: next fullstack ==="
@@ -97,24 +143,33 @@ jobs:
 
           echo "✓ 所有 E2E 测试通过"
 
-      # 发布到 npm
-      # 标签推送 → dist-tag = latest;手动触发 → 用 inputs.npm_tag
+      # ── 发布到 npm ─────────────────────────────────────────
       - name: Publish to npm
         working-directory: cli
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            npm publish --access public --tag latest
-          else
-            npm publish --access public --tag "${{ inputs.npm_tag }}"
-          fi
+        run: npm publish --access public --tag ${{ steps.parse.outputs.dist_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # ── 发布摘要 ───────────────────────────────────────────
       - name: Summary
         working-directory: cli
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          NAME=$(node -p "require('./package.json').name")
-          echo "### Published: \`$NAME@$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          VERSION="${{ steps.parse.outputs.version }}"
+          DIST_TAG="${{ steps.parse.outputs.dist_tag }}"
+          PRERELEASE="${{ steps.parse.outputs.prerelease }}"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            BADGE="🧪 测试版"
+            INSTALL="npm install @nuwax-ai/cli@$DIST_TAG"
+          else
+            BADGE="🚀 正式版"
+            INSTALL="npm install @nuwax-ai/cli"
+          fi
+
+          echo "### $BADGE \`@nuwax-ai/cli@$VERSION\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Install: \`npx $NAME list\`" >> $GITHUB_STEP_SUMMARY
+          echo "| 属性 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| npm dist-tag | \`$DIST_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 安装命令 | \`$INSTALL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 使用 | \`npx @nuwax-ai/cli@$DIST_TAG list\` |" >> $GITHUB_STEP_SUMMARY

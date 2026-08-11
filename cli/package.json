@@ -13,7 +13,9 @@
     "pack": "node scripts/pack-templates.mjs",
     "prepublishOnly": "npm run build && npm run pack",
     "dev": "tsc --watch",
-    "test": "node scripts/test-local.mjs"
+    "test": "node scripts/test-local.mjs",
+    "release:beta": "node scripts/release.mjs beta",
+    "release": "node scripts/release.mjs release"
   },
   "files": [
     "dist",
