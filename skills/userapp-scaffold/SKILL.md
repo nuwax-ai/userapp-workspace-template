@@ -1,11 +1,13 @@
 ---
 name: userapp-scaffold
 description: >
-  UserApp workspace 模板脚手架。当用户需要创建新的 UserApp workspace 项目、
+  UserApp workspace 模板脚手架 CLI。当用户需要创建新的 UserApp workspace 项目、
   或往已有 workspace 添加 service 时使用。支持 Go/Java/Python/Rust 后端 +
   React/Vue 前端 + Next.js 全栈单体的任意组合。
+  注意:manifest 字段、路由规划、健康检查、日志、部署回滚等平台规范,
+  请参考 userapp-dev-guide skill。
   触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
-  create-userapp、@nuwax-ai/cli。
+  create-userapp、@nuwax-ai/cli、init、add、worker。
 ---
 
 # UserApp 模板脚手架
@@ -137,10 +139,6 @@ Worker 与 web 服务的区别:
 
 ## 生成后的典型操作
 
-### 改路由前缀
-
-编辑 `<service>/project.manifest.toml` 的 `[proxy].path`。
-
 ### 加业务模块(后端)
 
 各后端采用分层架构,新增模块按现有 `item` 模块的模式复制:
@@ -156,13 +154,10 @@ Worker 与 web 服务的区别:
 fetch('/api/go/items')  // 浏览器经反代路由到 backend-go
 ```
 
-### 数据库
+## 重要约束
 
-容器自带 PostgreSQL(`localhost:5432`),读 `POSTGRES_USER` / `POSTGRES_DB` / `POSTGRES_PASSWORD` 环境变量。迁移用 `run.migrate`(仅 Next.js 模板预设)。
+1. **Next.js 和前端 SPA 二选一**:Next.js 占 `/` catch-all。要后端 API + 前端 SPA,用 `--backend + --frontend`,不要用 `--next`。
+2. **端口由平台定**:代码必须读 `$PORT` 环境变量,不能硬编码。
 
-## 注意事项
-
-1. **Next.js 和前端 SPA 二选一**:Next.js 占 `/` catch-all。如果同时要后端 API + 前端 SPA,用 `--backend + --frontend`,不要用 `--next`。
-2. **至少一个 enabled service**:空 workspace 无法发布。
-3. **端口由平台定**:代码里不要硬编码端口,必须读 `$PORT` 环境变量。
-4. **环境变量明文保存**:敏感配置(如 DB 密码)直接写在 `project.manifest.toml` 的 `[env]` 里,以明文随源码保存。初始模板内置公共账号,用户自行修改。
+> manifest 字段、路由规则、健康检查、日志、部署回滚等平台规范,
+> 参考 **userapp-dev-guide** skill。
