@@ -158,6 +158,10 @@ jobs:
             echo "ERROR: worker 不应有 [proxy] 段"; exit 1
           fi
 
+          echo "=== AGENTS.md generated ==="
+          test -f "$WORKDIR/test-app/AGENTS.md"
+          grep -q 'npx skills add nuwax-ai/userapp-workspace-template' "$WORKDIR/test-app/AGENTS.md"
+
           echo "=== conflict detection ==="
           if $CLI add backend-go 2>/dev/null; then
             echo "ERROR: 应该拒绝重复"; exit 1
