@@ -51,11 +51,13 @@ jobs:
         working-directory: cli
         run: npm run build
 
-      - name: Smoke test (list)
+      - name: Smoke test (list + docs)
         working-directory: cli
-        run: node dist/index.js list
+        run: |
+          node dist/index.js list
+          node dist/index.js docs
 
-      - name: E2E test (init + add + conflict detection)
+      - name: E2E test (init + add + worker + conflict detection)
         run: |
           set -e
           CLI="node $(pwd)/cli/dist/index.js"
@@ -67,10 +69,21 @@ jobs:
           grep -q 'service_id = "backend-go"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
           grep -q 'path = "/api/go/"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
 
+          echo "=== workspace manifest has comment template ==="
+          grep -q '\[pingap\]' "$WORKDIR/test-app/workspace.manifest.toml"
+          grep -q 'bridge_service' "$WORKDIR/test-app/workspace.manifest.toml"
+
           echo "=== add: rust with custom service_id ==="
           cd "$WORKDIR/test-app"
           $CLI add backend-rust --service-id my-rust-api --path /api/rust-v2/
           grep -q 'name = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
+
+          echo "=== add: worker (no [proxy], kind=worker) ==="
+          $CLI add backend-python --kind worker --service-id bg-worker
+          grep -q 'kind = "worker"' "$WORKDIR/test-app/bg-worker/project.manifest.toml"
+          if grep -q '\[proxy\]' "$WORKDIR/test-app/bg-worker/project.manifest.toml"; then
+            echo "ERROR: worker 不应有 [proxy] 段"; exit 1
+          fi
 
           echo "=== conflict detection ==="
           if $CLI add backend-go 2>/dev/null; then

@@ -61,8 +61,12 @@ function hasUpdate(current: string, latest: string): boolean {
 
 /**
  * 检查更新(异步,不阻塞)。有新版时打印提示。
+ * CI 环境跳过(避免不必要的网络请求)。
  */
 export async function checkUpdate(): Promise<void> {
+  // CI 环境跳过(GITHUB_ACTIONS / CI 变量)
+  if (process.env.CI || process.env.GITHUB_ACTIONS) return;
+
   const cache = readCache();
   const now = Date.now();
 
