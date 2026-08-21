@@ -21,7 +21,7 @@ userapp-workspace-template/
 ├── docs/                            # UserApp 平台开发者文档(7 篇)
 ├── skills/                          # AI Agent skills
 │   ├── userapp-scaffold/            # CLI 脚手架使用指南
-│   └── userapp-dev-guide/           # 平台开发规范(manifest/路由/部署/排错)
+│   └── userapp-dev-guide/           # 平台开发规范(manifest/路由/部署/排错/app-cli 本地开发测试)
 ├── .github/workflows/               # CI(ci-cli.yml + release-cli.yml)
 └── README.md                        # workspace 模型 + manifest 字段参考
 ```
@@ -52,7 +52,7 @@ npx skills add . --agent zcode --copy
 | Skill | 用途 |
 |---|---|
 | `userapp-scaffold` | 用 CLI 创建/追加 workspace service(工具型) |
-| `userapp-dev-guide` | manifest 配置/路由/健康检查/日志/部署/排错(知识型) |
+| `userapp-dev-guide` | manifest 配置/路由/健康检查/日志/部署/排错/app-cli 本地开发测试(知识型) |
 
 ## CLI 脚手架
 

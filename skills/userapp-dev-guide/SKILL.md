@@ -3,13 +3,15 @@ name: userapp-dev-guide
 description: >
   UserApp 平台开发规范权威指南。当用户在 UserApp workspace 里开发服务、
   写或改 manifest 配置、规划路由、处理健康检查、声明日志、发布部署、回滚、
-  排查错误时使用。覆盖:核心概念、manifest 全字段、校验规则、环境变量约定、
-  数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调)、健康探针、
-  日志、发布状态机、版本保留、回滚、迁移约定、常见错误排查。
+  排查错误、本地运行验证时使用。覆盖:核心概念、manifest 全字段、校验规则、
+  环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调)、
+  健康探针、日志、发布状态机、版本保留、回滚、迁移约定、常见错误排查、
+  app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
   触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
   proxy path、strip_prefix、路由、catch-all、反代、pingap、健康检查、探针、
   readiness、liveness、SIGTERM、优雅关闭、日志、发布、部署、上线、回滚、
-  迁移、migrate、启动失败、502、404、端口、PORT、环境变量、数据库连接。
+  迁移、migrate、启动失败、502、404、端口、PORT、环境变量、数据库连接、
+  app-cli、gen-lock、release.lock、本地运行、本地验证、本地测试、集成验证。
 ---
 
 # UserApp 平台开发指南
@@ -271,6 +273,101 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 ---
 
+## app-cli 本地开发与测试
+
+`app-cli` 是平台运行时编排器(生产装在 app-runtime 容器内,替代 start.sh:编排子服务
++ Pingap 反代 + 健康/日志/代理管理 API)。本地开发用它做两件事:
+**manifest/路由秒级验证**(`--gen-lock`)和**多服务本地集成验证**(编排模式)。
+日常单服务编码不需要它——直接 `PORT=xxxx` 起 dev server 即可。
+
+开发沙箱容器内已预装 `app-cli` 和 `pingap`(平台统一版本),命令直接可用,无需安装。
+
+### 命令行参数与环境变量
+
+`app-cli --help` 随时可查;每个参数都有同名 env 等价(命令行值优先):
+
+| 参数 | env | 默认 | 说明 |
+|---|---|---|---|
+| `--workspace <DIR>` | `APP_CLI_WORKSPACE` | `/app/code` | workspace 根(含 workspace.manifest.toml + 各子项目) |
+| `--log-dir <DIR>` | `APP_CLI_LOG_DIR` | `/app/logs` | 日志根目录(app-cli 自身 + 各服务 runtime.{out,err}.log) |
+| `--admin-addr <ADDR>` | `APP_CLI_ADMIN_ADDR` | `0.0.0.0:3010` | 管理 API 监听地址 |
+| `--pingap-bin <PATH>` | `APP_CLI_PINGAP_BIN` | `/usr/local/bin/pingap` | pingap 二进制路径(沙箱默认路径已装,一般不用设) |
+| `--gen-lock <DIR>` | `APP_CLI_GEN_LOCK` | — | 本地开发模式:只生成 release.lock.toml + 打印配置预览后**退出**,不启动任何服务 |
+
+另有仅本地用的逃生 env(生产禁):`APP_CLI_SKIP_PG_WAIT=1` 跳过 60s PG 等待、
+`APP_CLI_SKIP_PINGAP_CONFIRM=1` 跳过启动时的配置生效确认。
+
+### 工作流 1:manifest/路由迭代验证(最常用,零依赖)
+
+```bash
+app-cli --gen-lock <workspace根>
+```
+
+读 `workspace.manifest.toml` → 自动发现子项目 → manifest 校验(**与平台构建同一套校验规则**;
+平台构建另会执行 build 命令、校验 artifact 产物,gen-lock 不涉及) →
+生成 `release.lock.toml` 到 workspace 根 → 打印服务清单、端口分配+启动拓扑序、
+Pingap 生效配置 TOML 预览。**不依赖 pingap 二进制、PG、镜像**,秒级完成。
+
+验证检查点:
+
+1. 命令无报错 = manifest 校验通过(gen-lock 的报错 = 平台构建时 manifest 校验会报的错)
+2. 服务清单 = 预期的 enabled 服务
+3. 端口(4000–7999,确定性分配)不与本地已占用端口冲突;拓扑序符合 `depends_on`
+4. Pingap 配置预览里 path/rewrite/strip_prefix/upstream 符合路由预期
+
+### 工作流 2:本地完整编排(集成验证)
+
+```bash
+APP_CLI_WORKSPACE=<workspace根> \
+APP_CLI_LOG_DIR=/tmp/userapp-logs \
+app-cli
+```
+
+启动链:等 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
+→ readiness 判定 → supervise。
+
+- 前置:各服务 `[run].command` 可直接执行;需要构建产物的先本地跑 build 脚本
+  (如 Next 模板 `run.command = ["node","server.js"]` 须先 build 出 standalone)
+- PG:服务依赖 DB 时须有可达 PG(连接参数读 `PGHOST`/`PGPORT`/
+  `POSTGRES_USER`/`POSTGRES_PASSWORD`,默认 localhost:5432 app/app);
+  **等 60s 仍不可达则 app-cli 直接报错退出**。无 DB 依赖时用
+  `APP_CLI_SKIP_PG_WAIT=1` 跳过等待(**仅本地逃生**,生产禁)
+- 退出语义:任一子进程退出或收到 Ctrl-C/SIGTERM → 优雅停掉全部子进程后
+  app-cli 退出。**本地手动跑不会自动重启**,要重新运行命令;生产容器里
+  由 supervisord 整组重启
+- 访问入口 = `http://127.0.0.1:9080/<proxy.path>...`(与生产同构,经反代)
+- 排查看日志:`$APP_CLI_LOG_DIR/app-cli.log.<日期>`(编排日志)+
+  `<service_id>/runtime.{out,err}.log`(子服务 stdout/stderr)
+
+常用管理 API(默认 :3010):
+
+```bash
+curl 127.0.0.1:3010/health                      # liveness(恒 200)
+curl 127.0.0.1:3010/ready                       # readiness
+curl 127.0.0.1:3010/v1/proxy/status             # 代理状态
+curl 127.0.0.1:3010/v1/proxy/effective-config   # 当前生效 Pingap TOML
+curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射
+```
+
+### 工作流 3:单服务日常开发(不用 app-cli)
+
+正常起 dev server(`PORT=4100 pnpm dev`、`uvicorn main:app --port $PORT` 等),
+守住两条平台契约:**监听 `0.0.0.0:$PORT`**、文件日志写 `$APP_LOG_DIR`(本地手动
+起时自己 `export APP_LOG_DIR=<目录>`,生产由 app-cli 注入)。
+多服务联调或发布前验证再切工作流 1/2。
+
+### Agent 开发规范(本地测试必守)
+
+1. **`release.lock.toml` 是生成产物**——不手改、不提交(本地 gen-lock 的版本/digest
+   字段是占位值,与平台构建产物不同)
+2. **逃生开关只许本地**——`APP_CLI_SKIP_PG_WAIT`/`APP_CLI_SKIP_PINGAP_CONFIRM`
+   只在本地命令行用,不写进 manifest、[env] 或任何部署配置
+3. **验证路由/manifest 问题优先工作流 1**(秒级、零依赖);涉及服务真实运行行为
+   才上工作流 2
+4. **监听契约不变**——本地开发同样不硬编码端口,任何时候监听 `0.0.0.0:$PORT`
+
+---
+
 ## 校验规则速查(Fail-Fast)
 
 - schema_version 须为 1;未知字段直接失败
@@ -300,3 +397,5 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 | `multiple catch-all routes` | 两个 `/` | 只留一个 |
 | `worker must not declare [proxy]` | worker 配了代理 | 删 [proxy] |
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
+| gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |
+| 本地编排起不来 | run.command 需要的产物没构建 / 端口被占用 / PG 60s 未就绪(报错退出) | 先跑 build 脚本;确保 PG 可达或设 `APP_CLI_SKIP_PG_WAIT=1`;看 app-cli.log 与 runtime.{out,err}.log 定位 |

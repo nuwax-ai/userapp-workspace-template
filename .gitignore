@@ -2,6 +2,9 @@
 **/artifact.zip
 **/userapp-next-standalone.zip
 
+# app-cli --gen-lock 本地产物（平台构建时在容器内重新生成）
+/release.lock.toml
+
 # Node
 **/node_modules/
 **/dist/
