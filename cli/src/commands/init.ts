@@ -20,7 +20,6 @@ import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
 import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd } from '../manifest.js';
-import { buildReplaceMap, renderString, isTextFile } from '../render.js';
 import { checkConflicts } from '../validate.js';
 import { releaseTemplate } from './release.js';
 

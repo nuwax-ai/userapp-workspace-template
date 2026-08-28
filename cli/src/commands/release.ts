@@ -68,6 +68,7 @@ export async function releaseTemplate(
     serviceId: opts.serviceId,
     templateVariables: template.variables,
     isCustomServiceId: opts.serviceId !== template.defaults.serviceId,
+    proxyPath: opts.proxyPath,
   });
 
   // 清空/创建目标目录

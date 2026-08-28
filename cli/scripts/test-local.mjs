@@ -92,6 +92,32 @@ try {
   const cargo = fs.readFileSync(cargoPath, 'utf-8');
   assert(cargo.includes('name = "my-rust-api"'), 'Cargo crate 名派生为 my-rust-api');
 
+  // === init: react 自定义 service_id + path(pack 占位符注入 + VITE_BASE 派生回归) ===
+  console.log('\n=== init: react custom service_id + path ===');
+  const packedVite = fs.readFileSync(
+    path.join(CLI_DIR, 'templates', 'frontend-react-vite', 'vite.config.ts'),
+    'utf-8',
+  );
+  assert(packedVite.includes('__VITE_BASE__'), 'pack 注入 vite.config.ts 占位符');
+  const packedServer = fs.readFileSync(
+    path.join(CLI_DIR, 'templates', 'frontend-react-vite', 'static-server.cjs'),
+    'utf-8',
+  );
+  assert(packedServer.includes('__HEALTH_SERVICE_TAG__'), 'pack 注入 static-server.cjs 占位符');
+
+  run(`${CLI} init "${path.join(WORKDIR, 'test-web')}" --frontend react --service-id my-web --path /admin/`);
+  const webDir = path.join(WORKDIR, 'test-web', 'my-web');
+  const webVite = fs.readFileSync(path.join(webDir, 'vite.config.ts'), 'utf-8');
+  assert(webVite.includes("base: '/admin/',") && !webVite.includes('__VITE_BASE__'), 'vite base 派生为 /admin/');
+
+  const webManifest = fs.readFileSync(path.join(webDir, 'project.manifest.toml'), 'utf-8');
+  assert(webManifest.includes('service_id = "my-web"'), 'manifest 自定义 service_id');
+  assert(webManifest.includes('path = "/admin/"'), 'manifest 自定义 proxy path');
+
+  const webServer = fs.readFileSync(path.join(webDir, 'static-server.cjs'), 'utf-8');
+  assert(webServer.includes("process.env.HOSTNAME || '0.0.0.0'"), 'static-server 显式绑定 HOSTNAME');
+  assert(!webServer.includes('__HEALTH_SERVICE_TAG__'), 'static-server 占位符已渲染');
+
   // === add: worker ===
   console.log('\n=== add: worker ===');
   run(`${CLI} add backend-python --kind worker --service-id bg-worker`, { cwd: appDir });

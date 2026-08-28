@@ -23,6 +23,11 @@ export interface RenderContext {
   templateVariables: Record<string, string>;
   /** service_id 是否被用户自定义(不同于模板默认值) */
   isCustomServiceId?: boolean;
+  /**
+   * 生效的 proxy.path(web 服务;worker 为空)。
+   * 用于派生 VITE_BASE 等前端资源基路径,保证自定义路由后静态资源可达。
+   */
+  proxyPath?: string;
 }
 
 /**
@@ -43,6 +48,12 @@ export function buildReplaceMap(ctx: RenderContext): Map<string, string> {
   // 派生变量:SERVICE_ID 和 LOG_PREFIX 总是跟随 service_id
   map.set('SERVICE_ID', ctx.serviceId);
   map.set('LOG_PREFIX', ctx.serviceId);
+
+  // 前端资源基路径跟随 proxy.path:'/react' → '/react/';catch-all '/' 保持 '/'
+  if (ctx.proxyPath) {
+    const trimmed = ctx.proxyPath.replace(/\/+$/, '');
+    map.set('VITE_BASE', trimmed === '' ? '/' : `${trimmed}/`);
+  }
 
   // 当 service_id 被自定义(不等于模板默认值)时,身份相关变量从 service_id 派生。
   // 这些变量的模板默认值通常是 <service_id>.log / <service_id> 等,

@@ -193,14 +193,18 @@ function isTextFile(fileName) {
   return TEXT_EXTS.has(ext);
 }
 
-/* ── glob 简易匹配(支持 * 和 **) ────────────────────────── */
+/* ── glob 简易匹配(支持 * 和 **) ──────────────────────────
+ * '**' 前缀匹配零层或多层目录:规则键形如 "**" + "/vite.config.ts" 时,
+ * 根目录的 vite.config.ts 和 src/nested/vite.config.ts 都会命中。
+ */
 function matchGlob(filePath, pattern) {
-  // 把 glob 转成正则
+  // 把 glob 转成正则('**' 连同其后的 '/' 一起替换,避免斜杠重复)
   const re = pattern
     .replace(/\./g, '\\.')
     .replace(/\*\*/g, '\x00') // 临时占位
     .replace(/\*/g, '[^/]*')
-    .replace(/\x00/g, '.*');
+    .replace(/\x00\//g, '(?:.*/)?')
+    .replace(/\x00/g, '.*'); // 兜底:不跟 '/' 的 '**'(如 src/**)
   return new RegExp(`^${re}$`).test(filePath);
 }
 

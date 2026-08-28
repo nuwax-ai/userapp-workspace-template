@@ -1,9 +1,11 @@
 // 极简静态文件服务器（Node 内置 http，无外部依赖），SPA fallback 到 index.html。
-// 供 Vite SPA 构建产物（dist/）使用：app-cli [run].command = ["node","static-server.js"]。
+// 供 Vite SPA 构建产物（dist/）使用：平台 [run].command = ["node","static-server.cjs"]。
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const port = process.env.PORT || 3000;
+// 平台约定：必须监听 0.0.0.0:$PORT（HOSTNAME 由平台注入，默认 0.0.0.0）。
+const host = process.env.HOSTNAME || '0.0.0.0';
 const types = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml',
@@ -23,7 +25,7 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 });
-server.listen(port, () => console.log(`[static-server] :${port}`));
+server.listen(port, host, () => console.log(`[static-server] ${host}:${port}`));
 
 // 优雅关闭：SIGTERM/SIGINT → 停止接新连接 → 排空 in-flight 请求 → 退出。
 // 与后端 SIGTERM → 排空 → 关 DB pool 的模式对齐（平台 shutdown_timeout_seconds 默认 30s）。
