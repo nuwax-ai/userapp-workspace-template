@@ -86,7 +86,9 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     `format = "${d.logFormat}"`,
   ];
   if (d.multilineStartPattern) {
-    logLines.push(`multiline_start_pattern = "${d.multilineStartPattern}"`);
+    // TOML basic string 不接受 \d 等未定义转义——正则里的反斜杠须翻倍转义
+    const escaped = d.multilineStartPattern.replace(/\\/g, '\\\\');
+    logLines.push(`multiline_start_pattern = "${escaped}"`);
   }
   lines.push(...logLines);
 
