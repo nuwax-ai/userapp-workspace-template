@@ -14,8 +14,6 @@
 import { execSync } from 'node:child_process';
 import { cpSync, existsSync, createWriteStream, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { build as esbuild } from 'esbuild';
-import archiver from 'archiver';
 
 const ROOT = process.cwd();
 const STANDALONE = join(ROOT, '.next/standalone');
@@ -26,8 +24,20 @@ async function main() {
   log('📦 [0/6] npm ci（消费 package-lock.json 可重现安装）...');
   execSync('npm ci', { stdio: 'inherit', cwd: ROOT });
 
+  // esbuild/archiver 依赖 npm ci 的产物——静态 import 会在安装前解析即失败，
+  // 须在安装完成后动态加载
+  const { build: esbuild } = await import('esbuild');
+  const archiver = (await import('archiver')).default;
+
   log('📦 [1/6] next build (output: standalone)...');
-  execSync('npm run build', { stdio: 'inherit', cwd: ROOT });
+  // next build 要求 production 环境：宿主链路（execute-command/构建通道）注入的
+  // NODE_ENV=development 会让 Turbopack prerender 崩（useContext null）——此处
+  // 显式钉 production；npm ci 不受影响（devDependencies 正常安装）
+  execSync('npm run build', {
+    stdio: 'inherit',
+    cwd: ROOT,
+    env: { ...process.env, NODE_ENV: 'production' },
+  });
 
   log('📦 [2/5] esbuild bundle migrate.js（自包含 drizzle-orm/pg，cjs）...');
   await esbuild({
