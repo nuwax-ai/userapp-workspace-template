@@ -5,6 +5,11 @@
 # 平台构建整体包（POST /api/userapp/build 产物落 workspace 根 builds/ 子目录）
 /builds/
 
+# dev 运行目录（zip 部署解压产物与轮换现场——平台生成勿提交）
+/.run/
+/.previous/
+/.staging/
+
 # app-cli --gen-lock 本地产物（平台构建时在容器内重新生成）
 /release.lock.toml
 
