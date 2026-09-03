@@ -142,11 +142,18 @@ enabled     = true                  # 可选,默认 true
 command  = ["sh", "scripts/build-standalone.sh"]   # 必填,argv 数组,非空
 artifact = "artifact.zip"           # 必填,构建产物在项目目录内的相对路径
 
+[devbuild]                          # 可选,dev 阶段编译命令;缺省回落 [build].command
+command = ["pnpm", "run", "type-check"]  # 仅配了 [devrun] 的源码态 dev 链路生效,不要求产 artifact
+
 [run]
 command                 = ["./server"]   # 必填,argv 数组
 migrate                 = []             # 可选,数据迁移命令 argv;启动前按拓扑序执行
 depends_on              = []             # 可选,依赖的其他 service_id 列表
 shutdown_timeout_seconds = 30            # 可选,默认 30;优雅关闭超时,必须 > 0
+
+[devrun]                            # 可选,dev 阶段热加载启动命令;缺省回落 [run].command
+command = ["pnpm", "exec", "vite"]  # 配置即把该 app 的 dev 链路切为源码态(跑源码,改码即生效);
+                                    # 须监听 0.0.0.0:$PORT(注入同 [run]);生产部署不读本段
 
 [health]                            # 可选,三路径默认都是 /health
 startup_path   = "/health"

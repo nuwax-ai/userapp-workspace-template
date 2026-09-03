@@ -17,7 +17,9 @@
   - [完整示例(带注释)](#完整示例带注释-1)
   - [字段表:`[project]`](#字段表project)
   - [字段表:`[build]`](#字段表build)
+  - [字段表:`[devbuild]`](#字段表devbuild)
   - [字段表:`[run]`](#字段表run)
+  - [字段表:`[devrun]`](#字段表devrun)
   - [字段表:`[health]`](#字段表health)
   - [字段表:`[proxy]`](#字段表proxy)
   - [字段表:`[[logs.sources]]`](#字段表logssources)
@@ -151,6 +153,14 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `command` | 字符串数组(argv) | ✅ | 构建命令,**直接执行不经过 shell**。需要 shell 功能显式 `["sh","-c","..."]`。不能为空数组,每个参数非空、不含 NUL。工作目录 = 子项目目录。 |
 | `artifact` | 字符串(相对路径) | ✅ | 构建产物路径(在项目目录内)。不能绝对、不能含 `..`。会被打入发布包。 |
 
+### 字段表:`[devbuild]`
+
+整段可选。**dev 阶段编译/检查命令,缺省回落 `[build].command`**。仅在配了 `[devrun]` 的源码态 dev 链路生效(`/api/v1/userapp/dev/start`·`/restart` 用它编译);未配 `[devrun]` 的 app 恒用 `[build].command`(发布同核,zip 是 `.run` 部署物必需品,轻量命令不产 zip 不能替换)。典型用法:前端配 `["pnpm","run","type-check"]` 秒级检查替代全量构建;后端不配(回落 `[build]` 刷新源码目录产物如 `app.jar`)。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 编译命令,规则同 `[build].command`。**不要求产出 artifact**(纯检查命令可用)。 |
+
 ### 字段表:`[run]`
 
 | 字段 | 类型 | 必填 | 默认 | 说明 |
@@ -159,6 +169,14 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `migrate` | 字符串数组(argv) | ❌ | `[]` | 数据迁移命令。**启动前**按拓扑顺序执行。必须幂等。 |
 | `depends_on` | 字符串数组(service_id) | ❌ | `[]` | 依赖的其他服务。驱动 migrate/启动顺序:被依赖者先。不能自依赖、不能引用不存在/disabled 的服务、不能成环。 |
 | `shutdown_timeout_seconds` | 整数 | ❌ | `30` | 收到停止信号后给多久优雅退出(SIGTERM → 等本值 → SIGKILL)。必须 `> 0`。 |
+
+### 字段表:`[devrun]`
+
+整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 优先)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、pingap 路由、健康检查与产物态完全一致;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。 |
 
 ### 字段表:`[health]`
 

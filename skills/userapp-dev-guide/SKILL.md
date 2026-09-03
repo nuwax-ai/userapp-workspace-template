@@ -79,11 +79,19 @@ enabled = true                      # 可选,默认true
 command = ["sh", "scripts/build.sh"]  # 必填,argv数组
 artifact = "artifact.zip"           # 必填,产物相对路径
 
+[devbuild]                          # 可选,dev阶段编译命令;缺省回落[build].command
+command = ["pnpm", "run", "type-check"]  # 仅配了[devrun]的源码态dev链路生效,不要求产artifact
+
 [run]
 command = ["./server"]              # 必填,必须监听 0.0.0.0:$PORT
 migrate = ["./migrate"]             # 可选,启动前按拓扑序执行,必须幂等
 depends_on = ["worker"]             # 可选,控制启动顺序
 shutdown_timeout_seconds = 30       # 可选,默认30
+
+[devrun]                            # 可选,dev阶段热加载启动;缺省回落[run].command
+command = ["pnpm", "exec", "vite"]  # 配置即切源码态:dev/start·restart编译([devbuild]优先)后
+                                    # app-cli直接编排源码workspace(改码即生效),不部署.run;
+                                    # 须监听0.0.0.0:$PORT(注入同[run]);生产不读本段
 
 [health]                            # 整段可选,默认 /health
 startup_path = "/health"
@@ -323,6 +331,10 @@ APP_CLI_LOG_DIR=/tmp/userapp-logs \
 app-cli
 ```
 
+dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的启动形态):
+上述命令加 `APP_CLI_RUN_PROFILE=dev` —— `[devrun].command` 优先、
+`[run].command` 兜底(与平台 dev/start spawn 本进程时注入的信号同名)。
+
 启动链:等 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
 → readiness 判定 → supervise。
 
@@ -340,14 +352,15 @@ app-cli
   `<service_id>/runtime.{out,err}.log`(子服务 stdout/stderr);启动成功后有
   `🔌 运行拓扑` 汇总行,每个 service_id 的 port 与 route 一眼可查
 
-常用管理 API(默认 :3010):
+常用管理 API(默认 :3010;JSON 端点响应为 `HttpResult` 信封
+`{code,message,data,tid,success}`——探针/effective-config/SSE 豁免):
 
 ```bash
 curl 127.0.0.1:3010/health                      # liveness(恒 200)
 curl 127.0.0.1:3010/ready                       # readiness
-curl 127.0.0.1:3010/v1/proxy/status             # 代理状态
-curl 127.0.0.1:3010/v1/proxy/effective-config   # 当前生效 Pingap TOML
-curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射
+curl 127.0.0.1:3010/v1/proxy/status             # 代理状态(data.mode/releaseId/...)
+curl 127.0.0.1:3010/v1/proxy/effective-config   # 当前生效 Pingap TOML(豁免信封)
+curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.upstreams)
 ```
 
 ### 工作流 3:单服务日常开发(不用 app-cli)

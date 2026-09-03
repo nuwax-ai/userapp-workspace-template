@@ -10,7 +10,8 @@
 /.previous/
 /.staging/
 
-# app-cli --gen-lock 本地产物（平台构建时在容器内重新生成）
+# release.lock.toml 生成产物（app-cli --gen-lock 本地工具 / dev/start 源码态
+# 自动 ensure——平台构建时在容器内重新生成），勿提交
 /release.lock.toml
 
 # Node
