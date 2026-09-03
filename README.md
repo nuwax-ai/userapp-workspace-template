@@ -59,6 +59,7 @@ CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/template-cli li
 ```text
 my-workspace/
 ├── workspace.manifest.toml          # 必有:workspace 级声明(名称、pingap 模式、健康策略)
+├── index.html                       # 可选:访问入口默认页(根路径/未匹配路径兜底展示,可自行修改)
 │
 ├── backend-go/
 │   └── project.manifest.toml        # 必有:参与构建
@@ -77,6 +78,15 @@ my-workspace/
 - **只有文件名正好是 `project.manifest.toml` 的目录才参与构建**;`*.draft.toml`、`manifest.toml`、
   `project.toml` 等任何其他名字都**被忽略**;
 - 多个服务按 `service_id` 字母序发现,再按 `depends_on` 做拓扑排序,决定 migrate / 启动顺序。
+
+**入口默认页 `index.html`**(可选):
+
+- workspace 根放一个 `index.html`,访问入口(容器内 9080 / 生产子域名)的**根路径与未匹配路径**
+  就兜底展示这个页面——典型用法是多服务导航页(`template-cli init` 会按所选服务自动生成);
+- **服务路由恒优先**:某服务声明 `[proxy].path = "/"`(catch-all,如 userapp-next)时它独占根路由,
+  `index.html` 不生效;
+- 用户可自行修改内容,**改完刷新即生效**(每次请求实时读文件);`add` 追加服务不会自动更新它,
+  想加导航卡片自己编辑即可。
 
 ---
 

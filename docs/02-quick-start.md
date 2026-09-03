@@ -130,6 +130,10 @@ https://{应用子域名}/api/health
 > 规则分发到各服务。`strip_prefix`(默认 `false`)控制是否把前缀剥掉再转给后端,API 后端通常设
 > `true`。详见 [反向代理与路由](04-pingap-routing.md)。
 
+> **入口默认页**:workspace 根放一个 `index.html`(CLI init 会自动生成导航页),访问根路径 `/`
+> 与未匹配路径时兜底展示它,可自行修改(改完刷新即生效)。某服务声明 `[proxy].path = "/"`
+> (catch-all)时它独占根路由,`index.html` 不生效——服务路由恒优先。
+
 健康检查:发布时平台会探活你声明的健康端点(默认 `/health`)。返回 2xx 才算就绪、才正式上线。
 
 ---

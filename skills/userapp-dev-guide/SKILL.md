@@ -348,6 +348,9 @@ dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的
   app-cli 退出。**本地手动跑不会自动重启**,要重新运行命令;生产容器里
   由 supervisord 整组重启
 - 访问入口 = `http://127.0.0.1:9080/<proxy.path>...`(与生产同构,经反代)
+- 入口默认页:workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径
+  兜底展示它(app-cli 内置静态服务 :9081,每次请求实时读文件,改完刷新即生效);
+  catch-all 服务(如 userapp-next 的 `path = "/"`)独占根路由时 index.html 不生效
 - 排查看日志:`$APP_CLI_LOG_DIR/app-cli.log.<日期>`(编排日志)+
   `<service_id>/runtime.{out,err}.log`(子服务 stdout/stderr);启动成功后有
   `🔌 运行拓扑` 汇总行,每个 service_id 的 port 与 route 一眼可查

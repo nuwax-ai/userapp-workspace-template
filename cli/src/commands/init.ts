@@ -19,7 +19,7 @@ import type { Command } from 'commander';
 import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
-import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd } from '../manifest.js';
+import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml } from '../manifest.js';
 import { checkConflicts } from '../validate.js';
 import { releaseTemplate } from './release.js';
 
@@ -88,6 +88,21 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   const wsContent = generateWorkspaceManifest(wsName, `${wsName} workspace`);
   fse.writeFileSync(path.join(absTarget, 'workspace.manifest.toml'), wsContent);
   console.log(k.green('  ✓ ') + 'workspace.manifest.toml');
+
+  // 生成 index.html(访问入口默认导航页)
+  // catch-all 模板(userapp-next 独占 /)不生成——应用自身就是根路径首页,
+  // index.html 兜底路由不会生效,生成了反而误导。
+  const hasCatchall = plan.some((p) => p.proxyPath === '/');
+  if (hasCatchall) {
+    console.log(k.gray('  - index.html 跳过(catch-all 服务独占 / 路由,应用即首页)'));
+  } else {
+    const indexContent = generateIndexHtml(
+      wsName,
+      plan.map((p) => ({ name: p.template.name, proxyPath: p.proxyPath })),
+    );
+    fse.writeFileSync(path.join(absTarget, 'index.html'), indexContent);
+    console.log(k.green('  ✓ ') + 'index.html(入口导航页,可自行修改)');
+  }
 
   // 释放各模板
   for (const item of plan) {

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  userapp-workspace-template — 访问入口默认页(可自行修改,改完刷新即生效)。
+
+  注意:本仓库全量形态下 userapp-next 的 [proxy].path = "/"(catch-all)独占根路由,
+  应用自身即首页,此文件不会生效——服务路由恒优先。删掉 userapp-next(或本仓库
+  的子集组合、CLI init 的前后端组合)后,此页面即作为入口兜底展示。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>userapp-workspace-template</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+    main { text-align: center; padding: 2rem; }
+    h1 { color: #1f2328; font-size: 1.6rem; margin-bottom: .4rem; }
+    p.hint { color: #6a737d; font-size: .9rem; margin-top: 0; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-top: 2rem; max-width: 760px; }
+    .card { display: block; background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; padding: 1.1rem 1.3rem; text-decoration: none; transition: box-shadow .15s, transform .15s; }
+    .card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .card-title { color: #24292f; font-weight: 600; }
+    .card-path { color: #0969da; font-size: .82rem; margin-top: .25rem; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>userapp-workspace-template</h1>
+    <p class="hint">多语言 UserApp workspace 模板 — 服务入口导航(可编辑此页面)</p>
+    <div class="cards">
+      <a class="card" href="/react/">
+        <div class="card-title">React Vite Frontend</div>
+        <div class="card-path">/react</div>
+      </a>
+      <a class="card" href="/vue/">
+        <div class="card-title">Vue Vite Frontend</div>
+        <div class="card-path">/vue</div>
+      </a>
+      <a class="card" href="/api/go/">
+        <div class="card-title">Go Backend</div>
+        <div class="card-path">/api/go</div>
+      </a>
+      <a class="card" href="/api/java/">
+        <div class="card-title">Java Backend</div>
+        <div class="card-path">/api/java</div>
+      </a>
+      <a class="card" href="/api/python/">
+        <div class="card-title">Python Backend</div>
+        <div class="card-path">/api/python</div>
+      </a>
+      <a class="card" href="/api/rust/">
+        <div class="card-title">Rust Backend</div>
+        <div class="card-path">/api/rust</div>
+      </a>
+      <a class="card" href="/">
+        <div class="card-title">Next.js Fullstack</div>
+        <div class="card-path">/ (独占根路由)</div>
+      </a>
+    </div>
+  </main>
+</body>
+</html>

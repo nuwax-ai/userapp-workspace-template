@@ -183,6 +183,65 @@ npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-work
 `;
 }
 
+/**
+ * 生成 workspace 根目录的 index.html(访问入口默认页)。
+ *
+ * 平台编排(app-cli)会在 workspace 根存在 index.html 且无服务占用 `/` 路由时,
+ * 把入口根路径兜底到该页面。按 init 所选服务生成导航卡片;用户可自行修改,
+ * 改完刷新即生效(每次请求实时读文件)。add 命令追加服务时不会自动更新此文件。
+ */
+export function generateIndexHtml(
+  workspaceName: string,
+  services: Array<{ name: string; proxyPath: string }>,
+): string {
+  const cards = services
+    .map((s) => {
+      const href = s.proxyPath.endsWith('/') ? `${s.proxyPath}` : `${s.proxyPath}/`;
+      return `      <a class="card" href="${href}">
+        <div class="card-title">${s.name}</div>
+        <div class="card-path">${s.proxyPath}</div>
+      </a>`;
+    })
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<!--
+  ${workspaceName} — 访问入口默认页(可自行修改,改完刷新即生效)。
+
+  - 服务路由前缀(如 /api/xxx、/react)由各服务 project.manifest.toml [proxy] 决定,恒优先;
+  - 本页面仅作为入口根路径(/)与未匹配路径的兜底展示;
+  - 追加服务后想加导航卡片,直接编辑下方 cards 区域即可。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${workspaceName}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+    main { text-align: center; padding: 2rem; }
+    h1 { color: #1f2328; font-size: 1.6rem; margin-bottom: .4rem; }
+    p.hint { color: #6a737d; font-size: .9rem; margin-top: 0; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; max-width: 640px; }
+    .card { display: block; background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; padding: 1.1rem 1.3rem; text-decoration: none; transition: box-shadow .15s, transform .15s; }
+    .card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .card-title { color: #24292f; font-weight: 600; }
+    .card-path { color: #0969da; font-size: .82rem; margin-top: .25rem; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${workspaceName}</h1>
+    <p class="hint">UserApp workspace — 服务入口导航(可编辑此页面)</p>
+    <div class="cards">
+${cards}
+    </div>
+  </main>
+</body>
+</html>
+`;
+}
+
 /* ── 内部:构建命令/产物/运行命令的 per-type 推断 ─────────── */
 
 interface BuildInfo {
