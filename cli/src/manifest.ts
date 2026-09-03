@@ -45,12 +45,14 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     `artifact = "${buildInfo.artifact}"`,
   );
 
-  // run 段
-  const runLines: string[] = ['', '[run]', `command = ${formatArgv(buildInfo.run)}`];
-  if (buildInfo.migrate) {
-    runLines.push(`migrate = ${formatArgv(buildInfo.migrate)}`);
+  // run 段 —— static 形态（无进程，内置静态托管承载）省略整段
+  if (buildInfo.run.length > 0) {
+    const runLines: string[] = ['', '[run]', `command = ${formatArgv(buildInfo.run)}`];
+    if (buildInfo.migrate) {
+      runLines.push(`migrate = ${formatArgv(buildInfo.migrate)}`);
+    }
+    lines.push(...runLines);
   }
-  lines.push(...runLines);
 
   // health 段 —— 模板显式声明的路径都输出(即使等于默认 /health,保持与源 manifest 一致)
   const healthParts: string[] = [];
@@ -76,15 +78,19 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     lines.push(...proxyLines);
   }
 
-  // logs 段 —— 替换 logGlob 里的 __SERVICE_ID__ 占位符
-  const logGlob = d.logGlob.replaceAll('__SERVICE_ID__', serviceId);
-  const logLines: string[] = [
-    '',
-    '[[logs.sources]]',
-    `id = "${d.logSourceId}"`,
-    `glob = "${logGlob}"`,
-    `format = "${d.logFormat}"`,
-  ];
+  // logs 段 —— static 形态（无进程）不生成（无运行时文件日志）；
+  // 其余模板替换 logGlob 里的 __SERVICE_ID__ 占位符
+  const logLines: string[] = [];
+  if (template.type !== 'static') {
+    const logGlob = d.logGlob.replaceAll('__SERVICE_ID__', serviceId);
+    logLines.push(
+      '',
+      '[[logs.sources]]',
+      `id = "${d.logSourceId}"`,
+      `glob = "${logGlob}"`,
+      `format = "${d.logFormat}"`,
+    );
+  }
   if (d.multilineStartPattern) {
     // TOML basic string 不接受 \d 等未定义转义——正则里的反斜杠须翻倍转义
     const escaped = d.multilineStartPattern.replace(/\\/g, '\\\\');
@@ -290,8 +296,10 @@ function getBuildInfo(template: TemplateMeta): BuildInfo {
     case 'frontend-vue3-vite':
       return {
         command: ['sh', 'scripts/build-standalone.sh'],
-        artifact: 'artifact.zip',
-        run: ['node', 'static-server.cjs'],
+        // static 形态：artifact = 静态内容目录（构建产 dist；无 [run] 段——
+        // 平台内置静态托管承载）
+        artifact: 'dist',
+        run: [],
       };
     case 'userapp-next':
       return {

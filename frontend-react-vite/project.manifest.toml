@@ -3,36 +3,28 @@ schema_version = 1
 [project]
 service_id = "frontend-react-vite"
 name = "React Vite Frontend"
-type = "node"
+type = "static"
 
 [build]
 command = ["sh", "scripts/build-standalone.sh"]
-artifact = "artifact.zip"
+# static 形态：artifact = 静态内容目录（构建产出 dist，无需打包 zip）
+artifact = "dist"
 
 # dev 阶段编译（可选，缺省回落 [build].command）：轻量类型检查（秒级）替代全量构建。
 # 仅在配了 [devrun] 的源码态 dev 链路生效；可部署性检查走 /api/v1/userapp/build。
 [devbuild]
 command = ["pnpm", "run", "type-check"]
 
-[run]
-command = ["node", "static-server.cjs"]
-
-# dev 阶段启动（可选，缺省回落 [run].command）：vite dev server 热加载跑源码，
-# 改码即生效。配置即把该 app 的 dev 链路切为源码态（编译走 [devbuild]，
-# 未配 [devrun] 的服务用 [run].command 在源码目录启动——依赖 build 产物落
-# 源码目录）。端口监听 0.0.0.0:$PORT（编排注入，见 vite.config.ts server 段）。
+# dev 阶段启动（可选）：vite dev server 热加载跑源码，改码即生效。static 服务
+# 配了 [devrun] 时 dev 源码态端口让给 dev server（托管跳过）；产物态恒由平台
+# 内置静态托管承载（无进程，启动恒成功）。见 vite.config.ts server 段（PORT 对接）。
 [devrun]
 command = ["pnpm", "exec", "vite"]
 
-# static-server.cjs 显式处理 /health（返 JSON 200），不再靠 SPA fallback 当探针。
+# static 托管内置 /health 探针端点（固定 200）。
 [health]
 readiness_path = "/health"
 
 [proxy]
 path = "/react"
 strip_prefix = true
-
-[[logs.sources]]
-id = "runtime"
-glob = "runtime.*.log"
-format = "text"

@@ -10,7 +10,7 @@
  * pack-templates.mjs 负责把模板源里的硬编码值替换成这些占位符。
  */
 
-export type ServiceType = 'go' | 'java' | 'python' | 'rust' | 'node';
+export type ServiceType = 'go' | 'java' | 'python' | 'rust' | 'node' | 'static';
 export type ServiceKind = 'web' | 'worker';
 export type TemplateCategory = 'backend' | 'frontend' | 'fullstack';
 export type LogFormat = 'jsonl' | 'text';
@@ -191,10 +191,10 @@ export const TEMPLATES: TemplateMeta[] = [
     id: 'frontend-react-vite',
     name: 'React Vite Frontend',
     category: 'frontend',
-    type: 'node',
+    type: 'static',
     kind: 'web',
     framework: 'react',
-    description: 'React 18 + Vite + TypeScript + Tailwind + shadcn/ui SPA,含 static-server',
+    description: 'React 18 + Vite + TypeScript + Tailwind + shadcn/ui SPA,平台静态托管',
     tags: ['react', 'vite', 'typescript', 'tailwind', 'shadcn', 'spa', 'frontend'],
     defaults: {
       serviceId: 'frontend-react-vite',
@@ -216,10 +216,10 @@ export const TEMPLATES: TemplateMeta[] = [
     id: 'frontend-vue3-vite',
     name: 'Vue Vite Frontend',
     category: 'frontend',
-    type: 'node',
+    type: 'static',
     kind: 'web',
     framework: 'vue',
-    description: 'Vue 3 (Composition API) + Vite + TypeScript + Tailwind SPA,含 static-server',
+    description: 'Vue 3 (Composition API) + Vite + TypeScript + Tailwind SPA,平台静态托管',
     tags: ['vue', 'vue3', 'vite', 'typescript', 'tailwind', 'spa', 'frontend'],
     defaults: {
       serviceId: 'frontend-vue3-vite',

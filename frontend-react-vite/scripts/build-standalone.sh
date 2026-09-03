@@ -1,8 +1,6 @@
 #!/bin/sh
-# Vite SPA standalone build：npm build → 复制 static-server.cjs → zip
+# Vite SPA 构建：产物 = dist/ 目录（static 形态 artifact，平台直接托管）
 set -e
 pnpm install --frozen-lockfile
 pnpm run build
-cp static-server.cjs dist/
-cd dist && zip -r ../artifact.zip . && cd ..
-echo "✅ artifact.zip 已生成"
+echo "✅ dist/ 已生成"

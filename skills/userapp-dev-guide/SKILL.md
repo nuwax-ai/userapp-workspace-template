@@ -341,6 +341,10 @@ dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的
 - 单服务失败(migrate/spawn/探测超时)**不阻塞**其余服务;任务终态 failed 的
   error 为逐服务汇总,已启动服务保留运行(dev/list 可查)
 - 事件经 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)
+- `type = "static"` 服务(无进程):`[run]` 禁止、`[build].artifact`=静态内容目录
+  (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
+  启动恒成功(`service_start_ok` 即时);dev 源码态配了 `[devrun]` 时端口让给
+  dev server(vite dev 热加载),托管跳过
 
 启动链:等 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
 → readiness 判定 → supervise。

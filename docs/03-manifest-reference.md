@@ -142,7 +142,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 |---|---|:---:|---|---|
 | `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
 | `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
-| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。 |
+| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = 无进程静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
 | `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台任务,**不能**声明 `[proxy]`)。 |
 | `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。整个 workspace 至少要有一个 enabled 服务。 |
 

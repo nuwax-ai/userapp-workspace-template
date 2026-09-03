@@ -144,7 +144,7 @@ schema_version = 1
 [project]
 service_id = "backend-go"           # 必填,稳定身份,DNS-1123,workspace 内唯一
 name        = "Go Backend"          # 必填,人类可读名
-type        = "go"                  # 必填:node / java / python / go / rust / static
+type        = "go"                  # 必填:node / java / python / go / rust / static(无进程静态服务)
 kind        = "web"                 # 可选,默认 web。web / worker
 enabled     = true                  # 可选,默认 true
 
