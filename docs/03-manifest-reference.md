@@ -185,8 +185,9 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `startup_path` | 字符串 | `/health` | 启动探针。 |
-| `readiness_path` | 字符串 | `/health` | 就绪探针:不 ready **摘流**(不转发请求),不重启容器。 |
-| `liveness_path` | 字符串 | `/health` | 存活探针:连续失败**重启容器**。 |
+| `readiness_path` | 字符串 | `/health` | 就绪探针:不 ready **摘流**(不转发请求),不重启容器。**dev 启动判定也用它**(dev/start·restart 逐服务探测,通过即 `service_start_ok` 事件)。 |
+| `liveness_path` | 字符串 | `/health` | 存活探针:连续失败**重启容器**。不参与 dev 启动判定。 |
+| `startup_timeout_seconds` | 整数 | `25` | dev 启动就绪探测窗口(秒)。readiness 在窗口内未 2xx → `service_start_fail`(不阻塞其余服务);慢启动服务(如 Spring Boot 冷启动)按需调大。必须 `> 0`。 |
 
 > 纯静态前端可用 `"/"`。是否把"后端 ready"上升为"整个 app ready",由 workspace 的 `[health].bridge_service` 控制。
 

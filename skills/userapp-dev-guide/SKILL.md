@@ -335,6 +335,13 @@ dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的
 上述命令加 `APP_CLI_RUN_PROFILE=dev` —— `[devrun].command` 优先、
 `[run].command` 兜底(与平台 dev/start spawn 本进程时注入的信号同名)。
 
+启动判定(app-cli builtin 引擎,dev/start·restart 的 SSE 逐服务事件):
+- `service_start_ok` = readiness 探测通过(`[health].readiness_path` 在
+  `[health].startup_timeout_seconds`(默认 25s,慢启动服务按需调大)窗口内 2xx)
+- 单服务失败(migrate/spawn/探测超时)**不阻塞**其余服务;任务终态 failed 的
+  error 为逐服务汇总,已启动服务保留运行(dev/list 可查)
+- 事件经 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)
+
 启动链:等 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
 → readiness 判定 → supervise。
 

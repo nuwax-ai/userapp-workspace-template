@@ -167,8 +167,9 @@ command = ["pnpm", "exec", "vite"]  # 配置即把该 app 的 dev 链路切为�
 
 [health]                            # 可选,三路径默认都是 /health
 startup_path   = "/health"
-readiness_path = "/ready"
+readiness_path = "/ready"           # dev 启动判定用它(探测通过=service_start_ok)
 liveness_path  = "/health"
+# startup_timeout_seconds = 25      # 可选,dev 启动探测窗口(秒);慢启动服务按需调大
 
 [proxy]                             # 可选;kind = worker 时【禁止】声明
 path             = "/api/go/"       # 必填(若有本段),绝对 URL 路径,workspace 内唯一
