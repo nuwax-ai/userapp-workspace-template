@@ -176,7 +176,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
-| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。 |
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。**并应答 `[health].readiness_path`**(vite 模板经 `configureServer` 插件实现 `/health`)——否则 dev server 会被 pingap 健康探针摘流(经 9080 的预览 503);dev server 的路由 base 用无前缀(vite 模板按 command 分流:`serve` 用 `/`,`build` 用 `[proxy].path`)以匹配 strip_prefix 转发。 |
 
 ### 字段表:`[health]`
 
