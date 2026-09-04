@@ -267,6 +267,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 **服务类型约束**
 - `kind = "worker"` 的服务**不能**声明 `[proxy]`。
+- `type = "static"` 的服务**不能**配置 `[run].command` / `[run].migrate`(无进程,`[run]` 整段省略,内置静态托管承载);构建期还会校验静态产物与 `[proxy]` 的路由一致性(资源引用逃逸/翻译后文件不存在 → 构建失败,见 [字段表:`[proxy]`](#字段表proxy))。
 
 **依赖**
 - `depends_on` 引用必须是**已存在且 enabled**的 `service_id`(不是目录名);

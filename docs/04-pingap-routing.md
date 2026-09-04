@@ -146,8 +146,8 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
 | `backend-java` | `/api/java/` | true | Java 后端 |
 | `backend-python` | `/api/python/` | true | Python 后端 |
 | `backend-rust` | `/api/rust/` | true | Rust 后端 |
-| `frontend-react-vite` | `/react` | true | React SPA |
-| `frontend-vue3-vite` | `/vue` | true | Vue3 SPA |
+| `frontend-react-vite` | `/react` | true | React SPA(`type = "static"`,平台内置静态托管) |
+| `frontend-vue3-vite` | `/vue` | true | Vue3 SPA(`type = "static"`,平台内置静态托管) |
 | `userapp-next` | `/` | false | Next.js 单体,唯一 catch-all |
 
 > 这是一个**演示用的最复杂组合**。实际应用按需保留:要 Next.js 单体就删 SPA;要"SPA + 后端 API"

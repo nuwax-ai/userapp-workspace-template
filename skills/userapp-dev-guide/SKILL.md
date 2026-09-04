@@ -407,6 +407,7 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 - HTTP 路径:以 `/` 开头,不含 `..`/`?`/`#`
 - 路由:path 唯一;最多一个 `/`
 - worker 不能声明 `[proxy]`
+- static 服务禁配 `[run].command`/`[run].migrate`(无进程,整段省略,内置静态托管)
 - depends_on:引用已存在且 enabled 的 service_id;不能自依赖/成环
 - 至少一个 enabled 服务
 - managed 模式不能写 pingap.config
@@ -426,6 +427,8 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 | `duplicate proxy path` | 路由重复 | 改唯一 |
 | `multiple catch-all routes` | 两个 `/` | 只留一个 |
 | `worker must not declare [proxy]` | worker 配了代理 | 删 [proxy] |
+| `static service must not declare [run].command` | static 服务配了 [run] 启动/迁移命令 | 删 [run] 段(无进程);要跑进程则 type 改 `node` 等 |
+| 报错含 `逃逸出 [proxy].path` 或 `翻译后找不到` | static 产物资源引用与 [proxy] 错配(base/strip_prefix/产物布局) | 构建工具 `base` 设为 `[proxy].path`;`strip_prefix` 与产物布局对齐(`strip=true`+无前缀产物 / `strip=false`+带前缀产物 二选一) |
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
 | gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |
 | 本地编排起不来 | run.command 需要的产物没构建 / 端口被占用 / PG 60s 未就绪(报错退出) | 先跑 build 脚本;确保 PG 可达或设 `APP_CLI_SKIP_PG_WAIT=1`;看 app-cli.log 与 runtime.{out,err}.log 定位 |
