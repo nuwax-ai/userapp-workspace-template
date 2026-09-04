@@ -17,6 +17,12 @@
 # skills 打包产物（make build-skills）
 /build/
 
+# docker 本地验证（make docker-verify 产物态部署目录 = 平台 .run 的本地等价）
+/.docker-run/
+
+# Java 构建产物（dev 源码态产物落源码目录的平台语义）
+**/app.jar
+
 # Node
 **/node_modules/
 **/dist/
