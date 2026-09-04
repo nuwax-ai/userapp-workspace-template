@@ -152,8 +152,9 @@ enabled     = true                  # 可选,默认 true
 command  = ["sh", "scripts/build-standalone.sh"]   # 必填,argv 数组,非空
 artifact = "artifact.zip"           # 必填,构建产物在项目目录内的相对路径
 
-[devbuild]                          # 可选,dev 阶段编译命令;缺省回落 [build].command
-command = ["pnpm", "run", "type-check"]  # 仅配了 [devrun] 的源码态 dev 链路生效,不要求产 artifact
+[devbuild]                          # 可选,dev 阶段编译/准备命令(依赖安装/type-check 等,不要求产 artifact);
+command = ["pnpm", "run", "type-check"]  # 仅配了 [devrun] 的源码态 dev 链路生效。缺省三分派:只配 [devrun]
+                                    # 的服务跳过编译(devrun 自足不消费产物);未配 [devrun] 回落 [build].command
 
 [run]
 command                 = ["./server"]   # 必填,argv 数组
@@ -162,8 +163,9 @@ depends_on              = []             # 可选,依赖的其他 service_id 列
 shutdown_timeout_seconds = 30            # 可选,默认 30;优雅关闭超时,必须 > 0
 
 [devrun]                            # 可选,dev 阶段热加载启动命令;缺省回落 [run].command
-command = ["pnpm", "exec", "vite"]  # 配置即把该 app 的 dev 链路切为源码态(跑源码,改码即生效);
-                                    # 须监听 0.0.0.0:$PORT(注入同 [run]);生产部署不读本段
+command = ["pnpm", "exec", "vite"]  # 配置即把该 app 的 dev 链路切为源码态(跑源码,改码即生效)且声明
+                                    # dev 态自足(未配 [devbuild] 则跳过编译);须监听 0.0.0.0:$PORT
+                                    # (注入同 [run]);生产部署不读本段
 
 [health]                            # 可选,三路径默认都是 /health
 startup_path   = "/health"

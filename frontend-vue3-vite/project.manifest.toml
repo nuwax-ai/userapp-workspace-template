@@ -10,6 +10,12 @@ command = ["sh", "scripts/build-standalone.sh"]
 # static 形态：artifact = 静态内容目录（构建产出 dist，无需打包 zip）
 artifact = "dist"
 
+# dev 阶段编译（可选，dev 准备命令，不要求产出 artifact）：增量安装依赖
+# （vite dev 跑源码不消费 dist；未配本段则按平台规则跳过编译，但依赖就
+# 没人装了——首次 dev 启动会因 vite 缺失失败）。
+[devbuild]
+command = ["pnpm", "install", "--frozen-lockfile"]
+
 # dev 阶段启动（可选）：vite dev server 热加载跑源码；static 服务配了
 # [devrun] 时 dev 源码态端口让给 dev server，产物态恒由内置静态托管承载。
 [devrun]

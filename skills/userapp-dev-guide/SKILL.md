@@ -79,8 +79,9 @@ enabled = true                      # 可选,默认true
 command = ["sh", "scripts/build.sh"]  # 必填,argv数组
 artifact = "artifact.zip"           # 必填,产物相对路径
 
-[devbuild]                          # 可选,dev阶段编译命令;缺省回落[build].command
-command = ["pnpm", "run", "type-check"]  # 仅配了[devrun]的源码态dev链路生效,不要求产artifact
+[devbuild]                          # 可选,dev阶段编译/准备命令(依赖安装/type-check等,不要求产artifact)
+command = ["pnpm", "run", "type-check"]  # 仅配了[devrun]的源码态dev链路生效。缺省三分派:只配[devrun]
+                                    # 的服务跳过编译(devrun自足不消费产物);未配[devrun]回落[build].command
 
 [run]
 command = ["./server"]              # 必填,必须监听 0.0.0.0:$PORT
@@ -89,7 +90,8 @@ depends_on = ["worker"]             # 可选,控制启动顺序
 shutdown_timeout_seconds = 30       # 可选,默认30
 
 [devrun]                            # 可选,dev阶段热加载启动;缺省回落[run].command
-command = ["pnpm", "exec", "vite"]  # 配置即切源码态:dev/start·restart编译([devbuild]优先)后
+command = ["pnpm", "exec", "vite"]  # 配置即切源码态且声明dev态自足(未配[devbuild]则跳过编译):
+                                    # dev/start·restart编译([devbuild]显式配置则执行)后
                                     # app-cli直接编排源码workspace(改码即生效),不部署.run;
                                     # 须监听0.0.0.0:$PORT(注入同[run]);生产不读本段
 

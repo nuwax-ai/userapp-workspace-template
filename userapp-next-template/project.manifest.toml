@@ -13,6 +13,17 @@ artifact = "userapp-next-standalone.zip"
 command = ["node", "server.js"]
 migrate = ["node", "migrate.js"]
 
+# dev 阶段编译（可选，dev 准备命令，不要求产出 artifact）：增量安装依赖
+# （next dev 跑源码，不消费 standalone 产物；未配本段则按平台规则跳过编译，
+# 但依赖就没人装了——首次 dev 启动会因 next 缺失失败）。
+[devbuild]
+command = ["npm", "install"]
+
+# dev 阶段启动（可选）：next dev 热加载跑源码（听 PORT env；/api/health
+# 路由 dev 模式可用；next dev 不消费 standalone 产物）。
+[devrun]
+command = ["npm", "run", "dev"]
+
 # 全栈单体：启动/存活探首页 "/"，就绪探 /api/health（均非默认 /health）。
 [health]
 startup_path = "/"

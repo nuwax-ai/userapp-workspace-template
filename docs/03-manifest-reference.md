@@ -155,11 +155,11 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[devbuild]`
 
-整段可选。**dev 阶段编译/检查命令,缺省回落 `[build].command`**。仅在配了 `[devrun]` 的源码态 dev 链路生效(`/api/v1/userapp/dev/start`·`/restart` 用它编译);未配 `[devrun]` 的 app 恒用 `[build].command`(发布同核,zip 是 `.run` 部署物必需品,轻量命令不产 zip 不能替换)。典型用法:前端配 `["pnpm","run","type-check"]` 秒级检查替代全量构建;后端不配(回落 `[build]` 刷新源码目录产物如 `app.jar`)。
+整段可选。**dev 阶段编译/准备命令**(职责域:依赖安装、type-check 等,均**不要求产出 artifact**)。仅在配了 `[devrun]` 的源码态 dev 链路生效(`/api/v1/userapp/dev/start`·`/restart` 用它编译)。未配本段的缺省三分派:**只配了 `[devrun]` 的服务跳过编译**——devrun 即声明 dev 态自足,跑源码不消费构建产物(依赖安装等前置准备即应放本段,否则首次 dev 启动会因依赖缺失失败);**未配 `[devrun]` 的服务回落 `[build].command`**(刷新源码目录产物如 `app.jar`,run.command 依赖它)。典型用法:前端配 `["pnpm","install","--frozen-lockfile"]` 或 install+type-check 增量秒级替代全量构建;后端不配(回落 `[build]`)。产物态链路(未配 `[devrun]` 的 app)编译恒用 `[build].command`(发布同核,zip 是 `.run` 部署物必需品,轻量命令不产 zip 不能替换)。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
-| `command` | 字符串数组(argv) | ✅(若有本段) | dev 编译命令,规则同 `[build].command`。**不要求产出 artifact**(纯检查命令可用)。 |
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 编译/准备命令,规则同 `[build].command`。**不要求产出 artifact**(纯检查/安装命令可用)。 |
 
 ### 字段表:`[run]`
 
@@ -172,7 +172,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[devrun]`
 
-整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 优先)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、pingap 路由、健康检查与产物态完全一致;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
+整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 显式配置则执行,未配则**本服务跳过编译**——本段即声明 dev 态自足)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、pingap 路由、健康检查与产物态完全一致;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
@@ -193,7 +193,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[proxy]`
 
-可选。**仅 `pingap.mode = managed` 时由平台读取生成路由**。`kind = worker` 的服务**禁止**声明。
+可选。**仅 `pingap.mode = managed` 时由平台读取生成路由**。`kind = worker` 的服务**禁止**声明。`type = static` 服务编译期自动校验 base/`path`/`strip_prefix`/产物布局联动(烧进 `dist/index.html` 的资源引用按本段规则推演 pingap 翻译链路),错配构建失败并给修复指引(如构建工具 base/publicPath 应与 `path` 一致)。
 
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |---|---|:---:|---|---|

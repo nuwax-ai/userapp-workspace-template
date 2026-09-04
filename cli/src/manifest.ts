@@ -45,6 +45,11 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     `artifact = "${buildInfo.artifact}"`,
   );
 
+  // devbuild 段 —— dev 阶段编译/准备命令(依赖安装/type-check 等,不要求产出 artifact)
+  if (buildInfo.devbuild) {
+    lines.push('', '[devbuild]', `command = ${formatArgv(buildInfo.devbuild)}`);
+  }
+
   // run 段 —— static 形态（无进程，内置静态托管承载）省略整段
   if (buildInfo.run.length > 0) {
     const runLines: string[] = ['', '[run]', `command = ${formatArgv(buildInfo.run)}`];
@@ -52,6 +57,12 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
       runLines.push(`migrate = ${formatArgv(buildInfo.migrate)}`);
     }
     lines.push(...runLines);
+  }
+
+  // devrun 段 —— dev 阶段热加载启动命令（配置即声明 dev 态自足：未配 devbuild
+  // 则跳过编译，dev 命令跑源码不消费构建产物）
+  if (buildInfo.devrun) {
+    lines.push('', '[devrun]', `command = ${formatArgv(buildInfo.devrun)}`);
   }
 
   // health 段 —— 模板显式声明的路径都输出(即使等于默认 /health,保持与源 manifest 一致)
@@ -264,6 +275,10 @@ interface BuildInfo {
   artifact: string;
   run: string[];
   migrate?: string[];
+  /** dev 阶段编译/准备命令([devbuild] 段;依赖安装/type-check 等前端模板配) */
+  devbuild?: string[];
+  /** dev 阶段热加载启动命令([devrun] 段;前端模板配) */
+  devrun?: string[];
 }
 
 function getBuildInfo(template: TemplateMeta): BuildInfo {
@@ -293,13 +308,24 @@ function getBuildInfo(template: TemplateMeta): BuildInfo {
         run: ['./server'],
       };
     case 'frontend-react-vite':
-    case 'frontend-vue3-vite':
       return {
         command: ['sh', 'scripts/build-standalone.sh'],
         // static 形态：artifact = 静态内容目录（构建产 dist；无 [run] 段——
         // 平台内置静态托管承载）
         artifact: 'dist',
         run: [],
+        // dev 准备/检查：依赖安装前置（vite/tsc 都在 node_modules）+ type-check
+        devbuild: ['sh', '-c', 'pnpm install --frozen-lockfile && pnpm run type-check'],
+        devrun: ['pnpm', 'exec', 'vite'],
+      };
+    case 'frontend-vue3-vite':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'dist',
+        run: [],
+        // dev 准备：依赖安装（vite dev 跑源码不消费 dist，未配则跳过编译但依赖没人装）
+        devbuild: ['pnpm', 'install', '--frozen-lockfile'],
+        devrun: ['pnpm', 'exec', 'vite'],
       };
     case 'userapp-next':
       return {
@@ -307,6 +333,9 @@ function getBuildInfo(template: TemplateMeta): BuildInfo {
         artifact: '__ARTIFACT_NAME__.zip',
         run: ['node', 'server.js'],
         migrate: ['node', 'migrate.js'],
+        // dev 准备：依赖安装（next dev 跑源码，不消费 standalone 产物）
+        devbuild: ['npm', 'install'],
+        devrun: ['npm', 'run', 'dev'],
       };
     default:
       throw new Error(`Unknown template: ${template.id}`);

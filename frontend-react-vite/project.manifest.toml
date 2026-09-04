@@ -10,10 +10,11 @@ command = ["sh", "scripts/build-standalone.sh"]
 # static 形态：artifact = 静态内容目录（构建产出 dist，无需打包 zip）
 artifact = "dist"
 
-# dev 阶段编译（可选，缺省回落 [build].command）：轻量类型检查（秒级）替代全量构建。
+# dev 阶段编译（可选，dev 准备/检查命令，不要求产出 artifact）：依赖安装前置
+# （增量，秒级；vite/tsc 都在 node_modules）+ 轻量类型检查，替代全量构建。
 # 仅在配了 [devrun] 的源码态 dev 链路生效；可部署性检查走 /api/v1/userapp/build。
 [devbuild]
-command = ["pnpm", "run", "type-check"]
+command = ["sh", "-c", "pnpm install --frozen-lockfile && pnpm run type-check"]
 
 # dev 阶段启动（可选）：vite dev server 热加载跑源码，改码即生效。static 服务
 # 配了 [devrun] 时 dev 源码态端口让给 dev server（托管跳过）；产物态恒由平台
