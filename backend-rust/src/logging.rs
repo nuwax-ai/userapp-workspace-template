@@ -10,6 +10,7 @@
 use crate::config::Config;
 use anyhow::Context;
 use std::fs;
+use std::io::IsTerminal;
 use std::time::{Duration, SystemTime};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
@@ -33,12 +34,15 @@ pub fn init(cfg: &Config) -> anyhow::Result<WorkerGuard> {
 
     let filter = EnvFilter::try_new(&cfg.log_level).unwrap_or_else(|_| EnvFilter::new("info"));
 
-    // stdout：人类可读；文件：JSON 便于采集
+    // stdout：人类可读。ANSI 仅在真终端启用——被 app-cli 管道采集（非 tty）时
+    // 控制符会原样进 runtime.out.log 与日志采集面。
     let stdout_layer = fmt::layer()
         .with_target(true)
         .with_span_events(FmtSpan::CLOSE)
+        .with_ansi(std::io::stdout().is_terminal())
         .with_writer(std::io::stdout);
 
+    // 文件：JSON 便于采集
     let file_layer = fmt::layer()
         .json()
         .with_target(true)

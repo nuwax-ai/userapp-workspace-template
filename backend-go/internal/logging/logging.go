@@ -23,7 +23,9 @@ func Setup() (*slog.Logger, error) {
 		MaxSize:    50, // MB
 		MaxBackups: 14,
 		MaxAge:     14, // days
-		Compress:   true,
+		// 不压缩：轮转产物须保持 .log 明文——manifest glob "backend-go*.log*"
+		// 会匹配轮转文件，压缩出的 .gz 会以二进制乱码进日志采集查询面。
+		Compress: false,
 	}
 
 	w := io.MultiWriter(os.Stdout, roller)
