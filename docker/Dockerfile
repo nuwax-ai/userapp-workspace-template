@@ -18,7 +18,7 @@ ARG APT_MIRROR=mirrors.aliyun.com
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 # app-cli 安装独立源：新发布的包 npmmirror 有同步延迟,默认走官方
 ARG APP_CLI_REGISTRY=https://registry.npmjs.org
-ARG APP_CLI_VERSION=0.2.1
+ARG APP_CLI_VERSION=0.2.2
 ARG GOPROXY_URL=https://goproxy.cn,direct
 ARG GO_VERSION=1.26.4
 ARG GO_DOWNLOAD_URL=https://go.dev/dl
