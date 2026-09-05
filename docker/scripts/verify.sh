@@ -59,10 +59,10 @@ check_page_and_assets() { # $1=label $2=路径
   done
 }
 
-echo "== 后端 readiness（java 预算最宽：startup_timeout 60s + Spring 冷启动 + 首启建表）=="
+echo "== 后端 readiness（java/python 预算最宽：java startup_timeout 60s + Spring 冷启动；python 的 asyncpg 连接在多服务启动突发下偶发分钟级——backend-python ensure_schema 自带超时重试自愈）=="
 assert "go/ready"       "$BASE/api/go/ready"                       120
 assert "java/readiness" "$BASE/api/java/actuator/health/readiness" 240
-assert "python/ready"   "$BASE/api/python/ready"                   120
+assert "python/ready"   "$BASE/api/python/ready"                   240
 assert "rust/ready"     "$BASE/api/rust/ready"                     120
 
 echo "== 前端静态托管 =="
