@@ -8,6 +8,11 @@ from app.config import Settings
 engine = None
 SessionLocal: async_sessionmaker[AsyncSession] | None = None
 
+# 跨服务 schema 初始化互斥锁 key（与 go/java/rust 后端、next 迁移共用，勿改）：
+# PG 的 CREATE TABLE IF NOT EXISTS 非原子，并发首启会撞 pg_type 唯一键
+# （SQLSTATE 23505）；事务级咨询锁把建表段全库串行。
+SCHEMA_INIT_LOCK_KEY = 424242
+
 
 def init_engine(settings: Settings) -> None:
     global engine, SessionLocal
@@ -23,10 +28,13 @@ def init_engine(settings: Settings) -> None:
 
 
 async def ensure_schema() -> None:
-    """启动幂等建表。生产可改为 Alembic。"""
+    """启动幂等建表（事务级咨询锁串行化并发首启，生产可改为 Alembic）。"""
     if engine is None:
         raise RuntimeError("engine not initialized; call init_engine() first")
     async with engine.begin() as conn:
+        await conn.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"), {"key": SCHEMA_INIT_LOCK_KEY}
+        )
         await conn.execute(
             text(
                 """

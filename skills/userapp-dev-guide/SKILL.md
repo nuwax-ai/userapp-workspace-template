@@ -409,6 +409,7 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 - worker 不能声明 `[proxy]`
 - static 服务禁配 `[run].command`/`[run].migrate`(无进程,整段省略,内置静态托管)
 - depends_on:引用已存在且 enabled 的 service_id;不能自依赖/成环
+- 新服务启动建表:建表段包单事务并先取 `pg_advisory_xact_lock(424242)`(**跨服务契约 key,勿改**,见任一后端 db 初始化)——PG 的 `CREATE TABLE IF NOT EXISTS` 非原子,多服务并发首启会撞 pg_type 唯一键(23505);drizzle 类运行时迁移用会话级 `pg_advisory_lock` 包整个 migrate(见 userapp-next migrate.ts)
 - 至少一个 enabled 服务
 - managed 模式不能写 pingap.config
 
