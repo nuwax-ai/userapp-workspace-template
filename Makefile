@@ -44,7 +44,10 @@ docker-verify: ## 端到端验证:manifest 校验+全量构建+产物态运行 �
 			docker logs --tail 60 userapp-local 2>&1 || true; exit 1; }; \
 		docker logs userapp-local 2>&1 | grep -q '产物态运行' && break; \
 		sleep 15; \
-	done
+	done; \
+	docker logs userapp-local 2>&1 | grep -q '产物态运行' || { \
+		echo '✗ 60 分钟内未见「产物态运行」(构建卡住/超慢?),最近日志:'; \
+		docker logs --tail 60 userapp-local 2>&1 || true; exit 1; }
 	./docker/scripts/verify.sh || { echo "排查:docker logs -f userapp-local / make docker-shell"; exit 1; }
 
 docker-dev: ## dev 源码态运行(vite/next 热加载;与 docker-verify 端口互斥,先 docker-down)

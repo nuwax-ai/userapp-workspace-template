@@ -44,9 +44,14 @@ chmod 700 "$PGDATA" 2>/dev/null || true
 su postgres -s /bin/bash -c "'$PG_BIN/pg_ctl' -D '$PGDATA' -l /app/logs/pg.log -w -t 60 start \
   -o '-c listen_addresses=127.0.0.1 -c unix_socket_directories=/run/postgresql'"
 
-# 建业务库（幂等）：initdb 只建角色不建库，服务连 $POSTGRES_DB
-su postgres -s /bin/bash -c "'$PG_BIN/createdb' -h 127.0.0.1 -U '$POSTGRES_USER' '$POSTGRES_DB'" \
-  2>/dev/null || log "数据库 $POSTGRES_DB 已存在"
+# 建业务库（幂等）：initdb 只建角色不建库，服务连 $POSTGRES_DB。
+# 先查存在性再建——"createdb 失败一律当已存在"会把真实故障误报成正常。
+if ! su postgres -s /bin/bash -c \
+    "'$PG_BIN/psql' -h 127.0.0.1 -U '$POSTGRES_USER' -d postgres -tAc \
+     \"SELECT 1 FROM pg_database WHERE datname='$POSTGRES_DB'\"" | grep -q 1; then
+  su postgres -s /bin/bash -c "'$PG_BIN/createdb' -h 127.0.0.1 -U '$POSTGRES_USER' '$POSTGRES_DB'"
+  log "已创建数据库 $POSTGRES_DB"
+fi
 
 # 等 pg_isready（60s 预算；app-cli serve 内部还会再等一轮，双保险）
 for _ in $(seq 1 30); do "$PG_BIN/pg_isready" -q -h 127.0.0.1 -p 5432 && break; sleep 2; done

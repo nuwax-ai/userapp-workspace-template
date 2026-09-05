@@ -3,6 +3,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import Settings
@@ -36,10 +37,13 @@ def init_engine(settings: Settings) -> None:
 async def ensure_schema() -> None:
     """启动幂等建表（事务级咨询锁串行化并发首启，生产可改为 Alembic）。
 
-    带超时与重试：SQLAlchemy async + uvloop 在多服务并发启动的突发负载下
-    偶发"连接协程唤醒丢失"（await 永不完成、无异常——首启建表即卡死）。
-    单次尝试限时，超时则 dispose 连接池（丢弃可能半开/挂起的连接）后重试，
-    把"永远挂起"收敛为有限次自恢复。
+    带超时与重试，覆盖两类启动期瞬时故障：
+    ① SQLAlchemy async + uvloop 在多服务并发启动的突发负载下偶发"连接协程
+    唤醒丢失"（await 永不完成、无异常）——单次尝试限时收敛为自恢复；
+    ② 瞬时连接故障——连接被拒（裸 OSError 直穿）或执行中途断连
+    （SQLAlchemy 包装为 DBAPIError，如 PG 恰在此时重启/半开连接被回收）。
+    命中即 dispose 连接池（丢弃可能半开/挂起的连接）后有限次重试；确定性
+    错误（如 SQL 语法）重试同样快速失败，且 raise ... from 保留原始错误。
     """
     if engine is None:
         raise RuntimeError("engine not initialized; call init_engine() first")
@@ -50,7 +54,7 @@ async def ensure_schema() -> None:
             async with asyncio.timeout(_SCHEMA_ATTEMPT_TIMEOUT):
                 await _ensure_schema_once()
             return
-        except (TimeoutError, OSError) as exc:
+        except (TimeoutError, OSError, DBAPIError) as exc:
             last_error = exc
             if attempt < _SCHEMA_ATTEMPTS:
                 logging.getLogger(__name__).warning(

@@ -43,6 +43,11 @@ pub async fn ensure_schema(pool: &PgPool) -> anyhow::Result<()> {
     .execute(&mut *tx)
     .await
     .context("create items table")?;
+    // 兼容旧表（缺 deleted 列的早期形态），与其余四个服务的初始化对齐
+    sqlx::query("ALTER TABLE items ADD COLUMN IF NOT EXISTS deleted INT NOT NULL DEFAULT 0")
+        .execute(&mut *tx)
+        .await
+        .context("add deleted column if missing")?;
     tx.commit().await.context("commit schema tx")?;
     tracing::info!("schema ready: items");
     Ok(())

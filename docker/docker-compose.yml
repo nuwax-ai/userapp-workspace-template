@@ -7,6 +7,22 @@
 # 切换前先 make docker-down。
 name: userapp-local
 
+x-app-build: &app-build
+  # context = docker/ 目录本身：镜像只 COPY entrypoint.sh，无需整个仓库作
+  # context（仓库内容经 bind mount 进容器，不走镜像）
+  context: .
+  dockerfile: Dockerfile
+  args:
+    APP_CLI_VERSION: "0.2.1"
+    # 切官方源示例（默认走国内镜像加速）：
+    # NPM_REGISTRY: "https://registry.npmjs.org"
+    # GOPROXY_URL: "https://proxy.golang.org,direct"
+    # GO_DOWNLOAD_URL: "https://go.dev/dl"
+    # PIP_INDEX_URL: "https://pypi.org/simple"
+    # MAVEN_ALIYUN: "false"
+    # CARGO_CN: "false"
+    # GITHUB_PROXY: ""
+
 x-app-volumes: &app-volumes
   # 仓库根 bind mount：产物落宿主树（已被 .gitignore 覆盖）
   - ..:/app/code
@@ -28,21 +44,7 @@ x-app-volumes: &app-volumes
 
 services:
   userapp: # 默认：产物态验证（全量构建 + .docker-run 部署布局 + serve）
-    build:
-      # context = docker/ 目录本身：镜像只 COPY entrypoint.sh，无需整个仓库作
-      # context（仓库内容经 bind mount 进容器，不走镜像）
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_CLI_VERSION: "0.2.1"
-        # 切官方源示例（默认走国内镜像加速）：
-        # NPM_REGISTRY: "https://registry.npmjs.org"
-        # GOPROXY_URL: "https://proxy.golang.org,direct"
-        # GO_DOWNLOAD_URL: "https://go.dev/dl"
-        # PIP_INDEX_URL: "https://pypi.org/simple"
-        # MAVEN_ALIYUN: "false"
-        # CARGO_CN: "false"
-        # GITHUB_PROXY: ""
+    build: *app-build
     image: userapp-local:latest
     container_name: userapp-local
     init: false # entrypoint 自管信号链
@@ -64,7 +66,8 @@ services:
 
   userapp-dev: # dev 源码态（vite/next 热加载）；make docker-dev 专用
     profiles: ["dev"]
-    image: userapp-local:latest # 与 userapp 同 build，自动共享
+    build: *app-build # 与 userapp 同 build（锚点）：无先验镜像时 make docker-dev 也能独立起
+    image: userapp-local:latest # 同 tag，两服务自动共享
     container_name: userapp-local-dev
     working_dir: /app/code
     command: ["dev"]
