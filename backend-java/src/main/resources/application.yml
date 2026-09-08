@@ -66,7 +66,7 @@ logging:
     name: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java.log}
   logback:
     rollingpolicy:
-      # 不压缩（无 .gz 后缀）：manifest glob "backend-java*" 会匹配轮转文件，
+      # 不压缩（无 .gz 后缀）：manifest logs.glob 会匹配轮转文件，
       # 压缩产物会以二进制乱码进日志采集查询面。
       file-name-pattern: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java}.%d{yyyy-MM-dd}.%i.log
       max-file-size: 50MB
