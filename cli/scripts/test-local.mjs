@@ -141,6 +141,11 @@ try {
   );
   assert(nextManifest.includes('migrate'), 'next manifest 含 migrate');
   assert(nextManifest.includes('userapp-next-standalone.zip'), 'next artifact 占位符替换');
+  const nextPkg = fs.readFileSync(
+    path.join(WORKDIR, 'test-next', 'userapp-next', 'package.json'),
+    'utf-8',
+  );
+  assert(nextPkg.includes('"geist"'), 'next 字体走 geist 包(构建期零外网)');
 
   // === --next + --backend 冲突 ===
   console.log('\n=== --next + --backend 冲突检测 ===');

@@ -83,6 +83,8 @@ npm run build:standalone   # → userapp-next-standalone.zip
 
 > 跨架构：`next.config.ts` 已设 `images.unoptimized: true` 跳过 sharp（native），mac arm64 构建的产物能在 amd64 容器运行。
 
+> 构建期零外网：字体随 `geist` npm 包内置（勿改回 `next/font/google`，那会在构建时从 Google Fonts 下载，国内/受限沙箱必挂）。
+
 ## 部署与运行（Manifest v2）
 
 模板根 `project.manifest.toml` 是这个 service 的构建与运行声明：

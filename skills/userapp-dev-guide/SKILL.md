@@ -415,12 +415,32 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 
 ---
 
+## 国内网络与镜像
+
+registry 类依赖的镜像由**环境层**注入(平台沙箱自动配置 / docker ARG,见 docker/Dockerfile),
+项目内不硬编码镜像。裸机开发(国内网络)按需自行配置:
+
+| 语言/工具 | 配置 |
+|---|---|
+| Go | `export GOPROXY=https://goproxy.cn,direct` |
+| npm / pnpm | `npm config set registry https://registry.npmmirror.com`(pnpm 同理) |
+| pip | `export PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/` |
+| cargo | rsproxy(即 docker `CARGO_CN` 写入的 `/usr/local/cargo/config.toml`) |
+| maven | wrapper 已内置 aliyun 发行版镜像;依赖可配 aliyun 的 `settings.xml` |
+
+模板已消除的硬编码外网依赖:rust swagger-ui(vendored 内嵌)、next 字体(geist npm 包内置)、
+java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google 等受限站点,优先选随包
+分发的离线方案,参照 backend-rust README「构建与网络」。
+
+---
+
 ## 常见错误排查
 
 | 现象 | 原因 | 怎么改 |
 |---|---|---|
 | 构建失败 | manifest 校验不过/build 报错/没产出 artifact | 看报错;本地先跑 build 脚本 |
 | 构建失败:GitHub 直连超时(utoipa-swagger-ui 下载 swagger-ui) | 依赖的 build.rs 构建期从 GitHub 拉资源,沙箱禁直连 | 模板已启用 `vendored` 免下载;新增此类依赖优先离线 feature,或下载 URL 前拼沙箱注入的 `GITHUB_MIRROR_URL`(须为带 `dist/` 的 GitHub tag archive),见 backend-rust README「构建与网络」 |
+| 构建失败:Google Fonts 拉取超时(next/font) | `next/font/google` 构建期从 Google 下载字体 | 模板已用 geist npm 包内置字体;新页面勿用 `next/font/google`,选随包分发的字体包 |
 | 激活后不 Ready | health 路径错/服务崩/端口没监听 `$PORT`/DB 连不上 | 看日志面板;确认监听 `$PORT`;health 返 2xx |
 | 外部 502/404 | `[proxy].path` 没配/错/没监听 `$PORT` | 确认 path;看日志确认收到请求 |
 | 日志面板查不到 | glob 没匹配/日志没写 `$APP_LOG_DIR` | 检查 glob 和写文件路径 |
