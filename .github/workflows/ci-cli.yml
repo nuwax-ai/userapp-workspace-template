@@ -78,7 +78,7 @@ jobs:
           $CLI add backend-rust --service-id my-rust-api --path /api/rust-v2/
           grep -q 'name = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
           grep -q '"axum", "vendored"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
-          grep -q 'maven.aliyun.com' cli/templates/backend-java/.mvn/wrapper/maven-wrapper.properties
+          grep -q 'maven.aliyun.com' "$GITHUB_WORKSPACE/cli/templates/backend-java/.mvn/wrapper/maven-wrapper.properties"
 
           echo "=== add: worker (no [proxy], kind=worker) ==="
           $CLI add backend-python --kind worker --service-id bg-worker
@@ -92,7 +92,8 @@ jobs:
           grep -q 'npx skills add nuwax-ai/userapp-workspace-template' "$WORKDIR/test-app/AGENTS.md"
 
           echo "=== init: react custom service_id + path (pack placeholder + VITE_BASE derive) ==="
-          grep -q '__VITE_BASE__' cli/templates/frontend-react-vite/vite.config.ts
+          # 注:此处已 cd 到 $WORKDIR/test-app,仓库文件必须用 $GITHUB_WORKSPACE 绝对路径
+          grep -q '__VITE_BASE__' "$GITHUB_WORKSPACE/cli/templates/frontend-react-vite/vite.config.ts"
           $CLI init "$WORKDIR/test-web" --frontend react --service-id my-web --path /admin/
           grep -q "base: command === 'serve' ? '/' : '/admin/'" "$WORKDIR/test-web/my-web/vite.config.ts"
           grep -q 'service_id = "my-web"' "$WORKDIR/test-web/my-web/project.manifest.toml"
