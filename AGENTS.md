@@ -60,6 +60,7 @@ npx skills add . --agent zcode --copy
 
 ```bash
 # 发布在 npm(用户用)
+npx @nuwax-ai/template-cli list backend    # 查看可用模板(backend / frontend)
 npx @nuwax-ai/template-cli init my-app --backend go --frontend react
 npx @nuwax-ai/template-cli add backend-rust
 

@@ -14,49 +14,72 @@ npx @nuwax-ai/template-cli <command>
 
 ## 命令
 
-### `list` — 列出所有可用模板
+### `list [category]` — 列出所有可用模板
 
 ```bash
-create-userapp list
-create-userapp list --category backend
+template-cli list                 # 全部(后端 4 + 前端 2 + 全栈 1)
+template-cli list backend         # 只看后端模板
+template-cli list frontend        # 只看前端模板
+template-cli list --category fullstack   # 等价写法
 ```
 
 ### `init <dir>` — 新建 workspace
 
 ```bash
 # 后端 + 前端组合
-create-userapp init my-app --backend go --frontend react
+template-cli init my-app --backend go --frontend react
 
 # 纯后端
-create-userapp init my-api --backend java
+template-cli init my-api --backend java
 
 # 纯前端
-create-userapp init my-web --frontend vue
+template-cli init my-web --frontend vue
 
 # Next.js 全栈单体(独占 /)
-create-userapp init my-fullstack --next
+template-cli init my-fullstack --next
 ```
 
 参数:
 - `--backend <lang>`: 后端语言(go / java / python / rust)
 - `--frontend <lang>`: 前端框架(react / vue)
-- `--next`: 使用 Next.js 全栈单体
+- `--next`: 使用 Next.js 全栈单体(独占 `/`,与 --backend/--frontend 互斥)
+- `--service-id <id>`: 覆盖默认 service_id(仅单模板时有效)
+- `--path <path>`: 覆盖默认 proxy.path(仅单模板时有效)
 - `--force`: 覆盖已存在的目录
 
 ### `add <template-id>` — 往现有 workspace 追加 service
 
 ```bash
 cd my-app  # 在 workspace 根目录
-create-userapp add backend-rust
+template-cli add backend-rust
 
 # 自定义 service_id 和路由
-create-userapp add backend-go --service-id my-api --path /api/v2/
+template-cli add backend-go --service-id my-api --path /api/v2/
 ```
 
 参数:
 - `--service-id <id>`: 覆盖默认 service_id
 - `--path <path>`: 覆盖默认 proxy.path
+- `--kind <kind>`: 服务类型,`web`(默认,对外 HTTP)/ `worker`(后台任务,不声明 proxy、不参与路由校验)
 - `--force`: 覆盖已存在的目录
+
+**追加同类模板的第二个实例**(如 workspace 已有 backend-java,再加一个 java 后端):默认身份
+(service_id 和 path)已被占用,直接 add 会被拒。**须同时指定 `--service-id` 和 `--path`**:
+
+```bash
+template-cli add backend-java --service-id java-admin --path /api/java-admin/
+```
+
+新实例的身份派生(artifactId/应用名/日志文件/目录名)自动跟随 service_id,见上文"参数化机制"。
+
+### `docs` — 查看开发者文档
+
+```bash
+template-cli docs         # 打印随包分发的开发者文档目录(7 篇)
+template-cli docs --open  # 用系统默认程序打开(macOS: open / Linux: xdg-open)
+```
+
+文档覆盖:核心概念、快速开始、manifest 字段参考、pingap 路由、日志、部署发布与回滚。
 
 ## 模板一览
 
@@ -82,7 +105,7 @@ create-userapp add backend-go --service-id my-api --path /api/v2/
 
 自定义 service_id 时,所有身份相关变量会自动派生。例如:
 ```bash
-create-userapp add backend-go --service-id my-api
+template-cli add backend-go --service-id my-api
 # → go.mod 的 module 名 = my-api
 # → import 路径 = my-api/internal/...
 # → 日志文件 = my-api.log
@@ -107,16 +130,21 @@ cli/
 │   ├── index.ts              CLI 入口
 │   ├── templates.ts          模板注册表(元数据 + 参数化规则)
 │   ├── render.ts             占位符替换引擎
-│   ├── manifest.ts           manifest 生成器
+│   ├── manifest.ts           manifest/AGENTS.md/index.html 生成器
 │   ├── validate.ts           冲突校验
+│   ├── update-check.ts       启动时更新检查(npm registry,24h 缓存)
 │   └── commands/
 │       ├── init.ts           init 命令
 │       ├── add.ts            add 命令
 │       ├── list.ts           list 命令
+│       ├── docs.ts           docs 命令
 │       └── release.ts        模板释放(init/add 共用)
 ├── scripts/
-│   └── pack-templates.mjs    从 ../backend-go 等源目录打包模板
-└── templates/                【构建产物】打包后的参数化模板
+│   ├── pack-templates.mjs    从 ../backend-go 等源目录打包模板
+│   ├── test-local.mjs        本地 E2E(npm test,与 CI 同口径)
+│   └── release.mjs           发版辅助(beta/release:算版本号 + commit + tag)
+├── docs/                     【随包分发】开发者文档(pack 时从 ../docs 同步)
+└── templates/                【构建产物】打包后的参数化模板(gitignored)
 ```
 
 ### 开发流程
@@ -145,7 +173,13 @@ node dist/index.js init /tmp/test-app --backend go --frontend react
 
 ### 发布
 
+发布走 **tag 触发 CI**,不在本地直接 `npm publish`:
+
 ```bash
-npm publish
-# prepublishOnly 会自动执行: npm run build && npm run pack
+npm run release:beta   # 0.1.3 → 0.1.3-beta.1 → 0.1.3-beta.2 ...(自动 bump + commit + tag)
+npm run release        # 0.1.3-beta.2 → 0.1.3(去 beta 后缀)
+
+git push origin main --tags   # 推 tag 触发 GitHub Actions 发布到 npm
 ```
+
+Tag 规则:`v0.1.3-beta.1` → npm dist-tag `beta`;`v0.1.3` → dist-tag `latest`。

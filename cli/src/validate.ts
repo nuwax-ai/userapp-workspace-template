@@ -74,7 +74,8 @@ export function checkConflicts(
     const pathConflict = existing.find((s) => s.proxyPath === newProxyPath);
     if (pathConflict) {
       errors.push(
-        `proxy.path 冲突: "${newProxyPath}" 已被 ${pathConflict.serviceId} (${pathConflict.directory}/) 占用`,
+        `proxy.path 冲突: "${newProxyPath}" 已被 ${pathConflict.serviceId} (${pathConflict.directory}/) 占用。\n` +
+          `  同类模板追加多个实例时,用 --service-id 和 --path 指定新身份与路由。`,
       );
     }
 

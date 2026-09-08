@@ -7,7 +7,7 @@ description: >
   注意:manifest 字段、路由规划、健康检查、日志、部署回滚等平台规范,
   请参考 userapp-dev-guide skill。
   触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
-  create-userapp、@nuwax-ai/template-cli、init、add、worker。
+  @nuwax-ai/template-cli、template-cli、init、add、worker。
 ---
 
 # UserApp 模板脚手架
@@ -27,7 +27,9 @@ description: >
 ### 查看可用模板
 
 ```bash
-npx @nuwax-ai/template-cli list
+npx @nuwax-ai/template-cli list            # 全部(后端 4 + 前端 2 + 全栈 1)
+npx @nuwax-ai/template-cli list backend    # 只看后端: go / java / python / rust
+npx @nuwax-ai/template-cli list frontend   # 只看前端: react / vue
 ```
 
 ### 查看开发者文档
@@ -69,7 +71,7 @@ npx @nuwax-ai/template-cli add <模板id>
 | 纯前端 SPA | `frontend-react-vite` / `frontend-vue3-vite` | `init <dir> --frontend react` |
 | 前后端分离 | 前端 SPA + 后端 API | `init <dir> --backend go --frontend react` |
 | 全栈单体(DB + 前端) | `userapp-next` | `init <dir> --next` |
-| 多个后端 | 主后端 + 追加 | init 后用 add 追加 |
+| 多个后端 | 主后端 + 追加 | init 后用 add 追加;**同类多实例须 `--service-id` + `--path`** |
 | 加后台 worker | 任意后端模板 + `--kind worker` | `add backend-python --kind worker` |
 
 ### 语言/框架特性对比
@@ -122,6 +124,23 @@ npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 - 日志文件名前缀 → `<service_id>`
 
 **注意:Java 的 package 名和源码目录不自动派生**。自定义 service_id 后,Java 的 `package com.example.backendjava;` 声明和 `src/main/java/com/example/backendjava/` 目录结构保持不变(只改 artifactId)。这能正常编译,但如果需要 package 名也跟着变,需手动 rename 目录和修改 package 声明。
+
+## 同类模板的多实例(如多个 Java 后端)
+
+用户要"再加一个 java/rust/... 后端"时,**直接 `add backend-java` 会被拒绝**——默认身份
+(service_id 和 path)已被第一个实例占用。这是 Fail-Fast 设计,不是 bug。
+
+追加同类模板的第二个实例,**必须同时指定 `--service-id` 和 `--path`**:
+
+```bash
+# workspace 里已有 backend-java(service_id=backend-java, path=/api/java/)
+npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/java-admin/
+```
+
+- 只给 `--service-id` 不给 `--path` 同样被拒(默认 path `/api/java/` 冲突);冲突报错会提示这两个参数
+- 建议路由从 service_id 派生(`java-admin` → `/api/java-admin/`),语义清晰
+- 新实例的身份派生规则(artifactId/应用名/日志文件/目录名自动跟随)见上节"自定义 service_id"
+- 两个实例完全独立:各自独立构建(Maven 工程/Go module 按 service_id 命名)、独立日志目录、独立端口(平台注入 `$PORT`);同库建表由 advisory lock 串行化,并发首启安全
 
 ## 后台 Worker
 

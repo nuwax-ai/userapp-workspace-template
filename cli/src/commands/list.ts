@@ -2,8 +2,9 @@
  * list 命令 —— 列出所有可用模板。
  *
  * 用法:
- *   create-userapp list
- *   create-userapp list --category backend
+ *   template-cli list                 # 全部
+ *   template-cli list backend         # 只看后端(位置参数)
+ *   template-cli list --category frontend
  */
 
 import type { Command } from 'commander';
@@ -15,19 +16,33 @@ export interface ListOptions {
   category?: string;
 }
 
+const VALID_CATEGORIES: TemplateCategory[] = ['backend', 'frontend', 'fullstack'];
+
 export function registerListCommand(program: Command): void {
   program
-    .command('list')
-    .description('列出所有可用模板')
-    .option('--category <cat>', '按分类过滤: backend / frontend / fullstack')
-    .action((opts: ListOptions) => {
-      runList(opts);
+    .command('list [category]')
+    .description('列出所有可用模板(可按分类过滤: backend / frontend / fullstack)')
+    .option('--category <cat>', '按分类过滤: backend / frontend / fullstack(等价于位置参数)')
+    .action((category: string | undefined, opts: ListOptions) => {
+      // 位置参数与 --category 同时给出且不一致时,显式报错而不是静默任选其一
+      if (category && opts.category && category !== opts.category) {
+        console.error(
+          k.red(`✗ 分类参数不一致: 位置参数 "${category}" ≠ --category "${opts.category}"`),
+        );
+        process.exit(1);
+      }
+      const filter = category ?? opts.category;
+      if (filter && !VALID_CATEGORIES.includes(filter as TemplateCategory)) {
+        console.error(k.red(`✗ 未知分类: "${filter}"。可选: ${VALID_CATEGORIES.join(' / ')}`));
+        process.exit(1);
+      }
+      runList(filter);
     });
 }
 
-function runList(opts: ListOptions): void {
-  const templates = opts.category
-    ? listByCategory(opts.category as TemplateCategory)
+function runList(category?: string): void {
+  const templates = category
+    ? listByCategory(category as TemplateCategory)
     : TEMPLATES;
 
   if (templates.length === 0) {
@@ -65,7 +80,9 @@ function runList(opts: ListOptions): void {
   }
 
   console.log(k.bold('\n用法:'));
-  console.log(k.gray('  create-userapp init <dir> --backend go --frontend react'));
-  console.log(k.gray('  create-userapp add backend-rust'));
-  console.log(k.gray('  create-userapp init <dir> --next'));
+  console.log(k.gray('  template-cli list backend          # 只看后端模板'));
+  console.log(k.gray('  template-cli list frontend         # 只看前端模板'));
+  console.log(k.gray('  template-cli init <dir> --backend go --frontend react'));
+  console.log(k.gray('  template-cli add backend-rust'));
+  console.log(k.gray('  template-cli init <dir> --next'));
 }

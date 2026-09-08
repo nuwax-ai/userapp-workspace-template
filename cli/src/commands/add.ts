@@ -2,7 +2,7 @@
  * add 命令 —— 往现有 workspace 追加 service。
  *
  * 用法:
- *   create-userapp add <template-id> [--service-id <id>] [--path <path>] [--force]
+ *   template-cli add <template-id> [--service-id <id>] [--path <path>] [--force]
  *
  * 流程:
  *  1. 确认当前目录是 workspace(有 workspace.manifest.toml)
@@ -98,6 +98,12 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
 
   const kindLabel = isWorker ? k.yellow(' [worker]') : '';
   console.log(k.cyan('▶ 追加 service: ') + k.bold(`${template.name} → ${serviceId}/`) + kindLabel);
+
+  // catch-all 服务独占 /:workspace 根的 index.html 兜底页不再生效(init 生成
+  // 的导航页),提示用户可删——与 init 对 catch-all 跳过生成 index.html 的行为对齐。
+  if (proxyPath === '/' && fs.existsSync(path.join(cwd, 'index.html'))) {
+    console.log(k.gray('  - 注意: index.html 兜底页将不再生效(catch-all 服务独占 / 路由),可删除'));
+  }
 
   // worker 覆盖模板的 kind 字段(用于 manifest 生成)
   const templateForRelease = isWorker ? { ...template, kind: 'worker' as const } : template;

@@ -27,6 +27,9 @@ npx @nuwax-ai/template-cli init my-fullstack --next
 
 # 往已有 workspace 追加 service
 cd my-app && npx @nuwax-ai/template-cli add backend-rust
+
+# 追加同类模板的第二个实例(如第二个 java 后端)须同时指定新身份与路由,默认身份会冲突被拒
+npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/java-admin/
 ```
 
 安装 Skill(让 AI Agent 自动使用):

@@ -157,10 +157,15 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
  * 生成 workspace 根目录的 AGENTS.md。
  *
  * 这是一个精简的 Agent 指引,让 Agent 在用户用 CLI 创建的新 workspace 里工作时,
- * 知道:项目结构、平台约束、怎么装 skills、怎么用 CLI 追加 service。
+ * 知道:项目结构(目录↔类型↔路由)、平台约束、怎么装 skills、怎么用 CLI 追加 service。
  */
-export function generateAgentsMd(workspaceName: string, services: Array<{ name: string; dir: string; type: string }>): string {
-  const serviceLines = services.map((s) => `| ${s.dir}/ | ${s.type} |`).join('\n');
+export function generateAgentsMd(
+  workspaceName: string,
+  services: Array<{ name: string; dir: string; type: string; proxyPath?: string }>,
+): string {
+  const serviceLines = services
+    .map((s) => `| ${s.dir}/ | ${s.type} | ${s.proxyPath ?? '—'} |`)
+    .join('\n');
 
   return `# ${workspaceName} — Agent Guide
 
@@ -178,9 +183,11 @@ npx skills add nuwax-ai/userapp-workspace-template
 
 ## 项目结构
 
-| 目录 | 类型 |
-|---|---|
+| 目录 | 类型 | 对外路由 |
+|---|---|---|
 ${serviceLines}
+
+> 用 \`add\` 追加服务后此表不会自动更新;各服务实际路由以其 \`project.manifest.toml\` 的 \`[proxy]\` 为准。
 
 ## 平台核心约束
 
@@ -194,7 +201,10 @@ ${serviceLines}
 ## 追加 Service
 
 \`\`\`bash
+npx @nuwax-ai/template-cli list backend    # 查看可用模板(backend / frontend)
 npx @nuwax-ai/template-cli add backend-rust
+# 追加同类模板的第二个实例(如第二个 java 后端)须同时指定新身份与路由,默认身份会冲突被拒:
+npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/java-admin/
 npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-worker
 \`\`\`
 `;

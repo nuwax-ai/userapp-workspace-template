@@ -84,6 +84,8 @@ try {
   assert(fs.existsSync(agentsPath), 'AGENTS.md 存在');
   const agentsContent = fs.readFileSync(agentsPath, 'utf-8');
   assert(agentsContent.includes('npx skills add nuwax-ai/userapp-workspace-template'), 'AGENTS.md 含 skills 安装命令');
+  assert(agentsContent.includes('| /api/go/ |'), 'AGENTS.md 结构表含服务路由列');
+  assert(agentsContent.includes('template-cli list backend'), 'AGENTS.md 含模板发现命令');
 
   // === add: rust with custom service_id ===
   console.log('\n=== add: rust custom service_id ===');

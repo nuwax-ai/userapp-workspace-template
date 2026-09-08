@@ -2,8 +2,8 @@
  * docs 命令 —— 打开或打印随 CLI 分发的开发者文档路径。
  *
  * 用法:
- *   create-userapp docs           # 打印文档目录路径
- *   create-userapp docs --open    # 尝试用系统默认程序打开(macOS: open)
+ *   template-cli docs           # 打印文档目录路径
+ *   template-cli docs --open    # 尝试用系统默认程序打开(macOS: open)
  */
 
 import path from 'node:path';

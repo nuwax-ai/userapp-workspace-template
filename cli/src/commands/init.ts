@@ -2,7 +2,7 @@
  * init 命令 —— 新建 workspace。
  *
  * 用法:
- *   create-userapp init <dir> [--backend <lang>] [--frontend <lang>] [--next]
+ *   template-cli init <dir> [--backend <lang>] [--frontend <lang>] [--next]
  *
  * 流程:
  *  1. 创建目标目录
@@ -114,11 +114,12 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
     });
   }
 
-  // 生成 AGENTS.md(让 Agent 知道项目结构 + 怎么装 skills)
+  // 生成 AGENTS.md(让 Agent 知道项目结构/路由 + 怎么装 skills)
   const servicesInfo = plan.map((p) => ({
     name: p.template.name,
     dir: p.dirName,
     type: p.template.type,
+    proxyPath: p.proxyPath,
   }));
   const agentsContent = generateAgentsMd(wsName, servicesInfo);
   fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);

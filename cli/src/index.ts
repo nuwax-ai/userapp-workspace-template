@@ -6,9 +6,9 @@
  * 按需组合多语言前后端模板,生成可发布的 workspace 结构。
  *
  * 用法:
- *   create-userapp init <dir> --backend go --frontend react
- *   create-userapp add backend-rust
- *   create-userapp list
+ *   template-cli init <dir> --backend go --frontend react
+ *   template-cli add backend-rust
+ *   template-cli list
  */
 
 import { Command } from 'commander';
@@ -30,7 +30,7 @@ const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 
 const program = new Command();
 
 program
-  .name('create-userapp')
+  .name('template-cli')
   .description('UserApp workspace 模板脚手架 — 按需组合多语言前后端模板')
   .version(pkg.version);
 
