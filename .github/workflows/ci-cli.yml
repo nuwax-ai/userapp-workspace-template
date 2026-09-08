@@ -77,6 +77,7 @@ jobs:
           cd "$WORKDIR/test-app"
           $CLI add backend-rust --service-id my-rust-api --path /api/rust-v2/
           grep -q 'name = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
+          grep -q '"axum", "vendored"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
 
           echo "=== add: worker (no [proxy], kind=worker) ==="
           $CLI add backend-python --kind worker --service-id bg-worker
@@ -91,12 +92,11 @@ jobs:
 
           echo "=== init: react custom service_id + path (pack placeholder + VITE_BASE derive) ==="
           grep -q '__VITE_BASE__' cli/templates/frontend-react-vite/vite.config.ts
-          grep -q '__HEALTH_SERVICE_TAG__' cli/templates/frontend-react-vite/static-server.cjs
           $CLI init "$WORKDIR/test-web" --frontend react --service-id my-web --path /admin/
-          grep -q "base: '/admin/'" "$WORKDIR/test-web/my-web/vite.config.ts"
+          grep -q "base: command === 'serve' ? '/' : '/admin/'" "$WORKDIR/test-web/my-web/vite.config.ts"
           grep -q 'service_id = "my-web"' "$WORKDIR/test-web/my-web/project.manifest.toml"
           grep -q 'path = "/admin/"' "$WORKDIR/test-web/my-web/project.manifest.toml"
-          grep -q "process.env.HOSTNAME || '0.0.0.0'" "$WORKDIR/test-web/my-web/static-server.cjs"
+          grep -q 'type = "static"' "$WORKDIR/test-web/my-web/project.manifest.toml"
 
           echo "=== conflict detection ==="
           if $CLI add backend-go 2>/dev/null; then

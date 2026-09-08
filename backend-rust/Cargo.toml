@@ -26,7 +26,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
 tracing-appender = "0.2"
 utoipa = { version = "5", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
+# vendored：swagger-ui 资源随 crate 内嵌，构建期零外网——平台沙箱禁止直连 GitHub，
+# 而 build.rs 默认会用 curl 从 GitHub 下载 swagger-ui zip。
+utoipa-swagger-ui = { version = "9", features = ["axum", "vendored"] }
 
 [profile.release]
 lto = true

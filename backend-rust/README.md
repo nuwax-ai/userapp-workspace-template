@@ -23,6 +23,17 @@ OpenAPI：`/api-docs/openapi.json`（Swagger UI 见 `/docs`）
 sh scripts/build-standalone.sh   # → artifact.zip（根目录含 server）
 ```
 
+## 构建与网络
+
+构建期**零外网依赖**：swagger-ui 资源经 `utoipa-swagger-ui` 的 `vendored` feature 随 crate 内嵌（平台沙箱禁止直连 GitHub）。
+
+之后若新增"构建期从 GitHub 下载资源"的依赖，按优先级处理：
+
+1. 优先使用该依赖自带的离线/vendored 类 feature（同 swagger-ui 的做法）；
+2. 否则把下载 URL 前拼沙箱注入的镜像源，如
+   `SWAGGER_UI_DOWNLOAD_URL="${GITHUB_MIRROR_URL}https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip"`。
+   注意：必须是**带 `dist/` 子目录的 GitHub tag archive**，官方 release 的 `swagger-ui-dist.zip` 解不出文件会导致构建失败。
+
 ## 中间件（外 → 内）
 
 1. `SetRequestId` / `PropagateRequestId`（`X-Request-Id`）

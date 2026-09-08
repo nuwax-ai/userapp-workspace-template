@@ -420,6 +420,7 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 | 现象 | 原因 | 怎么改 |
 |---|---|---|
 | 构建失败 | manifest 校验不过/build 报错/没产出 artifact | 看报错;本地先跑 build 脚本 |
+| 构建失败:GitHub 直连超时(utoipa-swagger-ui 下载 swagger-ui) | 依赖的 build.rs 构建期从 GitHub 拉资源,沙箱禁直连 | 模板已启用 `vendored` 免下载;新增此类依赖优先离线 feature,或下载 URL 前拼沙箱注入的 `GITHUB_MIRROR_URL`(须为带 `dist/` 的 GitHub tag archive),见 backend-rust README「构建与网络」 |
 | 激活后不 Ready | health 路径错/服务崩/端口没监听 `$PORT`/DB 连不上 | 看日志面板;确认监听 `$PORT`;health 返 2xx |
 | 外部 502/404 | `[proxy].path` 没配/错/没监听 `$PORT` | 确认 path;看日志确认收到请求 |
 | 日志面板查不到 | glob 没匹配/日志没写 `$APP_LOG_DIR` | 检查 glob 和写文件路径 |

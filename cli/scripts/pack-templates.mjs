@@ -134,11 +134,13 @@ const PLACEHOLDER_RULES = {
     'package.json': [
       { from: '"name": "@nuwax-ai/react-vite"', to: '"name": "__PACKAGE_NAME__"' },
     ],
+    // base 按 command 分流:dev serve 用 '/',build 产物带前缀;
+    // __VITE_BASE__ 占位整个字面量(含尾斜杠,渲染时随 [proxy].path 派生)
     '**/vite.config.ts': [
-      { from: "base: '/react/',", to: "base: '__VITE_BASE__'," },
-    ],
-    '**/static-server.cjs': [
-      { from: "service: 'react'", to: "service: '__HEALTH_SERVICE_TAG__'" },
+      {
+        from: "base: command === 'serve' ? '/' : '/react/',",
+        to: "base: command === 'serve' ? '/' : '__VITE_BASE__',",
+      },
     ],
     '**/index.html': [
       { from: '<title>React Vite App</title>', to: '<title>__HTML_TITLE__</title>' },
@@ -150,10 +152,10 @@ const PLACEHOLDER_RULES = {
       { from: '"name": "@nuwax-ai/vue3-vite"', to: '"name": "__PACKAGE_NAME__"' },
     ],
     '**/vite.config.ts': [
-      { from: "base: '/vue/',", to: "base: '__VITE_BASE__'," },
-    ],
-    '**/static-server.cjs': [
-      { from: "service: 'vue'", to: "service: '__HEALTH_SERVICE_TAG__'" },
+      {
+        from: "base: command === 'serve' ? '/' : '/vue/',",
+        to: "base: command === 'serve' ? '/' : '__VITE_BASE__',",
+      },
     ],
     '**/index.html': [
       { from: '<title>Vue3 Vite App</title>', to: '<title>__HTML_TITLE__</title>' },
