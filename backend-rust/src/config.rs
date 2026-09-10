@@ -29,10 +29,10 @@ impl Config {
         let pg_host = env::var("PGHOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("PGPORT").unwrap_or_else(|_| "5432".into());
         let pg_user =
-            urlencoding_component(&env::var("POSTGRES_USER").unwrap_or_else(|_| "app".into()));
+            urlencoding_component(&env::var("POSTGRES_USER").unwrap_or_else(|_| "dev".into()));
         let pg_pass =
-            urlencoding_component(&env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "app".into()));
-        let pg_db = env::var("POSTGRES_DB").unwrap_or_else(|_| "app".into());
+            urlencoding_component(&env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "dev".into()));
+        let pg_db = env::var("POSTGRES_DB").unwrap_or_else(|_| "dev".into());
 
         Ok(Self {
             port: env::var("PORT").unwrap_or_else(|_| "8080".into()),

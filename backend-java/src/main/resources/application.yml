@@ -5,9 +5,9 @@ server:
 
 spring:
   datasource:
-    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${POSTGRES_DB:app}?sslmode=disable
-    username: ${POSTGRES_USER:app}
-    password: ${POSTGRES_PASSWORD:app}
+    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${POSTGRES_DB:dev}?sslmode=disable
+    username: ${POSTGRES_USER:dev}
+    password: ${POSTGRES_PASSWORD:dev}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: backend-java-pool

@@ -29,9 +29,9 @@ func Load() (Config, error) {
 
 		PGHost: getenv("PGHOST", "localhost"),
 		PGPort: getenv("PGPORT", "5432"),
-		PGUser: getenv("POSTGRES_USER", "app"),
-		PGPass: getenv("POSTGRES_PASSWORD", "app"),
-		PGDB:   getenv("POSTGRES_DB", "app"),
+		PGUser: getenv("POSTGRES_USER", "dev"),
+		PGPass: getenv("POSTGRES_PASSWORD", "dev"),
+		PGDB:   getenv("POSTGRES_DB", "dev"),
 	}
 
 	var err error
