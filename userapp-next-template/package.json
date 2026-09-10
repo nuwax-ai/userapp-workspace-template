@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "build:standalone": "node scripts/build-standalone.mjs",
+    "build:standalone": "pnpm install --frozen-lockfile && node scripts/build-standalone.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:push": "drizzle-kit push",
