@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -29,9 +30,9 @@ func Load() (Config, error) {
 
 		PGHost: getenv("PGHOST", "localhost"),
 		PGPort: getenv("PGPORT", "5432"),
-		PGUser: getenv("POSTGRES_USER", "dev"),
-		PGPass: getenv("POSTGRES_PASSWORD", "dev"),
-		PGDB:   getenv("POSTGRES_DB", "dev"),
+		PGUser: getenvWarn("POSTGRES_USER", "dev"),
+		PGPass: getenvWarn("POSTGRES_PASSWORD", "dev"),
+		PGDB:   getenvWarn("POSTGRES_DB", "dev"),
 	}
 
 	var err error
@@ -63,6 +64,16 @@ func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
 	}
+	return def
+}
+
+// getenvWarn 凭据类缺省回退打 WARN 保持可观测：缺省是平台初始账号 dev/dev，
+// 用户改过 PG 密码后静默回落会把排障引向模糊的 "password authentication failed"。
+func getenvWarn(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	log.Printf("WARN: %s not set, using platform default %q", key, def)
 	return def
 }
 

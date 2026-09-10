@@ -6,5 +6,7 @@ cargo build --release
 # 旧进程继续用旧 inode，下次启动用新文件。
 cp target/release/server server.tmp
 mv -f server.tmp server
+# 先删旧 zip：zip 对已存在文件是更新模式，产物集合变化时旧条目会残留
+rm -f artifact.zip
 zip artifact.zip server
 echo "✅ artifact.zip 已生成"

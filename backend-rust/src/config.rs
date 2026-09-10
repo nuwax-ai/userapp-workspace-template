@@ -28,11 +28,9 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let pg_host = env::var("PGHOST").unwrap_or_else(|_| "localhost".into());
         let pg_port = env::var("PGPORT").unwrap_or_else(|_| "5432".into());
-        let pg_user =
-            urlencoding_component(&env::var("POSTGRES_USER").unwrap_or_else(|_| "dev".into()));
-        let pg_pass =
-            urlencoding_component(&env::var("POSTGRES_PASSWORD").unwrap_or_else(|_| "dev".into()));
-        let pg_db = env::var("POSTGRES_DB").unwrap_or_else(|_| "dev".into());
+        let pg_user = urlencoding_component(&env_or_default_warned("POSTGRES_USER", "dev"));
+        let pg_pass = urlencoding_component(&env_or_default_warned("POSTGRES_PASSWORD", "dev"));
+        let pg_db = env_or_default_warned("POSTGRES_DB", "dev");
 
         Ok(Self {
             port: env::var("PORT").unwrap_or_else(|_| "8080".into()),
@@ -54,6 +52,15 @@ impl Config {
                 .unwrap_or_else(|_| "info".into()),
         })
     }
+}
+
+/// 凭据类缺省回退打 WARN 保持可观测：缺省是平台初始账号 dev/dev，用户改过
+/// PG 密码后静默回落会把排障引向模糊的「密码错误」而非「缺 POSTGRES_*」。
+fn env_or_default_warned(key: &str, def: &str) -> String {
+    env::var(key).unwrap_or_else(|_| {
+        eprintln!("WARN: {key} not set, using platform default '{def}'");
+        def.to_string()
+    })
 }
 
 /// 解析 u32 环境变量；未设置用默认值，设置但非法则 fail-fast。

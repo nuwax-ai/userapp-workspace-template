@@ -1,3 +1,5 @@
+import os
+
 from urllib.parse import quote_plus
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -29,17 +31,25 @@ class Settings(BaseSettings):
         )
 
 
+def _env_or_default(key: str, default: str) -> str:
+    """凭据类缺省回退打 WARN 保持可观测：缺省是平台初始账号 dev/dev，
+    用户改过 PG 密码后静默回落会把排障引向模糊的「密码错误」。"""
+    value = os.environ.get(key)
+    if value is None:
+        print(f"WARN: {key} not set, using platform default '{default}'", flush=True)
+        return default
+    return value
+
+
 def get_settings() -> Settings:
     # 同时兼容 PORT / PGHOST 等大写环境变量
-    import os
-
     return Settings(
         port=int(os.environ.get("PORT", "8080")),
         pghost=os.environ.get("PGHOST", "localhost"),
         pgport=int(os.environ.get("PGPORT", "5432")),
-        postgres_user=os.environ.get("POSTGRES_USER", "dev"),
-        postgres_password=os.environ.get("POSTGRES_PASSWORD", "dev"),
-        postgres_db=os.environ.get("POSTGRES_DB", "dev"),
+        postgres_user=_env_or_default("POSTGRES_USER", "dev"),
+        postgres_password=_env_or_default("POSTGRES_PASSWORD", "dev"),
+        postgres_db=_env_or_default("POSTGRES_DB", "dev"),
         db_pool_size=int(os.environ.get("DB_POOL_SIZE", "5")),
         db_max_overflow=int(os.environ.get("DB_MAX_OVERFLOW", "5")),
         db_pool_timeout=int(os.environ.get("DB_POOL_TIMEOUT", "30")),
