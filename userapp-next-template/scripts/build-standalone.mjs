@@ -21,8 +21,10 @@ const ZIP = join(ROOT, 'userapp-next-standalone.zip');
 const log = (m) => console.log(m);
 
 async function main() {
-  log('📦 [0/6] npm ci（消费 package-lock.json 可重现安装）...');
-  execSync('npm ci', { stdio: 'inherit', cwd: ROOT });
+  // pnpm 安装（模板不带 lock：首次生成、有 lock 复用；onlyBuiltDependencies
+  // 已在 package.json 声明 esbuild/sharp 等构建脚本白名单）
+  log('📦 [0/6] pnpm install...');
+  execSync('pnpm install', { stdio: 'inherit', cwd: ROOT });
 
   // esbuild/archiver 依赖 npm ci 的产物——静态 import 会在安装前解析即失败，
   // 须在安装完成后动态加载
