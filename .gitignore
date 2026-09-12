@@ -55,3 +55,4 @@ cli/docs/
 # IDE 会话产物
 .zcode/
 .qoder/
+tmp/
