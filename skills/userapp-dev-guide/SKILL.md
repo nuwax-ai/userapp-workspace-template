@@ -153,7 +153,9 @@ LOG_LEVEL = "debug"
 ```
 postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 ```
-默认 user/db = `app`,密码平台注入。**不要在 [env] 里覆盖这些**。
+代码一律读环境变量,**不要在 [env] 里覆盖这些**。未注入时初始默认均为 `dev`
+(账号/密码/库名;开发沙箱手动执行 SQL:`PGPASSWORD=dev psql -h 127.0.0.1 -U dev -d dev`),
+平台注入时以注入值为准。
 
 ---
 

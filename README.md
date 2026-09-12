@@ -330,7 +330,8 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 ```
 
 **数据库**:容器自带 PostgreSQL,你的服务连 `localhost:5432`,账号/库/密码读 `POSTGRES_USER`
-(默认 `app`)、`POSTGRES_DB`(默认 `app`)、`POSTGRES_PASSWORD`(平台注入)环境变量。详见
+(未注入时默认 `dev`)、`POSTGRES_DB`(未注入时默认 `dev`)、`POSTGRES_PASSWORD`(平台注入,
+未注入时默认 `dev`)环境变量。详见
 [docs/01-concepts.md](docs/01-concepts.md) 的「数据库」一节。
 
 **database 目录**:workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql`

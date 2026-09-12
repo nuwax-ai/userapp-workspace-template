@@ -149,9 +149,9 @@ app-runtime 镜像自带 PostgreSQL(和 pgweb 管理台),跑在**同一个应用
 |---|---|---|
 | 主机 | 直连同容器 | `localhost`(`127.0.0.1`) |
 | 端口 | `PGPORT` | `5432` |
-| 用户名 | `POSTGRES_USER` | `app` |
-| 密码 | `POSTGRES_PASSWORD` | 平台注入(本地兜底 `app`) |
-| 默认库 | `POSTGRES_DB` | `app`(首次 initdb 时自动建) |
+| 用户名 | `POSTGRES_USER` | `dev` |
+| 密码 | `POSTGRES_PASSWORD` | 平台注入时以注入值为准;未注入时 `dev` |
+| 默认库 | `POSTGRES_DB` | `dev`(首次 initdb 时自动建) |
 
 连接串示例:
 
