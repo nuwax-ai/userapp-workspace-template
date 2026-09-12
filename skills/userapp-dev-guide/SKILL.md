@@ -5,12 +5,13 @@ description: >
   写或改 manifest 配置、规划路由、处理健康检查、声明日志、发布部署、回滚、
   排查错误、本地运行验证时使用。覆盖:核心概念、manifest 全字段、校验规则、
   环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调)、
-  健康探针、日志、发布状态机、版本保留、回滚、迁移约定、常见错误排查、
+  健康探针、日志、发布状态机、版本保留、回滚、迁移约定、database 目录 SQL 自动执行、
+  常见错误排查、
   app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
   触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
   proxy path、strip_prefix、路由、catch-all、反代、pingap、健康检查、探针、
   readiness、liveness、SIGTERM、优雅关闭、日志、发布、部署、上线、回滚、
-  迁移、migrate、启动失败、502、404、端口、PORT、环境变量、数据库连接、
+  迁移、migrate、database 目录、自动执行 SQL、建表、表不存在、启动失败、502、404、端口、PORT、环境变量、数据库连接、
   app-cli、gen-lock、release.lock、本地运行、本地验证、本地测试、集成验证。
 ---
 
@@ -277,6 +278,29 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 3. **先 expand 再发代码最后 contract** — 加列先加,删列等旧代码下线
 4. **平台不执行 down migration**
 
+### database/ 目录 SQL 自动执行
+
+workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文件,由**平台**在发布
+activate 后自动按序执行(容器内 `psql -f`)。规则:
+
+- **顺序**:根 `database/` 先(建库/扩展类),子项目按目录名字典序;目录内按文件名字典序
+  (建议 `001_`、`002_` 前缀显式控制)
+- **只扫一层**:仅 `database/` 直接子文件,子目录不递归;非 `.sql` 不进发布包
+- **文件名白名单 `[A-Za-z0-9._-]`**:中文/空格/特殊字符文件名被**静默跳过**(仅 warn 日志)
+- **幂等**:每次发布重跑全部 SQL(无执行记录表),SQL 须自带幂等
+  (`CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`)
+- **失败不阻断**:单文件失败仅日志跳过,继续下一文件;`ON_ERROR_STOP=on` 保证文件内原子
+- **目标库**:运行容器内 PG(`$POSTGRES_USER`/`$POSTGRES_DB`);执行前等 PG 就绪(≤60s),
+  未就绪本轮整体跳过
+
+与 `run.migrate` 的边界:database/ 是**平台**执行、失败仅日志;run.migrate 是 **app-cli**
+在服务启动前执行应用自管迁移、失败阻断启动。建库/扩展/平台侧初始化放 database/,
+应用 schema 演进走 run.migrate。
+
+> ⚠️ **开发阶段不会自动执行**:本地 devrun / 沙箱调试时 database/ 里的 SQL 不会被跑——
+> schema 变更需先手动执行(dbx / psql 连开发库),再同步放入 database/ 随发布生效。
+> 完整规则见各 workspace 根 `database/README.md`。
+
 ### 优雅关闭
 
 SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到 SIGTERM 应停止接新请求、排空在途、关连接。
@@ -445,6 +469,8 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 | 外部 502/404 | `[proxy].path` 没配/错/没监听 `$PORT` | 确认 path;看日志确认收到请求 |
 | 日志面板查不到 | glob 没匹配/日志没写 `$APP_LOG_DIR` | 检查 glob 和写文件路径 |
 | 回滚后报错 | 迁移非幂等/schema 不兼容 | 修迁移(幂等+expand/contract) |
+| 发布后 SQL 没执行/表不存在 | 文件名含中文/空格(白名单 `[A-Za-z0-9._-]` 外被跳过)、SQL 不在 `database/` 直接子层、或单文件报错被跳过 | 文件名改白名单字符并放 `database/` 一级;看部署日志 `database sql` 段的 failed 列表;修好重新发布 |
+| 开发/本地运行报表不存在 | `database/` SQL 只在发布 activate 后自动执行,开发阶段不会跑 | 手动执行(dbx/psql 连开发库)后再起服务;应用 schema 演进改走 `run.migrate` |
 | `unknown field` | 拼错字段/多写字段 | 严格模式,只写文档列出的字段 |
 | `duplicate proxy path` | 路由重复 | 改唯一 |
 | `multiple catch-all routes` | 两个 `/` | 只留一个 |

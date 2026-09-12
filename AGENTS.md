@@ -7,6 +7,7 @@
 ```
 userapp-workspace-template/
 ├── workspace.manifest.toml          # 开发用 workspace(含全部 7 个模板)
+├── database/                        # workspace 根 SQL 约定目录(发布时平台自动执行,规则见其 README)
 ├── backend-go/                      # Go (Gin + GORM) 后端模板源
 ├── backend-java/                    # Java (Spring Boot + MyBatis-Plus) 后端模板源
 ├── backend-python/                  # Python (FastAPI + SQLAlchemy) 后端模板源
@@ -33,6 +34,9 @@ userapp-workspace-template/
 3. **严格校验,Fail Fast** — 未知字段/非法枚举/重复路由/依赖环 → 构建直接失败
 4. **service_id 是稳定身份** — 不是目录名,决定日志目录/路由 upstream/依赖引用
 5. **回滚不执行 down migration** — 迁移必须幂等 + expand/contract
+6. **database/ 目录 = 发布时自动执行的 SQL** — 根 `database/` 先、子项目按目录字典序,
+   文件名字典序;SQL 须幂等,单文件失败仅日志不阻断发布;**开发阶段不自动执行**,
+   schema 变更需手动执行后再放入。详见 [database/README.md](database/README.md)
 
 > 完整字段参考、路由规划、健康检查、日志、部署回滚等,
 > 参考 **docs/** 目录或 **userapp-dev-guide** skill。

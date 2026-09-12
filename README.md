@@ -63,6 +63,7 @@ CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/template-cli li
 my-workspace/
 ├── workspace.manifest.toml          # 必有:workspace 级声明(名称、pingap 模式、健康策略)
 ├── index.html                       # 可选:访问入口默认页(根路径/未匹配路径兜底展示,可自行修改)
+├── database/                        # 可选:workspace 根 SQL(发布时平台自动执行,见下「database 目录」)
 │
 ├── backend-go/
 │   └── project.manifest.toml        # 必有:参与构建
@@ -331,6 +332,11 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 **数据库**:容器自带 PostgreSQL,你的服务连 `localhost:5432`,账号/库/密码读 `POSTGRES_USER`
 (默认 `app`)、`POSTGRES_DB`(默认 `app`)、`POSTGRES_PASSWORD`(平台注入)环境变量。详见
 [docs/01-concepts.md](docs/01-concepts.md) 的「数据库」一节。
+
+**database 目录**:workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql`
+文件,会在**发布(activate)成功后**被平台按序自动执行(根先、子项目按目录字典序、
+文件名字典序;须幂等;单文件失败仅日志不阻断发布)。**开发阶段不会自动执行**——本地
+调试时 schema 变更需手动跑(dbx / psql)。完整规则见 [database/README.md](database/README.md)。
 
 ---
 

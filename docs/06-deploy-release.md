@@ -15,8 +15,9 @@
 workspace-package-<release_id>.zip
 ├── workspace.manifest.toml        ← 你的 workspace manifest(原样打入)
 ├── release.lock.toml              ← 平台生成的不可变运行时快照
+├── database/                      ← workspace 根 SQL(activate 后平台自动执行)
 ├── pingap/                        ← 仅 extend/custom 模式存在
-└── <各 service 目录>/             ← 各服务的构建产物(原样打入)
+└── <各 service 目录>/             ← 各服务的构建产物 + {目录}/database/*.sql(原样打入)
 ```
 
 ### `release.lock.toml` —— 发布的运行时权威
@@ -125,6 +126,21 @@ workspace 启动失败。
 2. **新旧代码短期都能兼容同一 schema**——回滚时代码退回旧版,但 schema 不退,旧代码得能跑在新 schema 上;
 3. **先 expand,再发代码,最后 contract**——加列先加(兼容旧代码),删列要等旧代码下线后再删;
 4. **平台不执行 down migration**——别指望回滚自动改库。
+
+### `database/` 目录 —— 平台自动执行的 SQL(与 run.migrate 互补)
+
+workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文件,在发布 **activate 成功后**
+由平台按序自动执行(容器内 psql):根 `database/` 先执行,子项目按目录名字典序,目录内按文件名字典序。
+
+与 `run.migrate` 的分工:**建库/扩展/平台侧初始化**类 SQL 放 `database/` 目录(平台执行,
+单文件失败仅日志、不阻断发布);**应用自身的 schema 迁移**走 `run.migrate`(失败阻断启动)。
+
+关键约束(完整规则见各 workspace 的 `database/README.md`):
+
+- **幂等**——每次发布都会重跑全部 SQL(无执行记录),必须 `IF NOT EXISTS` / `ON CONFLICT` 自带幂等;
+- **文件名只能用 `[A-Za-z0-9._-]`**——中文/空格等字符的文件名会被平台静默跳过;
+- **只扫 `database/` 直接子层**——子目录不递归,非 `.sql` 文件不进发布包;
+- **开发阶段不自动执行**——本地调试时 schema 变更需手动执行(dbx / psql)后再放入本目录。
 
 ---
 
