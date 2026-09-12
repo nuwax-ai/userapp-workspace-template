@@ -19,7 +19,7 @@ import type { Command } from 'commander';
 import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
-import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml } from '../manifest.js';
+import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml, generateDatabaseReadme, CLAUDE_MD_CONTENT } from '../manifest.js';
 import { checkConflicts } from '../validate.js';
 import { releaseTemplate } from './release.js';
 
@@ -124,6 +124,15 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   const agentsContent = generateAgentsMd(wsName, servicesInfo);
   fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
   console.log(k.green('  ✓ ') + 'AGENTS.md');
+
+  // CLAUDE.md:Claude Code 经 @import 指令展开读取 AGENTS.md(其他 agent 直读 AGENTS.md)
+  fse.writeFileSync(path.join(absTarget, 'CLAUDE.md'), CLAUDE_MD_CONTENT);
+  console.log(k.green('  ✓ ') + 'CLAUDE.md(@AGENTS.md 导入)');
+
+  // workspace 根 database/(发布时平台自动执行 SQL 的约定目录,规则见其 README)
+  fse.ensureDirSync(path.join(absTarget, 'database'));
+  fse.writeFileSync(path.join(absTarget, 'database', 'README.md'), generateDatabaseReadme());
+  console.log(k.green('  ✓ ') + 'database/(平台自动执行 SQL 的约定目录)');
 
   // 输出下一步提示
   console.log(k.green('\n✓ workspace 创建完成!\n'));

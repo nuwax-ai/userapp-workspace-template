@@ -86,6 +86,19 @@ try {
   assert(agentsContent.includes('npx skills add nuwax-ai/userapp-workspace-template'), 'AGENTS.md 含 skills 安装命令');
   assert(agentsContent.includes('| /api/go/ |'), 'AGENTS.md 结构表含服务路由列');
   assert(agentsContent.includes('template-cli list backend'), 'AGENTS.md 含模板发现命令');
+  assert(agentsContent.includes('database/ 目录 = 发布时自动执行的 SQL'), 'AGENTS.md 含 database 约定');
+
+  // === CLAUDE.md + 根 database/(init 根产物) ===
+  const claudePath = path.join(appDir, 'CLAUDE.md');
+  assert(fs.existsSync(claudePath) && fs.readFileSync(claudePath, 'utf-8') === '@AGENTS.md\n', 'CLAUDE.md = @AGENTS.md 导入');
+  const genDbReadme = path.join(appDir, 'database', 'README.md');
+  assert(fs.existsSync(genDbReadme), '根 database/README.md 生成');
+  const repoDbReadme = fs.readFileSync(path.resolve(CLI_DIR, '..', 'database', 'README.md'), 'utf-8');
+  assert(
+    fs.readFileSync(genDbReadme, 'utf-8') === repoDbReadme,
+    '生成的 database/README.md 与仓库根逐字一致(防漂移)',
+  );
+  assert(repoDbReadme.includes('开发阶段不会自动执行'), 'database README 含开发阶段说明');
 
   // === add: rust with custom service_id ===
   console.log('\n=== add: rust custom service_id ===');
@@ -102,6 +115,11 @@ try {
     'utf-8',
   );
   assert(packedVite.includes('__VITE_BASE__'), 'pack 注入 vite.config.ts 占位符');
+  const packedClaude = fs.readFileSync(
+    path.join(CLI_DIR, 'templates', 'frontend-react-vite', 'CLAUDE.md'),
+    'utf-8',
+  );
+  assert(packedClaude === '@AGENTS.md\n', '前端模板 CLAUDE.md 归一为 @AGENTS.md(无内容副本)');
 
   run(`${CLI} init "${path.join(WORKDIR, 'test-web')}" --frontend react --service-id my-web --path /admin/`);
   const webDir = path.join(WORKDIR, 'test-web', 'my-web');
@@ -119,10 +137,13 @@ try {
 
   // === add: worker ===
   console.log('\n=== add: worker ===');
+  // 先删根 database/ 模拟旧版 CLI 产物,验证 add 兜底补齐
+  fs.rmSync(path.join(appDir, 'database'), { recursive: true, force: true });
   run(`${CLI} add backend-python --kind worker --service-id bg-worker`, { cwd: appDir });
   const workerManifest = fs.readFileSync(path.join(appDir, 'bg-worker', 'project.manifest.toml'), 'utf-8');
   assert(workerManifest.includes('kind = "worker"'), 'worker kind = worker');
   assert(!workerManifest.includes('[proxy]'), 'worker 无 [proxy] 段');
+  assert(fs.existsSync(path.join(appDir, 'database', 'README.md')), 'add 兜底补齐根 database/README.md');
 
   // === 冲突检测 ===
   console.log('\n=== 冲突检测 ===');

@@ -19,6 +19,7 @@ import * as k from 'kolorist';
 
 import { getTemplate, type TemplateMeta } from '../templates.js';
 import { checkConflicts, validateServiceId, type ExistingService } from '../validate.js';
+import { generateDatabaseReadme } from '../manifest.js';
 import { releaseTemplate } from './release.js';
 
 export interface AddOptions {
@@ -113,6 +114,14 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
     proxyPath,
     force: opts.force,
   });
+
+  // 兜底:旧版 CLI 生成的 workspace 缺根 database/(子项目 stub 引用它的 README 会悬空)
+  const rootDbReadme = path.join(cwd, 'database', 'README.md');
+  if (!fs.existsSync(rootDbReadme)) {
+    fse.ensureDirSync(path.join(cwd, 'database'));
+    fse.writeFileSync(rootDbReadme, generateDatabaseReadme());
+    console.log(k.green('  ✓ ') + 'database/README.md(补齐 workspace 根 SQL 约定说明)');
+  }
 
   console.log(k.green('\n✓ service 追加完成!\n'));
 }

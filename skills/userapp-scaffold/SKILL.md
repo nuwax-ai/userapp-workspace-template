@@ -55,6 +55,11 @@ npx @nuwax-ai/template-cli init <目录名> --frontend react
 npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
+init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(导航页,catch-all 时跳过)、
+`AGENTS.md`(Agent 指南)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
+`database/`(SQL 约定目录,规则见其 README);各子项目的 `project.manifest.toml` 由 CLI
+按所选模板生成(不在模板包里),子项目另有 `database/README.md`。
+
 ### 往已有 workspace 追加 service
 
 ```bash
