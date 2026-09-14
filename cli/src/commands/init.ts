@@ -121,7 +121,7 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
     type: p.template.type,
     proxyPath: p.proxyPath,
   }));
-  const agentsContent = generateAgentsMd(wsName, servicesInfo);
+  const agentsContent = generateAgentsMd(wsName, servicesInfo, !hasCatchall);
   fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
   console.log(k.green('  ✓ ') + 'AGENTS.md');
 

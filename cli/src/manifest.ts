@@ -158,26 +158,38 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
  *
  * 这是一个精简的 Agent 指引,让 Agent 在用户用 CLI 创建的新 workspace 里工作时,
  * 知道:项目结构(目录↔类型↔路由)、平台约束、怎么装 skills、怎么用 CLI 追加 service。
+ * @param hasIndexHtml workspace 根是否生成了 index.html 导航页(catch-all 服务
+ *   独占 / 时 init 不生成,结构表也不列该行)。默认 true。
  */
 export function generateAgentsMd(
   workspaceName: string,
   services: Array<{ name: string; dir: string; type: string; proxyPath?: string }>,
+  hasIndexHtml = true,
 ): string {
   const serviceLines = services
     .map((s) => `| ${s.dir}/ | ${s.type} | ${s.proxyPath ?? '—'} |`)
     .join('\n');
+  const indexRow = hasIndexHtml ? '\n| `index.html` | 入口导航页 | 根路径/未匹配路径兜底 |' : '';
+  const tableNote = hasIndexHtml
+    ? [
+        '> 用 `add` 追加服务后,此表与 `index.html` 的导航卡片**都不会自动更新**;各服务实际路由',
+        '> 以其 `project.manifest.toml` 的 `[proxy]` 为准,追加/删除对外服务后记得同步维护导航卡片。',
+      ].join('\n')
+    : '> 用 `add` 追加服务后此表不会自动更新;各服务实际路由以其 `project.manifest.toml` 的 `[proxy]` 为准。';
 
   return `# ${workspaceName} — Agent Guide
 
-> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。开发前请先安装 AI skills。
+> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。
 
-## 安装 Skills(重要)
+## Skills(按需)
+
+若运行环境已预置这些 skills(如平台沙箱),直接使用即可,**跳过安装**;
+本地开发可安装以获得完整规范指引:
 
 \`\`\`bash
 npx skills add nuwax-ai/userapp-workspace-template
 \`\`\`
 
-安装后 Agent 将获得:
 - **userapp-scaffold**: CLI 脚手架使用(init/add/list 命令)
 - **userapp-dev-guide**: 平台开发规范(manifest 字段/路由/健康检查/日志/部署/排错)
 
@@ -185,9 +197,9 @@ npx skills add nuwax-ai/userapp-workspace-template
 
 | 目录 | 类型 | 对外路由 |
 |---|---|---|
-${serviceLines}
+${serviceLines}${indexRow}
 
-> 用 \`add\` 追加服务后此表不会自动更新;各服务实际路由以其 \`project.manifest.toml\` 的 \`[proxy]\` 为准。
+${tableNote}
 
 ## 平台核心约束
 
@@ -199,6 +211,8 @@ ${serviceLines}
 6. **database/ 目录 = 发布时自动执行的 SQL** — 根 \`database/\` 先、子项目按目录字典序;
    SQL 须幂等,单文件失败仅日志不阻断发布;**开发阶段不自动执行**,schema 变更需手动
    执行(dbx/psql)后再放入。详见 \`database/README.md\`
+7. **static 服务无进程** — \`type = "static"\` 的服务(前端 SPA 模板)禁止 \`[run]\` 段,
+   \`[build].artifact\` 为静态内容目录,由平台内置静态托管承载(SPA fallback)
 
 > 完整规范参考 **userapp-dev-guide** skill 或 \`npx @nuwax-ai/template-cli docs\`。
 

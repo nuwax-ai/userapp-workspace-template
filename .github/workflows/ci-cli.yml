@@ -93,6 +93,8 @@ jobs:
           test -f "$WORKDIR/test-app/AGENTS.md"
           grep -q 'npx skills add nuwax-ai/userapp-workspace-template' "$WORKDIR/test-app/AGENTS.md"
           grep -q 'database/ 目录 = 发布时自动执行的 SQL' "$WORKDIR/test-app/AGENTS.md"
+          grep -q 'index.html' "$WORKDIR/test-app/AGENTS.md"
+          grep -q 'static 服务无进程' "$WORKDIR/test-app/AGENTS.md"
 
           echo "=== CLAUDE.md + root database/ generated ==="
           grep -q '^@AGENTS.md$' "$WORKDIR/test-app/CLAUDE.md"
@@ -121,5 +123,9 @@ jobs:
           grep -q 'migrate' "$WORKDIR/test-next/userapp-next/project.manifest.toml"
           grep -q 'userapp-next-standalone.zip' "$WORKDIR/test-next/userapp-next/project.manifest.toml"
           grep -q '"geist"' "$WORKDIR/test-next/userapp-next/package.json"
+          # catch-all 独占 /:不生成 index.html,AGENTS.md 也不应提它
+          if /usr/bin/grep -q 'index.html' "$WORKDIR/test-next/AGENTS.md"; then
+            echo "ERROR: catch-all workspace 的 AGENTS.md 不应包含 index.html"; exit 1
+          fi
 
           echo "✓ CI 测试全部通过"
