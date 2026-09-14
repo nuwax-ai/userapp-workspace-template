@@ -7,8 +7,8 @@ Spring Boot 3.5 + MyBatis-Plus 后端模板。监听 `0.0.0.0:$PORT`，连接内
 ## 本地运行
 
 ```sh
-# 需 JDK 25+ 与可用的 Postgres（默认 localhost:5432 / app:app/app）
-export PORT=8080 POSTGRES_USER=app POSTGRES_PASSWORD=app POSTGRES_DB=app
+# 需 JDK 25+ 与可用的 Postgres（默认 localhost:5432 / dev:dev/dev，与平台容器 PG 初始凭据一致）
+export PORT=8080 POSTGRES_USER=dev POSTGRES_PASSWORD=dev POSTGRES_DB=dev
 export JAVA_HOME=/opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk/Contents/Home   # Homebrew 示例
 export PATH="$JAVA_HOME/bin:$PATH"
 

@@ -7,8 +7,8 @@ Gin + GORM 后端模板。监听 `0.0.0.0:$PORT`，连接内置 PostgreSQL，提
 ## 本地运行
 
 ```sh
-# 需可用的 Postgres（默认 localhost:5432 / app:app/app）
-export PORT=8080 POSTGRES_USER=app POSTGRES_PASSWORD=app POSTGRES_DB=app
+# 需可用的 Postgres（默认 localhost:5432 / dev:dev/dev，与平台容器 PG 初始凭据一致）
+export PORT=8080 POSTGRES_USER=dev POSTGRES_PASSWORD=dev POSTGRES_DB=dev
 go run ./cmd/server
 ```
 

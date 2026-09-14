@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic';
 /** GET /api/db — 数据库连接状态 + 表列表（诊断用）。 */
 export async function GET() {
   const host = process.env.PGHOST || 'localhost';
-  const database = process.env.POSTGRES_DB || 'app';
-  const user = process.env.POSTGRES_USER || 'app';
+  const database = process.env.POSTGRES_DB || 'dev';
+  const user = process.env.POSTGRES_USER || 'dev';
   try {
     const versionRes = await db.execute(sql`SELECT version()`);
     const tablesRes = await db.execute(

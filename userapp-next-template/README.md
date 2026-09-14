@@ -34,15 +34,15 @@ npm run dev                     # http://localhost:3000
 
 访问 http://localhost:3000/users 体验用户管理 CRUD（Server Component 直读 DB + Server Actions）。
 
-> 本地无 PG：`docker run -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app -e POSTGRES_DB=app -p 5432:5432 -d postgres:16`
+> 本地无 PG：`docker run -e POSTGRES_USER=dev -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=dev -p 5432:5432 -d postgres:16`
 
 ## 环境变量
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `POSTGRES_USER` | `app` | PG 用户 |
-| `POSTGRES_PASSWORD` | `app` | PG 密码（生产请改） |
-| `POSTGRES_DB` | `app` | PG 库名 |
+| `POSTGRES_USER` | `dev` | PG 用户 |
+| `POSTGRES_PASSWORD` | `dev` | PG 密码（与容器 PG 初始值一致，可自行重置） |
+| `POSTGRES_DB` | `dev` | PG 库名 |
 | `PGHOST` | `localhost` | PG 主机 |
 | `PGPORT` | `5432` | PG 端口 |
 | `DATABASE_URL` | — | 可选，设了则**优先**于分散变量（外部 PG / Neon / Supabase） |

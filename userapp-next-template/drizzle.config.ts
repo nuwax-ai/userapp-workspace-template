@@ -7,7 +7,7 @@ import { defineConfig } from 'drizzle-kit';
  */
 const url =
   process.env.DATABASE_URL ||
-  `postgresql://${process.env.POSTGRES_USER || 'app'}:${process.env.POSTGRES_PASSWORD || 'app'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'}/${process.env.POSTGRES_DB || 'app'}`;
+  `postgresql://${process.env.POSTGRES_USER || 'dev'}:${process.env.POSTGRES_PASSWORD || 'dev'}@${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'}/${process.env.POSTGRES_DB || 'dev'}`;
 
 export default defineConfig({
   schema: './src/db/schema.ts',
