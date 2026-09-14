@@ -23,6 +23,7 @@ userapp-workspace-template/
 ├── skills/                          # AI Agent skills
 │   ├── userapp-scaffold/            # CLI 脚手架使用指南
 │   └── userapp-dev-guide/           # 平台开发规范(manifest/路由/部署/排错/app-cli 本地开发测试)
+├── prompts/                         # 沙箱 agent 系统提示词(平台注入用,见 prompts/README.md)
 ├── .github/workflows/               # CI(ci-cli.yml + release-cli.yml)
 └── README.md                        # workspace 模型 + manifest 字段参考
 ```
