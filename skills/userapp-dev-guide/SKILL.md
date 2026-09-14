@@ -380,7 +380,8 @@ dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的
 - 前置:各服务 `[run].command` 可直接执行;需要构建产物的先本地跑 build 脚本
   (如 Next 模板 `run.command = ["node","server.js"]` 须先 build 出 standalone)
 - PG:服务依赖 DB 时须有可达 PG(连接参数读 `PGHOST`/`PGPORT`/
-  `POSTGRES_USER`/`POSTGRES_PASSWORD`,默认 localhost:5432 app/app);
+  `POSTGRES_USER`/`POSTGRES_PASSWORD`,默认 localhost:5432 dev/dev——与容器
+  PG 初始凭据一致,用户可自行重置,以环境变量实际值为准);
   **等 60s 仍不可达则 app-cli 直接报错退出**。无 DB 依赖时用
   `APP_CLI_SKIP_PG_WAIT=1` 跳过等待(**仅本地逃生**,生产禁)
 - 退出语义:任一子进程退出或收到 Ctrl-C/SIGTERM → 优雅停掉全部子进程后

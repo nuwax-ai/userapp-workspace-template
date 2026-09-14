@@ -55,7 +55,8 @@ npx @nuwax-ai/template-cli init <目录名> --frontend react
 npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
-init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(导航页,catch-all 时跳过)、
+init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(导航页,catch-all 时跳过;
+**`add` 追加服务不会自动更新它**,追加/删除对外服务后需手动增删导航卡片)、
 `AGENTS.md`(Agent 指南)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
 `database/`(SQL 约定目录,规则见其 README);各子项目的 `project.manifest.toml` 由 CLI
 按所选模板生成(不在模板包里),子项目另有 `database/README.md`。
@@ -123,6 +124,7 @@ npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 ```
 
 自定义 service_id 时,身份相关变量自动派生:
+- **子目录名** → `<service_id>`(模板释放到的目录直接以 service_id 命名,不再是模板名)
 - Go module 名、Rust crate 名 → `<service_id>`(import 路径同步更新)
 - Java artifactId、Spring 应用名 → `<service_id>`
 - Python FastAPI title、Rust OpenAPI title → `<service_id>`
