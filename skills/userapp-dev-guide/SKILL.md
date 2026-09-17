@@ -313,14 +313,24 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 `app-cli` 是平台运行时编排器(生产装在 app-runtime 容器内,替代 start.sh:编排子服务
 + Pingap 反代 + 健康/日志/代理管理 API)。本地开发用它做两件事:
-**manifest/路由秒级验证**(`--gen-lock`)和**多服务本地集成验证**(编排模式)。
+**manifest/路由秒级验证**(`gen-lock`)和**多服务本地集成验证**(编排模式)。
 日常单服务编码不需要它——直接 `PORT=xxxx` 起 dev server 即可。
 
 开发沙箱容器内已预装 `app-cli` 和 `pingap`(平台统一版本),命令直接可用,无需安装。
 
 ### 命令行参数与环境变量
 
-`app-cli --help` 随时可查;每个参数都有同名 env 等价(命令行值优先):
+统一使用 `app-cli <子命令> <参数>`。用 `app-cli --help` 查看命令、`app-cli serve --help` / `app-cli build --help` 查看各自参数。必须显式传 workspace，默认 `/app/code` 不是当前目录。
+
+- `gen-lock --workspace DIR`：校验并生成 lock，不启动服务。
+- `build --workspace DIR [--dev] [--deploy-dir DIR] [--only IDS]`：构建与产物组装。
+- `serve --workspace DIR`：常驻所有者与管理 API，独立本地运行首选。
+- `run --workspace DIR`：直接前台编排入口，供平台开发链路使用；不是绕过所有者的备用启动方式。
+- `run-service`：运行时内部入口，普通应用开发不直接调用。
+
+不再支持顶层 `--workspace`、顶层 `--gen-lock`、无子命令启动或 `APP_CLI_GEN_LOCK` 选择动作，也没有 `server` 别名。安装版本不支持时报告版本不匹配，不回退旧语法。
+
+下表中 workspace 适用于 gen-lock/build/serve/run；其余运行参数只属于 serve/run。环境变量值可被命令行覆盖；build 的 `--dev/--deploy-dir/--only` 没有同名环境变量：
 
 | 参数 | env | 默认 | 说明 |
 |---|---|---|---|
@@ -328,7 +338,6 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 | `--log-dir <DIR>` | `APP_CLI_LOG_DIR` | `/app/logs` | 日志根目录(app-cli 自身 + 各服务 runtime.{out,err}.log) |
 | `--admin-addr <ADDR>` | `APP_CLI_ADMIN_ADDR` | `0.0.0.0:3010` | 管理 API 监听地址 |
 | `--pingap-bin <PATH>` | `APP_CLI_PINGAP_BIN` | `/usr/local/bin/pingap` | pingap 二进制路径(沙箱默认路径已装,一般不用设) |
-| `--gen-lock <DIR>` | `APP_CLI_GEN_LOCK` | — | 本地开发模式:只生成 release.lock.toml + 打印配置预览后**退出**,不启动任何服务 |
 
 另有仅本地用的逃生 env(生产禁):`APP_CLI_SKIP_PG_WAIT=1` 跳过 60s PG 等待、
 `APP_CLI_SKIP_PINGAP_CONFIRM=1` 跳过启动时的配置生效确认。
@@ -336,7 +345,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 ### 工作流 1:manifest/路由迭代验证(最常用,零依赖)
 
 ```bash
-app-cli --gen-lock <workspace根>
+app-cli gen-lock --workspace <workspace根>
 ```
 
 读 `workspace.manifest.toml` → 自动发现子项目 → manifest 校验(**与平台构建同一套校验规则**;
@@ -351,17 +360,29 @@ Pingap 生效配置 TOML 预览。**不依赖 pingap 二进制、PG、镜像**,�
 3. 端口(4000–7999,确定性分配)不与本地已占用端口冲突;拓扑序符合 `depends_on`
 4. Pingap 配置预览里 path/rewrite/strip_prefix/upstream 符合路由预期
 
-### 工作流 2:本地完整编排(集成验证)
+### 工作流 2:独立本地完整编排(集成验证)
+
+**平台沙箱已有受管实例时，不运行下列命令**：通过平台启动/重启操作与该应用的预览入口验证。端口可达不是应用身份的证明；无法确认实例归属/控制入口时记录受阻。不要重复启动 serve/run、杀占用者、删锁文件或换管理端口绕过所有权保护。
+
+独立环境确认无现有实例，且管理 API、Pingap 与各服务端口无冲突后，在 workspace 根执行：
 
 ```bash
-APP_CLI_WORKSPACE=<workspace根> \
-APP_CLI_LOG_DIR=/tmp/userapp-logs \
-app-cli
+app-cli gen-lock --workspace .
+app-cli build --workspace . --deploy-dir .local-deploy
+app-cli serve --workspace .local-deploy --log-dir .local-logs
 ```
 
-dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的启动形态):
-上述命令加 `APP_CLI_RUN_PROFILE=dev` —— `[devrun].command` 优先、
-`[run].command` 兜底(与平台 dev/start spawn 本进程时注入的信号同名)。
+`.local-deploy/`、`.local-logs/` 加入 `.gitignore`。产物态服务在组装后的目录运行（例如 Next standalone），不要直接在源码根执行依赖产物布局的生产命令。
+
+dev 源码态（替代上述产物态步骤，不同时启动）：
+
+```bash
+app-cli gen-lock --workspace .
+app-cli build --workspace . --dev
+APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
+```
+
+`[devrun].command` 优先、`[run].command` 兜底；后者依赖的产物须在源码目录可用。
 
 启动判定(app-cli builtin 引擎,dev/start·restart 的 SSE 逐服务事件):
 - `service_start_ok` = readiness 探测通过(`[health].readiness_path` 在
@@ -384,14 +405,12 @@ dev 形态(源码态,任一服务配了 `[devrun]` 时本地复现 dev/start 的
   PG 初始凭据一致,用户可自行重置,以环境变量实际值为准);
   **等 60s 仍不可达则 app-cli 直接报错退出**。无 DB 依赖时用
   `APP_CLI_SKIP_PG_WAIT=1` 跳过等待(**仅本地逃生**,生产禁)
-- 退出语义:任一子进程退出或收到 Ctrl-C/SIGTERM → 优雅停掉全部子进程后
-  app-cli 退出。**本地手动跑不会自动重启**,要重新运行命令;生产容器里
-  由 supervisord 整组重启
+- `serve` 是常驻控制进程，业务启动失败/停止不等于控制进程退出。通过状态与日志判断业务就绪，不能只看 PID。独立本地验证完成后，只对自己启动的前台所有者发 Ctrl-C；`run` 的直接编排退出行为不能套用到 `serve`。
 - 访问入口 = `http://127.0.0.1:9080/<proxy.path>...`(与生产同构,经反代)
 - 入口默认页:workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径
   兜底展示它(app-cli 内置静态服务 :9081,每次请求实时读文件,改完刷新即生效);
   catch-all 服务(如 userapp-next 的 `path = "/"`)独占根路由时 index.html 不生效
-- 排查看日志:`$APP_CLI_LOG_DIR/app-cli.log.<日期>`(编排日志)+
+- 排查看日志:`<log-dir>/app-cli.log.<日期>`(编排日志)+
   `<service_id>/runtime.{out,err}.log`(子服务 stdout/stderr);启动成功后有
   `🔌 运行拓扑` 汇总行,每个 service_id 的 port 与 route 一眼可查
 

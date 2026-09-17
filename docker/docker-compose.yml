@@ -13,7 +13,7 @@ x-app-build: &app-build
   context: .
   dockerfile: Dockerfile
   args:
-    APP_CLI_VERSION: "0.2.2"
+    APP_CLI_VERSION: "${APP_CLI_VERSION:-}" # 构建时必填；留空不阻止 down/config
     # 切官方源示例（默认走国内镜像加速）：
     # NPM_REGISTRY: "https://registry.npmjs.org"
     # GOPROXY_URL: "https://proxy.golang.org,direct"

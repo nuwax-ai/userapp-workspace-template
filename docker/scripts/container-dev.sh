@@ -9,11 +9,11 @@ set -euo pipefail
 WS="${APP_CLI_WORKSPACE:-/app/code}"
 
 echo "===== [1/3] manifest 校验（gen-lock）====="
-/usr/local/bin/app-cli-bin --gen-lock "$WS"
+/usr/local/bin/app-cli-bin gen-lock --workspace "$WS"
 
 echo "===== [2/3] dev 构建（三分派）====="
-/usr/local/bin/app-cli-bin build --dev
+/usr/local/bin/app-cli-bin build --workspace "$WS" --dev
 
 echo "===== [3/3] 源码态运行（app-cli serve，dev profile）====="
 export APP_CLI_RUN_PROFILE=dev
-exec /usr/local/bin/app-cli-bin serve
+exec /usr/local/bin/app-cli-bin serve --workspace "$WS"

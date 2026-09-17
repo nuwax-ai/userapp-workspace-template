@@ -18,7 +18,7 @@ ARG APT_MIRROR=mirrors.aliyun.com
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 # app-cli 安装独立源：新发布的包 npmmirror 有同步延迟,默认走官方
 ARG APP_CLI_REGISTRY=https://registry.npmjs.org
-ARG APP_CLI_VERSION=0.2.2
+ARG APP_CLI_VERSION
 ARG GOPROXY_URL=https://goproxy.cn,direct
 ARG GO_VERSION=1.26.4
 ARG GO_DOWNLOAD_URL=https://go.dev/dl
@@ -46,6 +46,9 @@ ARG CARGO_CN
 ARG GITHUB_PROXY
 ARG NODE_MAJOR
 ARG PINGAP_VERSION
+
+# 新 CLI 契约须使用已发布的匹配版本，不默认安装旧版。
+RUN test -n "$APP_CLI_VERSION" || { echo "APP_CLI_VERSION must name a published release supporting subcommand options" >&2; exit 1; }
 
 # ── 1. apt 换源 + 基础工具 ─────────────────────────────────────────────────
 RUN curl -sSL https://linuxmirrors.cn/main.sh | bash -s -- \
@@ -154,7 +157,10 @@ RUN npm install -g --registry "${APP_CLI_REGISTRY}" @nuwax-ai/app-cli@${APP_CLI_
     app-cli --version && \
     ln -sf "$(find "$(npm root -g)" -type f -path '*app-cli-linux-*/app-cli' | head -n1)" \
         /usr/local/bin/app-cli-bin && \
-    /usr/local/bin/app-cli-bin --version
+    /usr/local/bin/app-cli-bin --version && \
+    /usr/local/bin/app-cli-bin gen-lock --workspace /app/code --help >/dev/null && \
+    /usr/local/bin/app-cli-bin build --workspace /app/code --help >/dev/null && \
+    /usr/local/bin/app-cli-bin serve --workspace /app/code --help >/dev/null
 
 # ── 10. 运行时布局 ─────────────────────────────────────────────────────────
 # workspace 挂载点 = compose bind mount 仓库根;PGDATA 落 named volume。

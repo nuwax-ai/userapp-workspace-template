@@ -118,7 +118,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 15. **index.html 导航页维护**：workspace 根的 `index.html` 是访问入口的默认导航页（init 自动生成，`add` 追加服务**不会**自动更新它）。**追加对外服务后同步增补导航卡片，删除服务后删掉对应卡片**；当某服务占 `/`（catch-all）时该文件不再生效，应删除；内容可自由修改，改完刷新即生效。
 
-**manifest 里的 dev 段**：CLI 生成的 `project.manifest.toml` 可能包含 `[devbuild]` / `[devrun]`——dev 阶段的准备/热加载命令（源码态运行，改码即生效），生产部署不读这两段。本地想以 dev 形态编排运行时给 `app-cli` 加环境变量 `APP_CLI_RUN_PROFILE=dev`。细节见 docs。
+**manifest 里的 dev 段**：CLI 生成的 `project.manifest.toml` 可能包含 `[devbuild]` / `[devrun]`——dev 阶段的准备/热加载命令（源码态运行，改码即生效），生产部署不读这两段。仅在独立本地环境以 dev 形态编排运行时，给 `app-cli serve --workspace .` 加环境变量 `APP_CLI_RUN_PROFILE=dev`。细节见 docs。
 
 **开发习惯：**
 
@@ -130,17 +130,22 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
-1. **manifest/路由确定性校验**：执行 `app-cli --gen-lock .`（沙箱预装；与平台构建同一套校验规则，秒级完成、零依赖）。校验失败会**一次列出全部问题**，修复后重跑直到通过；它会生成 `release.lock.toml` 并打印 Pingap 路由配置预览——lock 是本地预览产物，不要手改、不要当作交付物。
-2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build` 一条命令跑全部服务）；
+1. **manifest/路由确定性校验**：执行 `app-cli gen-lock --workspace .`（沙箱预装；与平台构建同一套校验规则，秒级完成、零依赖）。校验失败会**一次列出全部问题**，修复后重跑直到通过；它会生成 `release.lock.toml` 并打印 Pingap 路由配置预览——lock 是本地预览产物，不要手改、不要当作交付物。
+2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace .` 一条命令跑全部服务）；
 3. **启动验证**：有进程的服务以模拟端口启动（如 `PORT=4100`），确认监听 `0.0.0.0:$PORT`、`[health]` 各路径返回 2xx；**static 服务（前端 SPA）无进程，跳过本条**，只确认构建产物正常生成；
 4. **接口验证**：后端用 curl 打通至少一个核心业务接口；
-5. **路由分发验证**（改动了路由、或新增/删除了对外服务时必须做）：用 app-cli 编排模式起一套与生产同构的反代：
+5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
+   - **平台沙箱**：优先使用平台提供的启动/重启操作及返回的预览入口，逐路由验证实际响应。已有平台管理的实例时，不再执行第二套 `app-cli serve/run`，不终止已有所有者、不删除锁文件，也不通过换管理端口绕过所有权保护。只有端口可达不能证明它属于当前应用；实例身份或控制方式不明确时，报告验证受阻及诊断信息。
+   - **独立本地环境**（确认没有平台管理实例，且管理 API、Pingap 及各服务端口均无冲突）：先生成 lock、构建并组装产物，再启动唯一的常驻所有者：
 
-   ```bash
-   APP_CLI_WORKSPACE=$PWD APP_CLI_LOG_DIR=/tmp/userapp-logs app-cli
-   ```
+     ```bash
+     app-cli gen-lock --workspace .
+     app-cli build --workspace . --deploy-dir .local-deploy
+     app-cli serve --workspace .local-deploy --log-dir .local-logs
+     ```
 
-   （**必须显式传 workspace**——app-cli 默认读 `/app/code`，不是当前目录。）启动后 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证真实分发；验证完 Ctrl-C 停掉。只手动起单服务测不到 proxy 层的问题（path 冲突、strip_prefix 与产物布局错配、index.html 资源引用逃逸）。
+     `.local-deploy/` 与 `.local-logs/` 是本地生成目录，应加入 `.gitignore`。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
+   - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
 6. **铁律复查**：对照上面 15 条铁律复查两个 manifest（gen-lock 已覆盖结构类规则，人工重点看铁律 7/13/15——数据库连接、SQL 幂等、导航页同步）。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。

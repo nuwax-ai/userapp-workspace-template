@@ -14,14 +14,17 @@ manifest 校验(gen-lock) → 7 服务全量编译(app-cli build) → 产物态�
 
 | 项 | 要求 |
 |---|---|
-| npm 包 | `@nuwax-ai/app-cli` 已发布；版本对齐 `docker/Dockerfile` 的 `APP_CLI_VERSION`（发版源 = rcoder 仓库 `crates/app-cli/Cargo.toml` + tag `app-cli-v*`） |
+| npm 包 | 指定支持新子命令语法的已发布 `@nuwax-ai/app-cli` 版本，通过环境变量 `APP_CLI_VERSION` 传入构建（发版源 = rcoder 仓库 `crates/app-cli/Cargo.toml` + tag `app-cli-v*`） |
 | Docker | 24+ / compose v2（Rancher Desktop 验证过） |
 | 磁盘 | ~10GB（镜像 ~5GB + 缓存卷） |
 | 内存 | 建议 Docker VM ≥ 8GB（JVM 编译 + Rust 链接 + 7 服务并发） |
 
 ## 快速开始
 
+先将 `APP_CLI_VERSION` 设置为**实际已发布且支持新命令契约**的版本，再执行下列命令。此处不提供未经发布核验的版本号；RCoder 源码已修改不代表 npm 包已更新。空版本在 Docker 构建首步失败，旧命令版本在安装后的 CLI 能力检查失败，不回退旧语法。
+
 ```bash
+# 在 shell 中 export APP_CLI_VERSION=<已核验的发布版本> 后：
 make docker-verify   # 端到端：起容器 → 构建全部服务 → 运行 → 宿主机断言
 ```
 
@@ -112,3 +115,12 @@ make docker-shell                         # 进容器（PG 已起：psql -h 127.
 常见失败：内存不足（JVM/Rust 链接被 OOM kill → 调大 Docker VM 内存）；首跑网络
 超时（重跑 `make docker-verify`，缓存卷续传）；app-cli 安装 404（npm 包版本未对齐
 或 registry 不通 → 检查 `APP_CLI_VERSION` / `APP_CLI_REGISTRY`）。
+
+## CLI 契约同步（2026-09-18）
+
+容器脚本统一为 `gen-lock --workspace`、`build --workspace`、`serve --workspace`。
+之前固定的 app-cli 0.2.2 已移除，构建前必须选择包含此次 CLI 调整的已发布版本。
+更新 app-cli 时还需核对匹配的 Pingap 分发版本；本文件夹原有 `PINGAP_VERSION=0.13.9`
+未作为本轮配对兼容性验证结论。新版本镜像需通过配置校验和完整 docker-verify 才能验收。
+
+本轮只完成命令、文档、构建参数检查：未发布 npm、未构建镜像、未运行七服务集成验证。
