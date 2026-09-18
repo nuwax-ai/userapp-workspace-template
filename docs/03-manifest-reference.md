@@ -155,7 +155,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[devbuild]`
 
-整段可选。**dev 阶段编译/准备命令**(职责域:依赖安装、type-check 等,均**不要求产出 artifact**)。仅在配了 `[devrun]` 的源码态 dev 链路生效(`/api/v1/userapp/dev/start`·`/restart` 用它编译)。未配本段的缺省三分派:**只配了 `[devrun]` 的服务跳过编译**——devrun 即声明 dev 态自足,跑源码不消费构建产物(依赖安装等前置准备即应放本段,否则首次 dev 启动会因依赖缺失失败);**未配 `[devrun]` 的服务回落 `[build].command`**(刷新源码目录产物如 `app.jar`,run.command 依赖它)。典型用法:前端配 `["pnpm","install","--frozen-lockfile"]` 或 install+type-check 增量秒级替代全量构建;后端不配(回落 `[build]`)。产物态链路(未配 `[devrun]` 的 app)编译恒用 `[build].command`(发布同核,zip 是 `.run` 部署物必需品,轻量命令不产 zip 不能替换)。
+整段可选。**dev 阶段编译/准备命令**(职责域:依赖安装、type-check 等,均**不要求产出 artifact**)。仅在配了 `[devrun]` 的源码态 dev 链路生效(`/api/v1/userapp/dev/start`·`/restart` 用它编译)。未配本段的缺省三分派:**只配了 `[devrun]` 的服务跳过编译**——devrun 即声明 dev 态自足,跑源码不消费构建产物(依赖安装等前置准备即应放本段,否则首次 dev 启动会因依赖缺失失败);**未配 `[devrun]` 的服务回落 `[build].command`**(刷新源码目录产物如 `app.jar`,run.command 依赖它)。典型用法:前端配 `["pnpm","install","--no-frozen-lockfile"]`(dev 安装允许生成/更新 lockfile,无 lockfile 时 frozen 直接 `ERR_PNPM_NO_LOCKFILE`)或 install+type-check 增量秒级替代全量构建;后端不配(回落 `[build]`)。产物态链路(未配 `[devrun]` 的 app)编译恒用 `[build].command`(发布同核,zip 是 `.run` 部署物必需品,轻量命令不产 zip 不能替换)。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
