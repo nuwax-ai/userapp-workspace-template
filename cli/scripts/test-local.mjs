@@ -74,6 +74,15 @@ try {
   assert(goManifest.includes('service_id = "backend-go"'), 'backend-go service_id');
   assert(goManifest.includes('path = "/api/go/"'), 'backend-go proxy path');
 
+  // react devbuild: 允许 lockfile 生成/更新(无 lockfile 时 frozen 直接 ERR_PNPM_NO_LOCKFILE),
+  // 且 type-check 仍串在安装后(安装/检查失败不得被吞)
+  const reactManifest = fs.readFileSync(path.join(appDir, 'frontend-react-vite', 'project.manifest.toml'), 'utf-8');
+  assert(
+    reactManifest.includes('pnpm install --no-frozen-lockfile && pnpm run type-check'),
+    'react devbuild = install --no-frozen-lockfile && type-check',
+  );
+  assert(!reactManifest.includes('--frozen-lockfile'), 'react devbuild 不含裸 --frozen-lockfile');
+
   // === workspace manifest 注释 ===
   const wsManifest = fs.readFileSync(path.join(appDir, 'workspace.manifest.toml'), 'utf-8');
   assert(wsManifest.includes('[pingap]'), 'workspace manifest 含 pingap 注释');
@@ -144,6 +153,13 @@ try {
   assert(workerManifest.includes('kind = "worker"'), 'worker kind = worker');
   assert(!workerManifest.includes('[proxy]'), 'worker 无 [proxy] 段');
   assert(fs.existsSync(path.join(appDir, 'database', 'README.md')), 'add 兜底补齐根 database/README.md');
+
+  // === add: vue(add 入口的 devbuild 断言) ===
+  console.log('\n=== add: vue devbuild ===');
+  run(`${CLI} add frontend-vue3-vite`, { cwd: appDir });
+  const vueManifest = fs.readFileSync(path.join(appDir, 'frontend-vue3-vite', 'project.manifest.toml'), 'utf-8');
+  assert(vueManifest.includes('["pnpm", "install", "--no-frozen-lockfile"]'), 'vue devbuild = install --no-frozen-lockfile');
+  assert(!vueManifest.includes('--frozen-lockfile'), 'vue devbuild 不含裸 --frozen-lockfile');
 
   // === 冲突检测 ===
   console.log('\n=== 冲突检测 ===');

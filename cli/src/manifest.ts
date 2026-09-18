@@ -400,8 +400,10 @@ function getBuildInfo(template: TemplateMeta): BuildInfo {
         // 平台内置静态托管承载）
         artifact: 'dist',
         run: [],
-        // dev 准备/检查：依赖安装前置（vite/tsc 都在 node_modules）+ type-check
-        devbuild: ['sh', '-c', 'pnpm install --frozen-lockfile && pnpm run type-check'],
+        // dev 准备/检查：依赖安装前置（vite/tsc 都在 node_modules）+ type-check。
+        // --no-frozen-lockfile：dev 安装允许生成/更新 lockfile（新项目无 lockfile
+        // 时 frozen 直接 ERR_PNPM_NO_LOCKFILE）
+        devbuild: ['sh', '-c', 'pnpm install --no-frozen-lockfile && pnpm run type-check'],
         devrun: ['pnpm', 'exec', 'vite'],
       };
     case 'frontend-vue3-vite':
@@ -409,8 +411,10 @@ function getBuildInfo(template: TemplateMeta): BuildInfo {
         command: ['sh', 'scripts/build-standalone.sh'],
         artifact: 'dist',
         run: [],
-        // dev 准备：依赖安装（vite dev 跑源码不消费 dist，未配则跳过编译但依赖没人装）
-        devbuild: ['pnpm', 'install', '--frozen-lockfile'],
+        // dev 准备：依赖安装（vite dev 跑源码不消费 dist，未配则跳过编译但依赖没人装）。
+        // --no-frozen-lockfile：dev 安装允许生成/更新 lockfile（新项目无 lockfile
+        // 时 frozen 直接 ERR_PNPM_NO_LOCKFILE）
+        devbuild: ['pnpm', 'install', '--no-frozen-lockfile'],
         devrun: ['pnpm', 'exec', 'vite'],
       };
     case 'userapp-next':
