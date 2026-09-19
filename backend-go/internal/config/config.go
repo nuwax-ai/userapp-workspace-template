@@ -3,8 +3,11 @@ package config
 import (
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -52,12 +55,23 @@ func Load() (Config, error) {
 }
 
 func (c Config) DSN() string {
-	return "host=" + c.PGHost +
-		" user=" + c.PGUser +
-		" password=" + c.PGPass +
-		" dbname=" + c.PGDB +
-		" port=" + c.PGPort +
-		" sslmode=disable TimeZone=UTC"
+	query := url.Values{"sslmode": {"disable"}, "TimeZone": {"UTC"}}
+	host := net.JoinHostPort(c.PGHost, c.PGPort)
+	if strings.HasPrefix(c.PGHost, "/") {
+		// libpq/pgx use a query host for Unix sockets; it is not a URL authority.
+		host = ""
+		query.Set("host", c.PGHost)
+		query.Set("port", c.PGPort)
+	}
+	u := url.URL{
+		Scheme:   "postgresql",
+		User:     url.UserPassword(c.PGUser, c.PGPass),
+		Host:     host,
+		Path:     "/" + c.PGDB,
+		RawPath:  "/" + url.PathEscape(c.PGDB),
+		RawQuery: query.Encode(),
+	}
+	return u.String()
 }
 
 func getenv(key, def string) string {

@@ -6,7 +6,7 @@ description: >
   排查错误、本地运行验证时使用。覆盖:核心概念、manifest 全字段、校验规则、
   环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调)、
   健康探针、日志、发布状态机、版本保留、回滚、迁移约定、database 目录 SQL 自动执行、
-  常见错误排查、
+  平台 iframe 嵌入、会话 Cookie 与跨域请求兼容、常见错误排查、
   app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
   触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
   proxy path、strip_prefix、路由、catch-all、反代、pingap、健康检查、探针、
@@ -18,6 +18,8 @@ description: >
 # UserApp 平台开发指南
 
 ## 核心概念
+
+**默认技术选型**：新应用需要后端且用户未指定语言时使用 Python（FastAPI）；前后端分离默认 Python + React，初始化显式传 `--backend python --frontend react`，纯后端只传 `--backend python`。用户明确选型优先，已有应用沿用现有技术栈；不为纯前端需求添加后端，明确选择全栈单体时使用 Next.js。下文其他语言的配置示例不改变这一默认约定。
 
 | 概念 | 是什么 |
 |---|---|
@@ -207,6 +209,21 @@ fetch('/api/go/items')
 > `depends_on` 只控制启动顺序,**不是服务发现**——不注入对方地址。
 
 ---
+
+## 平台 iframe 嵌入与会话兼容
+
+UserApp 页面默认支持在平台的跨站 iframe 中使用。用户可以自行修改应用的嵌入策略；用户明确要求禁止或限制 iframe 时，按其要求实现并说明平台内嵌预览可能不可用，不把有意的限制当作缺陷或擅自恢复。既有应用有明确的嵌入策略时予以保留；无法区分用户意图与框架默认行为时，先说明冲突再澄清，不直接覆盖。以下兼容要求适用于仍需支持平台嵌入的应用。
+
+- **默认嵌入策略**：应用、静态服务器及自定义 Pingap 插件不得下发阻止平台嵌入的 `X-Frame-Options: DENY/SAMEORIGIN`。如设置 CSP `frame-ancestors`，必须允许实际平台父页面的源（嵌套 iframe 时包含全部祖先源），不能仅设 `'self'` 或 `'none'`。仅在需要配置嵌入白名单时获取实际平台源，不硬编码测试域名；不要仅为满足默认兼容而新增 frame-ancestors 白名单及配置依赖。已有或用户要求的白名单缺少必要配置时明确报告缺项。不要添加强制跳出 iframe 的脚本，也不要为嵌入兼容删除全部 CSP、鉴权或 CSRF 防护。
+- **框架默认值**：引入 Helmet、Spring Security 或认证库时检查实际生效的响应头，覆盖与平台嵌入冲突的默认项。Helmet 的 X-Frame-Options 和 CSP frame-ancestors 要分别检查，只调整其中一个不一定足够。
+- **应用会话 Cookie**：需要在跨站 iframe 中使用的应用 Cookie 显式设置 `SameSite=None; Secure`，会话 Cookie 保留 `HttpOnly`，核对外部域名下的 Domain/Path；无跨子域共享需求时优先省略 Domain。平台 `ticket` 与应用会话是两套 Cookie，平台不会自动修正应用 Cookie。无会话需求的应用不必新增 Cookie。
+- **HTTPS 与代理**：Secure 要求浏览器访问的外部入口使用 HTTPS，不要求 Java、RCoder、Pingap 和应用之间启用 TLS。Express 等框架需按实际代理拓扑配置可信代理，核对应用收到的外部 Host/协议；协议误报为 HTTP 时报告代理链问题，不能通过取消 Secure、伪造协议头或盲目信任所有来源绕过。
+- **请求与页面通信**：iframe 内调用本应用 API 优先用相对路径。跨站嵌入本身不等于需要 CORS；确需跨源 fetch 且使用 Cookie 时，客户端带 credentials，响应按实际调用方配置 Origin 白名单和凭据许可，不使用 `Access-Control-Allow-Origin: *` 搭配凭据。父子页面跨源通信使用 `postMessage` 并校验来源，不直接读写对方 DOM。
+- **浏览器验证**：新增或修改页面入口、登录、Cookie、代理配置或安全中间件后，通过平台实际 iframe 检查页面、资源、登录后刷新、业务请求及退出（按已有功能验证）。查看文档最终响应和重定向链、Cookie 拒收原因及后续请求是否携带 Cookie；curl 返回 HTML 不能证明 iframe 可用。第三方 Cookie 策略仍可能阻止 `SameSite=None; Secure`，不得以关闭浏览器安全设置作为修复。无法使用真实平台/浏览器时明确记录未验证项。
+
+用户明确选择禁止或限制嵌入时，改为验证约定的拒绝/允许范围和独立访问流程，不要求平台 iframe 必须成功，Cookie 按实际会话使用场景配置，不因禁止嵌入就自动移除 Secure/HttpOnly 或改动 SameSite。
+
+排障时区分：X-Frame-Options/CSP 拒绝嵌入、CORS 请求失败、Cookie 丢失、混合内容、父子页面同源策略，以及上游 502。先记录状态码和完整报错，不把所有白屏都归因于跨域。
 
 ## 健康检查
 

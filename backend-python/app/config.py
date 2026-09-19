@@ -1,6 +1,6 @@
 import os
 
-from urllib.parse import quote_plus
+from sqlalchemy.engine import URL
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,12 +23,15 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        user = quote_plus(self.postgres_user)
-        password = quote_plus(self.postgres_password)
-        return (
-            f"postgresql+asyncpg://{user}:{password}"
-            f"@{self.pghost}:{self.pgport}/{self.postgres_db}"
-        )
+        return URL.create(
+            "postgresql+asyncpg",
+            username=self.postgres_user,
+            password=self.postgres_password,
+            host=self.pghost,
+            port=int(self.pgport),
+            database=self.postgres_db,
+        ).render_as_string(hide_password=False)
+
 
 
 def _env_or_default(key: str, default: str) -> str:

@@ -46,7 +46,7 @@ npx @nuwax-ai/template-cli docs --open  # 用系统默认程序打开文档目�
 npx @nuwax-ai/template-cli init <目录名> --backend <lang> --frontend <lang>
 
 # 纯后端
-npx @nuwax-ai/template-cli init <目录名> --backend go
+npx @nuwax-ai/template-cli init <目录名> --backend python
 
 # 纯前端
 npx @nuwax-ai/template-cli init <目录名> --frontend react
@@ -71,11 +71,13 @@ npx @nuwax-ai/template-cli add <模板id>
 
 ## 模板选择指南
 
+新应用未指定后端语言时，默认 **Python（FastAPI）**；前后端都需要时默认 **Python + React**。命令显式传 `--backend python`，不依赖 CLI 的隐式默认值。用户明确选型优先；已有应用沿用原技术栈，不因默认值迁移或重建。纯前端需求不额外添加后端，明确选择全栈单体时使用 Next.js。
+
 | 用户需求 | 推荐模板 | 命令 |
 |---|---|---|
-| 纯 API 后端 | `backend-go` / `backend-rust` | `init <dir> --backend go` |
+| 纯 API 后端（未指定语言） | `backend-python` | `init <dir> --backend python` |
 | 纯前端 SPA | `frontend-react-vite` / `frontend-vue3-vite` | `init <dir> --frontend react` |
-| 前后端分离 | 前端 SPA + 后端 API | `init <dir> --backend go --frontend react` |
+| 前后端分离（未指定技术栈） | Python API + React SPA | `init <dir> --backend python --frontend react` |
 | 全栈单体(DB + 前端) | `userapp-next` | `init <dir> --next` |
 | 多个后端 | 主后端 + 追加 | init 后用 add 追加;**同类多实例须 `--service-id` + `--path`** |
 | 加后台 worker | 任意后端模板 + `--kind worker` | `add backend-python --kind worker` |
@@ -177,13 +179,14 @@ Worker 与 web 服务的区别:
 
 前端用**相对路径**调后端:
 ```typescript
-fetch('/api/go/items')  // 浏览器经反代路由到 backend-go
+fetch('/api/python/items')  // 浏览器经反代路由到 backend-python
 ```
 
 ## 重要约束
 
 1. **Next.js 和前端 SPA 二选一**:Next.js 占 `/` catch-all。要后端 API + 前端 SPA,用 `--backend + --frontend`,不要用 `--next`。
 2. **端口由平台定**:代码必须读 `$PORT` 环境变量,不能硬编码。
+3. **页面默认支持平台 iframe**：用户明确要求禁止或限制嵌入时按其要求实现，说明平台内嵌预览可能不可用，并按用户选定策略验收；用户自行设置的明确嵌入策略不擅自覆盖，意图不明时先澄清。其余情况下，生成后及新增登录/安全中间件时，不得引入阻止平台嵌入的 X-Frame-Options 或 CSP；跨站 iframe 所需的应用会话 Cookie 使用 `SameSite=None; Secure`（会话保留 HttpOnly）。平台 ticket 不替代应用会话配置，curl 成功不代表浏览器验证通过。详细规则见 [userapp-dev-guide 的 iframe 兼容章节](../userapp-dev-guide/SKILL.md#平台-iframe-嵌入与会话兼容)。
 
 > manifest 字段、路由规则、健康检查、日志、部署回滚等平台规范,
 > 参考 **userapp-dev-guide** skill。

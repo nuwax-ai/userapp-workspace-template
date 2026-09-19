@@ -50,16 +50,17 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 - **影响架构的歧义**（例如没说要不要前端、没说语言且能看出用户在意）→ 先简洁澄清，一次最多 3 个问题，每个问题附上你的默认建议；
 - **不影响架构的细节**（UI 风格、字段命名等）→ 直接按最佳实践决策，并在汇报中说明，不要追问。
 
-**默认选型**（用户未指定且无需澄清时）：前后端分离，Go 后端 + React 前端；用户明确要"一体化全栈/单体"时用 `--next`。
+**默认选型**（新应用、用户未指定且无需澄清时）：前后端分离，Python（FastAPI）后端 + React 前端；纯后端需求默认 Python。用户明确指定的语言/框架优先，已有应用沿用现有技术栈，不因默认值迁移或重建；明确要"一体化全栈/单体"时用 `--next`。纯前端需求不额外创建后端。
 
 ### 2.2 执行初始化
 
 | 需求 | 命令 |
 |---|---|
-| 前后端都要（默认） | `npx @nuwax-ai/template-cli init . --backend go --frontend react` |
+| 前后端都要（默认） | `npx @nuwax-ai/template-cli init . --backend python --frontend react` |
+| 只要后端，未指定语言 | `npx @nuwax-ai/template-cli init . --backend python` |
 | 指定后端语言 | `--backend go\|java\|python\|rust`（支持别名 golang / spring / py / fastapi） |
 | 指定前端框架 | `--frontend react\|vue`（支持别名 vue3） |
-| 只要后端 / 只要前端 | 只传对应参数，如 `init . --backend java` |
+| 只要前端，未指定框架 | `npx @nuwax-ai/template-cli init . --frontend react` |
 | Next.js 全栈单体 | `--next`（独占 `/` 路由，不能与 --backend / --frontend 同时使用） |
 
 初始化在当前工作目录进行（`init .`，目录已由平台创建；若报"目录已存在且非空"，加 `--force`）。完成后：
@@ -120,6 +121,15 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 **manifest 里的 dev 段**：CLI 生成的 `project.manifest.toml` 可能包含 `[devbuild]` / `[devrun]`——dev 阶段的准备/热加载命令（源码态运行，改码即生效），生产部署不读这两段。仅在独立本地环境以 dev 形态编排运行时，给 `app-cli serve --workspace .` 加环境变量 `APP_CLI_RUN_PROFILE=dev`。细节见 docs。
 
+**iframe 默认兼容与用户选定策略：**
+
+- 应用默认支持平台跨站 iframe。用户可自行修改程序以禁止或限制嵌入；明确要求这种策略时按其要求实现并说明平台内嵌预览可能不可用，不将其当作缺陷或擅自恢复。保留既有应用中明确的用户嵌入策略；无法区分用户意图与框架默认行为时先澄清，不直接覆盖。以下兼容规则适用于仍需支持平台嵌入的应用；其他应用按实际会话场景配置 Cookie，不因禁止嵌入就自动移除 Secure/HttpOnly 或改动 SameSite。
+- 默认兼容模式下，应用、静态服务器和自定义代理不得下发阻止平台嵌入的 `X-Frame-Options: DENY/SAMEORIGIN`；设置 CSP `frame-ancestors` 时允许实际平台祖先源，不能仅设 `'self'` 或 `'none'`。仅在需要嵌入白名单时取实际平台源，不硬编码测试域名，也不为默认兼容额外引入白名单配置依赖；已有或用户要求的白名单缺少必要配置时明确报告。禁止添加强制跳出 iframe 的脚本。
+- 引入 Helmet、Spring Security、认证库时检查默认响应头，保留与平台兼容的安全措施，不通过删除全部 CSP、鉴权或 CSRF 防护解决嵌入问题。
+- 需要在跨站 iframe 中使用的应用 Cookie 显式设置 `SameSite=None; Secure`；会话 Cookie 保留 `HttpOnly`，Domain/Path 按外部访问地址配置。平台 ticket 不替代应用会话配置，无会话需求不新增 Cookie。Secure 要求外部入口 HTTPS，容器间仍可 HTTP；按实际拓扑配置可信代理并核对外部 Host/协议，不能因内部 HTTP 而取消 Secure，也不伪造协议或盲目信任任意转发头。
+- iframe 内的本应用 API 使用相对路径。确需跨源携带 Cookie 时，客户端启用 credentials，服务端明确允许实际调用方 Origin 和凭据，不使用通配 Origin。父子页面跨源通信使用 `postMessage` 并校验来源，不直接访问对方 DOM。
+- 浏览器可能额外限制第三方 Cookie，`SameSite=None; Secure` 不保证所有浏览器都可用；保留问题证据并报告平台适配需求，不让用户关闭浏览器安全设置。详细排查参考 userapp-dev-guide 的 iframe 兼容章节。
+
 **开发习惯：**
 
 - 每个服务的 `[build].command` 必须可独立执行成功，命令的**工作目录是该服务的子目录**；
@@ -147,6 +157,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
      `.local-deploy/` 与 `.local-logs/` 是本地生成目录，应加入 `.gitignore`。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
    - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
 6. **铁律复查**：对照上面 15 条铁律复查两个 manifest（gen-lock 已覆盖结构类规则，人工重点看铁律 7/13/15——数据库连接、SQL 幂等、导航页同步）。
+7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。
 
@@ -157,7 +168,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 1. **本轮完成内容**（简要）；
 2. **workspace 结构树**（一级目录 + 每个服务一句话说明，含 `index.html`）；
 3. **服务清单**：service_id / 语言框架 / 路由前缀 / 是否 worker；
-4. **验证结果**：gen-lock、构建、启动、接口、路由分发的结论；
+4. **验证结果**：gen-lock、构建、启动、接口、路由分发及适用的 iframe 策略验证结论，注明未验证项；
 5. **下一步建议**（可选）。
 
 # 沟通规范

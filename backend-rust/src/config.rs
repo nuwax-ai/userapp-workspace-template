@@ -30,7 +30,7 @@ impl Config {
         let pg_port = env::var("PGPORT").unwrap_or_else(|_| "5432".into());
         let pg_user = urlencoding_component(&env_or_default_warned("POSTGRES_USER", "dev"));
         let pg_pass = urlencoding_component(&env_or_default_warned("POSTGRES_PASSWORD", "dev"));
-        let pg_db = env_or_default_warned("POSTGRES_DB", "dev");
+        let pg_db = urlencoding_component(&env_or_default_warned("POSTGRES_DB", "dev"));
 
         Ok(Self {
             port: env::var("PORT").unwrap_or_else(|_| "8080".into()),
