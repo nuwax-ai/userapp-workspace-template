@@ -12,10 +12,6 @@ artifact = "artifact.zip"
 [run]
 command = ["python3", "main.py"]
 
-# Database readiness is required even without a migration command.
-[env]
-APP_CLI_REQUIRE_PG = "1"
-
 # startup/liveness 用默认 /health；readiness 走更深的 /ready。
 [health]
 readiness_path = "/ready"

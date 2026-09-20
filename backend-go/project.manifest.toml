@@ -12,11 +12,6 @@ artifact = "artifact.zip"
 [run]
 command = ["./server"]
 
-# The service opens PostgreSQL during startup even without a migrate command.
-# app-cli probes this service's database before launching the process.
-[env]
-APP_CLI_REQUIRE_PG = "1"
-
 # startup/liveness 用默认 /health；readiness 走更深的 /ready（DB 等依赖检查）。
 [health]
 readiness_path = "/ready"

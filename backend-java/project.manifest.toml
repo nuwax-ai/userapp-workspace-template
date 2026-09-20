@@ -13,10 +13,6 @@ artifact = "artifact.zip"
 command = ["java", "-jar", "app.jar"]
 
 # Spring Boot Actuator 三件套（均非默认 /health，需显式声明）。
-# Database readiness is required even without a migration command.
-[env]
-APP_CLI_REQUIRE_PG = "1"
-
 # startup 用 /liveness（只含 livenessState，DB 宕仍 UP，避免启动探针被 DB 拖死反复重启）；
 # readiness 用 /readiness（含 db，DB 宕摘流）。与 go/python/rust 的 /health 恒 200 语义对齐。
 # startup_timeout_seconds：dev 启动就绪探测窗口（默认 25s）——Spring Boot 冷启动
