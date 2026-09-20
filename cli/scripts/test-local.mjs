@@ -95,7 +95,9 @@ try {
   assert(agentsContent.includes('npx skills add nuwax-ai/userapp-workspace-template'), 'AGENTS.md 含 skills 安装命令');
   assert(agentsContent.includes('| /api/go/ |'), 'AGENTS.md 结构表含服务路由列');
   assert(agentsContent.includes('template-cli list backend'), 'AGENTS.md 含模板发现命令');
-  assert(agentsContent.includes('database/ 目录 = 发布时自动执行的 SQL'), 'AGENTS.md 含 database 约定');
+  assert(agentsContent.includes('结构快照'), 'AGENTS.md 声明为结构快照(规范以 skills 为准)');
+  assert(agentsContent.includes('0.0.0.0:$PORT'), 'AGENTS.md 含端口契约(manifest 契约保留)');
+  assert(!agentsContent.includes('Go + React') && !agentsContent.includes('Python + React'), 'AGENTS.md 不含默认选型策略');
 
   // === CLAUDE.md + 根 database/(init 根产物) ===
   const claudePath = path.join(appDir, 'CLAUDE.md');

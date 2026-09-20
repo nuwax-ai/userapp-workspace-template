@@ -15,8 +15,8 @@ workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个�
 不用手动复制和删目录。用 `@nuwax-ai/template-cli` 按需组合,一条命令生成干净的 workspace:
 
 ```bash
-# 前后端分离:Go 后端 + React 前端
-npx @nuwax-ai/template-cli init my-app --backend go --frontend react
+# 前后端分离:Python 后端 + React 前端
+npx @nuwax-ai/template-cli init my-app --backend python --frontend react
 
 # 纯后端 / 纯前端
 npx @nuwax-ai/template-cli init my-api --backend java

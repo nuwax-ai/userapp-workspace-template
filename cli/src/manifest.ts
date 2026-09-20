@@ -156,8 +156,14 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
 /**
  * 生成 workspace 根目录的 AGENTS.md。
  *
- * 这是一个精简的 Agent 指引,让 Agent 在用户用 CLI 创建的新 workspace 里工作时,
- * 知道:项目结构(目录↔类型↔路由)、平台约束、怎么装 skills、怎么用 CLI 追加 service。
+ * 内容原则——只放两类内容:
+ * ①生成时刻的结构事实(项目结构:目录↔类型↔路由);
+ * ②manifest 契约级约束($PORT/两级 manifest/Fail-Fast/service_id/迁移约定等)——
+ *   平台对契约长期向后兼容,冻结进快照不会过时。
+ * 不写可变策略(默认技术选型、工具用法细则、维护义务细则)——AGENTS.md 会被 agent 以
+ * 更高优先级读取且在 init 时冻结;策略烧进来后,一旦 skills/系统提示词更新,旧 workspace
+ * 里的快照就会压过新策略(历史教训:旧默认 Go+React 与新默认 Python+React 冲突)。
+ * 策略一律归 skills / 系统提示词,本文件顶部声明冲突时以它们为准。
  * @param hasIndexHtml workspace 根是否生成了 index.html 导航页(catch-all 服务
  *   独占 / 时 init 不生成,结构表也不列该行)。默认 true。
  */
@@ -181,7 +187,8 @@ export function generateAgentsMd(
 
   return `# ${workspaceName} — Agent Guide
 
-> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。
+> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。**本文件只是生成时刻的结构快照**:
+> 开发规范、默认技术选型等可变策略以 skills / 系统提示词为准,与本文冲突时以它们为准。
 
 ## Skills(按需)
 
@@ -203,30 +210,27 @@ ${serviceLines}${indexRow}
 
 ${tableNote}
 
-## 平台核心约束
+## 平台核心约束(manifest 契约,长期向后兼容)
 
-1. **服务必须监听 \`0.0.0.0:$PORT\`** — 不能硬编码端口
-2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个子目录 \`project.manifest.toml\`
-3. **严格校验,Fail Fast** — 配置错误构建立即失败
-4. **service_id 是稳定身份** — 不是目录名,决定日志目录/路由 upstream/依赖引用
-5. **回滚不执行 down migration** — 迁移必须幂等 + expand/contract
-6. **database/ 目录 = 发布时自动执行的 SQL** — 根 \`database/\` 先、子项目按目录字典序;
-   SQL 须幂等,单文件失败仅日志不阻断发布;**开发阶段不自动执行**,schema 变更需手动
-   执行(dbx/psql)后再放入。详见 \`database/README.md\`
-7. **static 服务无进程** — \`type = "static"\` 的服务(前端 SPA 模板)禁止 \`[run]\` 段,
-   \`[build].artifact\` 为静态内容目录,由平台内置静态托管承载(SPA fallback)
+1. **服务必须监听 \`0.0.0.0:$PORT\`** — \`PORT\` 由平台注入,任何地方硬编码端口都是 bug
+2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个一级子目录 \`project.manifest.toml\`,
+   文件名必须完全一致;平台只扫描一级子目录
+3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
+4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
+5. **回滚不执行 down migration** — \`[run].migrate\` 必须幂等,遵循 expand/contract
+6. **\`type = "static"\` 服务无进程** — 禁止 \`[run]\` 段,\`[build].artifact\` 为静态内容目录,
+   由平台内置静态托管承载
+7. **database/ 目录的 SQL 执行规则** — 详见 workspace 根 \`database/README.md\`(init 已生成)
 
-> 完整规范参考 **userapp-dev-guide** skill 或 \`npx @nuwax-ai/template-cli docs\`。
+## 规范与工具入口
 
-## 追加 Service
-
-\`\`\`bash
-npx @nuwax-ai/template-cli list backend    # 查看可用模板(backend / frontend)
-npx @nuwax-ai/template-cli add backend-rust
-# 追加同类模板的第二个实例(如第二个 java 后端)须同时指定新身份与路由,默认身份会冲突被拒:
-npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/java-admin/
-npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-worker
-\`\`\`
+- **完整开发规范**(manifest 字段/路由/健康检查/日志/部署/排错/铁律):参考
+  **userapp-dev-guide** skill,或 \`npx @nuwax-ai/template-cli docs\` 查阅随 CLI 分发的
+  开发者文档;\`database/\` 目录的 SQL 执行规则见该目录下的 README。
+- **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看可用模板,
+  在 workspace 根执行 \`npx @nuwax-ai/template-cli add <模板id>\`;同类模板的第二个实例
+  须同时指定新身份与路由(默认身份会冲突被拒),如
+  \`add backend-java --service-id java-admin --path /api/java-admin/\`。
 `;
 }
 

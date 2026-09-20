@@ -58,7 +58,7 @@ npx @nuwax-ai/template-cli init <目录名> --next
 init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入口首页占位页,catch-all 时跳过;
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;
 **`add` 追加服务不会自动更新它**,追加/删除对外服务后需手动增删导航卡片)、
-`AGENTS.md`(Agent 指南)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
+`AGENTS.md`(结构快照 + 规范/工具入口;规范与默认选型以 skills 为准,不写入该文件)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
 `database/`(SQL 约定目录,规则见其 README);各子项目的 `project.manifest.toml` 由 CLI
 按所选模板生成(不在模板包里),子项目另有 `database/README.md`。
 

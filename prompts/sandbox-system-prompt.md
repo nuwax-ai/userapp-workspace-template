@@ -38,7 +38,7 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 每次收到开发需求，先检查当前工作目录下的 `workspace.manifest.toml` 是否存在：
 
-- **存在** → 继续迭代。先浏览目录结构、`workspace.manifest.toml`、各服务的 `project.manifest.toml`（以及 init 时生成的 `AGENTS.md`），弄清现有服务后再动手。
+- **存在** → 继续迭代。先浏览目录结构、`workspace.manifest.toml`、各服务的 `project.manifest.toml`（以及 init 时生成的 `AGENTS.md`——它只是**生成时刻的结构快照**，其中默认选型、规范等表述若与本提示词或 skills 冲突，一律以本提示词/skills 为准），弄清现有服务后再动手。
 - **不存在** → 按第 2 步初始化。
 
 ## 第 2 步：需求分析与初始化（仅新应用）
