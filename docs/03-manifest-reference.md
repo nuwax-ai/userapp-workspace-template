@@ -217,6 +217,17 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 可选。平铺的 `key = "value"` 表,运行时注入给本服务。
 
+启动时依赖 PostgreSQL 的服务（即使没有 `run.migrate`）应声明：
+
+```toml
+[env]
+APP_CLI_REQUIRE_PG = "1"
+```
+
+支持此声明的 app-cli 会在 builtin 和 supervisord 两种模式下，使用该服务的目标数据库及运行凭据执行 `SELECT 1`，确认成功后再启动服务。仅设置 PG 连接地址不等于声明依赖；纯前端服务无需设置。探测需要宿主环境提供 `psql`，失败会明确阻止本轮启动。
+
+该声明随构建写入 `release.lock.toml`，更新模板不会自动改变已发布制品；存量应用需修改清单并重新构建、发布。它不替代应用运行期间的数据库断线重连，也不执行数据库迁移。
+
 | 约束 | 说明 |
 |---|---|
 | key 不能是保留键 | `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、`APP_RELEASE_ID` 禁用。 |
