@@ -7,6 +7,7 @@
 ```
 userapp-workspace-template/
 ├── workspace.manifest.toml          # 开发用 workspace(含全部 7 个模板)
+├── index.html                       # 开发用 workspace 的入口首页(根路径兜底,改完刷新即生效)
 ├── database/                        # workspace 根 SQL 约定目录(发布时平台自动执行,规则见其 README)
 ├── backend-go/                      # Go (Gin + GORM) 后端模板源
 ├── backend-java/                    # Java (Spring Boot + MyBatis-Plus) 后端模板源
