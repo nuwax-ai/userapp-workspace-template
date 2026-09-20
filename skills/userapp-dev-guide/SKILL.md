@@ -4,12 +4,12 @@ description: >
   UserApp 平台开发规范权威指南。当用户在 UserApp workspace 里开发服务、
   写或改 manifest 配置、规划路由、处理健康检查、声明日志、发布部署、回滚、
   排查错误、本地运行验证时使用。覆盖:核心概念、manifest 全字段、校验规则、
-  环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调)、
+  环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调/入口首页策略)、
   健康探针、日志、发布状态机、版本保留、回滚、迁移约定、database 目录 SQL 自动执行、
   平台 iframe 嵌入、会话 Cookie 与跨域请求兼容、常见错误排查、
   app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
   触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
-  proxy path、strip_prefix、路由、catch-all、反代、pingap、健康检查、探针、
+  proxy path、strip_prefix、路由、catch-all、首页、入口页、导航页、index.html、反代、pingap、健康检查、探针、
   readiness、liveness、SIGTERM、优雅关闭、日志、发布、部署、上线、回滚、
   迁移、migrate、database 目录、自动执行 SQL、建表、表不存在、启动失败、502、404、端口、PORT、环境变量、数据库连接、
   app-cli、gen-lock、release.lock、本地运行、本地验证、本地测试、集成验证。
@@ -197,6 +197,25 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 - 全 workspace**最多一个 `/`**(catch-all,通常给主前端)
 - 具体前缀优先于 catch-all 命中
 - **worker 不能声明 [proxy]**
+
+### 入口首页(index.html)策略
+
+- workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径兜底展示它(app-cli 内置
+  静态服务实时读文件,改完刷新即生效);服务路由恒优先
+- **默认策略 = 保留导航页并个性化**:init 生成的是脚手架占位页(标题=目录名,卡片=模板默认
+  文案),每轮开发结束把它更新为应用真实首页——标题=应用名(与 `workspace.manifest.toml`
+  的 name 一致),卡片=真实功能名+一句话描述(链接仍指 `[proxy].path`)。多服务、纯后端
+  workspace 必用本策略(纯后端时此页是应用唯一门面,至少写清应用名与各 API 用途)
+- **可选策略 = 主前端接管 `/`**:仅当用户明确要求"打开即是应用本身"且只有一个主前端时。
+  改主前端 `[proxy].path = "/"` 并删除 `index.html`,联动清单(缺一即 404/白屏):
+  1. 构建工具 base 同步改 `/`(React/Vue 模板原默认 `/react/`、`/vue/`)
+  2. 前端路由器 base 同步(hash router 不受影响)
+  3. `strip_prefix` 保持 true(产物按根路径打包)
+  4. 后端 `/api/*` 前缀不受影响,前端调用仍用相对路径
+  5. 全 workspace 仍最多一个 `/`;Next.js 单体本就占 `/`,不可再加
+- 改完跑 `app-cli gen-lock --workspace .` + 构建——static 服务会自动校验 base/path/
+  strip_prefix 与产物布局联动,错配直接报错并给修复指引
+- 判定原则:拿不准就留在默认策略;接管 `/` 属路由变更,完成后必须走路由分发验证
 
 ### 服务间互调(推荐:走容器内反代)
 

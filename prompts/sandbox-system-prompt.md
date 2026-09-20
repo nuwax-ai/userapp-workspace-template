@@ -67,7 +67,7 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 - 阅读生成的 `AGENTS.md` 了解项目结构和开发约定（其中"安装 skills"的指引在沙箱中可跳过——skills 已预置或已由平台安装）；
 - 可顺手把 `workspace.manifest.toml` 里 `[workspace].name` 改成可读的应用名（默认是目录名，即会话 ID）；
-- init 还会在根目录生成 `index.html`（入口导航页，维护责任见铁律 15）和 `database/`（SQL 约定目录，规则见铁律 13）。
+- init 还会在根目录生成 `index.html`（入口首页占位页，开发完成后须按铁律 15 个性化为应用真实首页）和 `database/`（SQL 约定目录，规则见铁律 13）。
 
 ### 2.3 追加服务（迭代过程中）
 
@@ -117,7 +117,12 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 14. **static 服务约束**：`type = "static"` 的服务**无进程**（两个前端 SPA 模板均为此类型）：省略 `[run]` 整段（声明了构建直接失败），`[build].artifact` 为静态内容目录，由平台内置静态托管承载（自动 SPA fallback）。不要试图给 static 服务加启动命令或健康探针改造；确实需要跑进程，把 `type` 改成 `node` 等进程类型。
 
-15. **index.html 导航页维护**：workspace 根的 `index.html` 是访问入口的默认导航页（init 自动生成，`add` 追加服务**不会**自动更新它）。**追加对外服务后同步增补导航卡片，删除服务后删掉对应卡片**；当某服务占 `/`（catch-all）时该文件不再生效，应删除；内容可自由修改，改完刷新即生效。
+15. **index.html 入口首页维护**：workspace 根的 `index.html` 是用户打开应用看到的第一眼（根路径/未匹配路径的兜底页；改完刷新即生效，无构建耦合）。init 生成的只是**脚手架占位页**——标题是目录名（会话 ID）、卡片是模板默认文案。**每轮开发结束时必须把它更新为当前应用的真实首页**：
+    - 标题与应用名一致（取 `workspace.manifest.toml` 的 `[workspace].name` 或用户口中的应用名，不用会话 ID/目录名）；
+    - 卡片用真实功能名 + 一句话描述替换模板默认文案，链接仍指向各服务 `[proxy].path`；
+    - 追加/删除对外服务时同步增删卡片（`add` **不会**自动更新此文件）；
+    - 纯后端 workspace 没有前端服务，此页就是应用的唯一门面——至少写清应用名与各 API 用途；
+    - 仅当某服务占 `/`（catch-all）时此文件不生效、应删除；用户明确要求"打开即是应用本身"时才考虑让主前端接管 `/`，联动清单见 userapp-dev-guide「入口首页策略」，默认不做。
 
 **manifest 里的 dev 段**：CLI 生成的 `project.manifest.toml` 可能包含 `[devbuild]` / `[devrun]`——dev 阶段的准备/热加载命令（源码态运行，改码即生效），生产部署不读这两段。仅在独立本地环境以 dev 形态编排运行时，给 `app-cli serve --workspace .` 加环境变量 `APP_CLI_RUN_PROFILE=dev`。细节见 docs。
 
@@ -156,7 +161,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
      `.local-deploy/` 与 `.local-logs/` 是本地生成目录，应加入 `.gitignore`。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
    - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
-6. **铁律复查**：对照上面 15 条铁律复查两个 manifest（gen-lock 已覆盖结构类规则，人工重点看铁律 7/13/15——数据库连接、SQL 幂等、导航页同步）。
+6. **铁律复查**：对照上面 15 条铁律复查两个 manifest（gen-lock 已覆盖结构类规则，人工重点看铁律 7/13/15——数据库连接、SQL 幂等、入口首页：打开根 `index.html` 核对，标题应是应用名、卡片应是真实功能名；凡出现 init 模板默认文案（如 "React Vite Frontend"）或会话 ID 标题，即视为本轮未完成）。
 7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。

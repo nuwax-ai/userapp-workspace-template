@@ -172,6 +172,8 @@ export function generateAgentsMd(
   const indexRow = hasIndexHtml ? '\n| `index.html` | 入口导航页 | 根路径/未匹配路径兜底 |' : '';
   const tableNote = hasIndexHtml
     ? [
+        '> `index.html` 是应用的入口首页——开发完成后记得把它更新为应用真实首页',
+        '> (标题=应用名,卡片=真实功能名与描述,替换 init 的模板默认文案);',
         '> 用 `add` 追加服务后,此表与 `index.html` 的导航卡片**都不会自动更新**;各服务实际路由',
         '> 以其 `project.manifest.toml` 的 `[proxy]` 为准,追加/删除对外服务后记得同步维护导航卡片。',
       ].join('\n')
@@ -320,6 +322,8 @@ export function generateIndexHtml(
 <!--
   ${escapeHtml(workspaceName)} — 访问入口默认页(可自行修改,改完刷新即生效)。
 
+  - 本页是脚手架占位页:开发完成后请把它更新为应用首页——标题改为真实应用名,
+    卡片改为真实功能名与描述(链接保持各服务 [proxy].path 不变);
   - 服务路由前缀(如 /api/xxx、/react)由各服务 project.manifest.toml [proxy] 决定,恒优先;
   - 本页面仅作为入口根路径(/)与未匹配路径的兜底展示;
   - 追加服务后想加导航卡片,直接编辑下方 cards 区域即可。
