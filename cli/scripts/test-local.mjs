@@ -83,6 +83,22 @@ try {
   );
   assert(!reactManifest.includes('--frozen-lockfile'), 'react devbuild 不含裸 --frozen-lockfile');
 
+  // build 脚本同语义(app-171 事故回归):平台导出链过滤 pnpm-lock.yaml,
+  // 构建脚本不得强依赖 lockfile——裸 install 缺失自动生成
+  const buildScriptAssert = (scriptPath, label) => {
+    const script = fs.readFileSync(scriptPath, 'utf-8');
+    assert(script.includes('pnpm install'), `${label} build 脚本含 pnpm install`);
+    assert(!script.includes('--frozen-lockfile'), `${label} build 脚本不含 --frozen-lockfile`);
+  };
+  buildScriptAssert(
+    path.resolve(CLI_DIR, '..', 'frontend-react-vite', 'scripts', 'build-standalone.sh'),
+    'react 源',
+  );
+  buildScriptAssert(
+    path.join(appDir, 'frontend-react-vite', 'scripts', 'build-standalone.sh'),
+    'react 生成',
+  );
+
   // === workspace manifest 注释 ===
   const wsManifest = fs.readFileSync(path.join(appDir, 'workspace.manifest.toml'), 'utf-8');
   assert(wsManifest.includes('[pingap]'), 'workspace manifest 含 pingap 注释');
@@ -162,6 +178,14 @@ try {
   const vueManifest = fs.readFileSync(path.join(appDir, 'frontend-vue3-vite', 'project.manifest.toml'), 'utf-8');
   assert(vueManifest.includes('["pnpm", "install", "--no-frozen-lockfile"]'), 'vue devbuild = install --no-frozen-lockfile');
   assert(!vueManifest.includes('--frozen-lockfile'), 'vue devbuild 不含裸 --frozen-lockfile');
+  buildScriptAssert(
+    path.resolve(CLI_DIR, '..', 'frontend-vue3-vite', 'scripts', 'build-standalone.sh'),
+    'vue 源',
+  );
+  buildScriptAssert(
+    path.join(appDir, 'frontend-vue3-vite', 'scripts', 'build-standalone.sh'),
+    'vue 生成',
+  );
 
   // === 冲突检测 ===
   console.log('\n=== 冲突检测 ===');
