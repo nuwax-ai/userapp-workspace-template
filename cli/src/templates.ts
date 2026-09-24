@@ -22,6 +22,8 @@ export interface TemplateDefaults {
   proxyPath: string;
   /** 是否剥掉前缀转发 */
   stripPrefix: boolean;
+  /** devrun 生效时的前缀策略；省略则沿用 stripPrefix。 */
+  devStripPrefix?: boolean;
   /** logs.sources 的 glob 模式(相对日志目录,只匹配文件名) */
   logGlob: string;
   /** logs.sources 的 format */
@@ -200,6 +202,7 @@ export const TEMPLATES: TemplateMeta[] = [
       serviceId: 'frontend-react-vite',
       proxyPath: '/react',
       stripPrefix: true,
+      devStripPrefix: false,
       logGlob: 'runtime.*.log',
       logFormat: 'text',
       logSourceId: 'runtime',
@@ -207,7 +210,6 @@ export const TEMPLATES: TemplateMeta[] = [
     },
     variables: {
       PACKAGE_NAME: '@nuwax-ai/react-vite',
-      VITE_BASE: '/react/',
       HEALTH_SERVICE_TAG: 'react',
       HTML_TITLE: 'React Vite App',
     },
@@ -225,6 +227,7 @@ export const TEMPLATES: TemplateMeta[] = [
       serviceId: 'frontend-vue3-vite',
       proxyPath: '/vue',
       stripPrefix: true,
+      devStripPrefix: false,
       logGlob: 'runtime.*.log',
       logFormat: 'text',
       logSourceId: 'runtime',
@@ -232,7 +235,6 @@ export const TEMPLATES: TemplateMeta[] = [
     },
     variables: {
       PACKAGE_NAME: '@nuwax-ai/vue3-vite',
-      VITE_BASE: '/vue/',
       HEALTH_SERVICE_TAG: 'vue',
       HTML_TITLE: 'Vue3 Vite App',
     },

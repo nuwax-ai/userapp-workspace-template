@@ -139,7 +139,7 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   console.log(k.bold('下一步:'));
   console.log(`  cd ${targetDir}`);
   console.log(k.cyan('\n  1. 安装 AI skills(推荐):'));
-  console.log(k.gray('     npx skills add nuwax-ai/userapp-workspace-template'));
+  console.log(k.gray('     npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main'));
   console.log(k.cyan('\n  2. 检查各子目录的 project.manifest.toml'));
   console.log(k.cyan('\n  3. 用 add 命令追加更多 service:'));
   console.log(k.gray('     npx @nuwax-ai/template-cli add <template-id>'));

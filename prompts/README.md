@@ -33,3 +33,18 @@
 提示词与 `userapp-dev-guide` 采用 `app-cli <子命令> <参数>`，且平台已有运行实例时不再引导 agent 额外启动编排器。
 更新部署时须同步三个入口：沙箱中的 app-cli 二进制、已安装/复制的 skills、平台实际注入的系统提示词。
 先确认二进制支持 `gen-lock --workspace`、`build --workspace`、`serve --workspace`，再启用新版技能与提示词；本仓库文件修改不会自动更新运行中的沙箱或平台配置。
+
+### React/Vue 路由契约同步
+
+template-cli 0.1.14 将本模块 `[proxy].path` 作为 Vite dev/build base 的唯一来源，
+并生成 `strip_prefix = true`、`dev_strip_prefix = false`。运行时需要 app-cli ≥ 0.3.7
+及支持该字段的 RCoder。`skills/`、系统提示词和生成的 `AGENTS.md` 已统一为该规则。
+存量项目需先按 `docs/04-pingap-routing.md` 接入 helper 和依赖，不能只套用新提示词。
+
+安装 skills 时明确使用本仓库 `main` 分支：
+
+```bash
+npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
+```
+
+平台预装/复制的 skills 与注入的系统提示词仍须单独同步，不随 npm 发布自动更新。

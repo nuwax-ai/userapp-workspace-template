@@ -49,7 +49,7 @@ userapp-workspace-template/
 
 ```bash
 # 安装全部 2 个 skill(推荐)
-npx skills add nuwax-ai/userapp-workspace-template
+npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
 
 # 或从本地路径安装(开发时)
 npx skills add . --agent zcode --copy

@@ -142,7 +142,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 |---|---|:---:|---|---|
 | `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
 | `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
-| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = 无进程静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
+| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
 | `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台任务,**不能**声明 `[proxy]`)。 |
 | `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。整个 workspace 至少要有一个 enabled 服务。 |
 
@@ -172,11 +172,11 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[devrun]`
 
-整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 显式配置则执行,未配则**本服务跳过编译**——本段即声明 dev 态自足)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、pingap 路由、健康检查与产物态完全一致;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
+整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 显式配置则执行,未配则**本服务跳过编译**——本段即声明 dev 态自足)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、健康检查与产物态一致;pingap 可通过 `proxy.dev_strip_prefix` 为 devrun 覆盖前缀策略;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
-| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。**并应答 `[health].readiness_path`**(vite 模板经 `configureServer` 插件实现 `/health`)——否则 dev server 会被 pingap 健康探针摘流(经 9080 的预览 503);dev server 的路由 base 用无前缀(vite 模板按 command 分流:`serve` 用 `/`,`build` 用 `[proxy].path`)以匹配 strip_prefix 转发。 |
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。**并应答 `[health].readiness_path`**(vite 模板经 `configureServer` 插件实现 `/health`)——否则 dev server 会被 pingap 健康探针摘流(经 9080 的预览 503);Vite 的 dev/build `base` 都应与 `[proxy].path` 对齐(如 `/react/`)，devrun 配 `dev_strip_prefix = false`，让浏览器资源 URL 留在子路径内；prod 静态托管仍用 `strip_prefix = true`。 |
 
 ### 字段表:`[health]`
 
@@ -193,12 +193,17 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 ### 字段表:`[proxy]`
 
+React/Vue 新模板以 `[proxy].path` 为 Vite dev/build base 的唯一来源，由配置文件在每次启动/构建时读取。
+更改公共路径只改本字段，不手改 Vite base；改后重启 dev、重新构建 prod。保留模板生成的 dev/prod
+前缀策略，多个同类前端使用唯一 service_id/path，详见 [路由文档](04-pingap-routing.md#4-路由规划)。
+
 可选。**仅 `pingap.mode = managed` 时由平台读取生成路由**。`kind = worker` 的服务**禁止**声明。`type = static` 服务编译期自动校验 base/`path`/`strip_prefix`/产物布局联动(烧进 `dist/index.html` 的资源引用按本段规则推演 pingap 翻译链路),错配构建失败并给修复指引(如构建工具 base/publicPath 应与 `path` 一致)。
 
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |---|---|:---:|---|---|
 | `path` | 字符串(绝对 URL 路径) | ✅(若有本段) | — | 路由前缀,以 `/` 开头。**workspace 内唯一**;**全 workspace 最多一个 `/`**(catch-all)。不含 `..`/`?`/`#`。 |
 | `strip_prefix` | 布尔 | ❌ | `false` | `true` = 转发前剥掉 `path` 前缀;`false` = 原样转发。 |
+| `dev_strip_prefix` | 布尔 | ❌ | 沿用 `strip_prefix` | app-cli ≥ 0.3.7；仅 dev 模式且该服务使用 `[devrun]` 时覆盖。managed/extend 生效；custom 自行配置。 |
 | `plugins` | 字符串数组 | ❌ | `[]` | extend 模式引用的 pingap 插件名。managed 留空。 |
 | `upstream_includes` | 字符串数组 | ❌ | `[]` | extend 模式引用的 upstream 片段名。managed 留空。 |
 
@@ -269,7 +274,7 @@ PG 启动等待由运行环境决定，不写入模板清单。RCoder 的 UserAp
 
 **服务类型约束**
 - `kind = "worker"` 的服务**不能**声明 `[proxy]`。
-- `type = "static"` 的服务**不能**配置 `[run].command` / `[run].migrate`(无进程,`[run]` 整段省略,内置静态托管承载);构建期还会校验静态产物与 `[proxy]` 的路由一致性(资源引用逃逸/翻译后文件不存在 → 构建失败,见 [字段表:`[proxy]`](#字段表proxy))。
+- `type = "static"` 的服务**不能**配置 `[run].command` / `[run].migrate`(prod 无业务进程,`[run]` 整段省略,内置静态托管承载；dev 可用 `[devrun]`);构建期还会校验静态产物与 `[proxy]` 的路由一致性(资源引用逃逸/翻译后文件不存在 → 构建失败,见 [字段表:`[proxy]`](#字段表proxy))。
 
 **依赖**
 - `depends_on` 引用必须是**已存在且 enabled**的 `service_id`(不是目录名);

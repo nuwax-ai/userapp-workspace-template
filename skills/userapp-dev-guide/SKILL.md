@@ -9,7 +9,7 @@ description: >
   平台 iframe 嵌入、会话 Cookie 与跨域请求兼容、常见错误排查、
   app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
   触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
-  proxy path、strip_prefix、路由、catch-all、首页、入口页、导航页、index.html、反代、pingap、健康检查、探针、
+  proxy path、strip_prefix、路由、Vite base、多个前端、两个 Vue、catch-all、首页、入口页、导航页、index.html、反代、pingap、健康检查、探针、
   readiness、liveness、SIGTERM、优雅关闭、日志、发布、部署、上线、回滚、
   迁移、migrate、database 目录、自动执行 SQL、建表、表不存在、启动失败、502、404、端口、PORT、环境变量、数据库连接、
   app-cli、gen-lock、release.lock、本地运行、本地验证、本地测试、集成验证。
@@ -188,8 +188,23 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 | `false`(默认) | `/api/go/health` | `/api/go/health`(原样) |
 
 - **API 后端**:`strip_prefix = true`(后端按根路径写)
-- **SPA 前端**:`strip_prefix = true`(前端按根路径打包)
+- **SPA prod**：base 与公共路径一致(如 `/react/`)，`strip_prefix = true` 对应 `dist/assets` 布局。
+- **Vite devrun**：base 同样为 `/react/`(Vue 为 `/vue/`)，`dev_strip_prefix = false` 保留前缀给 Vite；app-cli ≥ 0.3.7。不能将 dev base 改回 `/`，否则脚本请求逃到域根。修改后同时验证预览脚本、HMR 与 prod 静态资源。
 - **Next.js 单体 `/`**:`strip_prefix = false`(自己处理全部路由)
+
+### React/Vue 的 TOML 单一来源
+
+先读目标子项目的 `AGENTS.md` 和 `project.manifest.toml`。新模板的 `vite.config.ts` 调用
+`scripts/manifest-routing.mjs`，用 TOML 解析器读取**本模块** `[proxy].path`，统一生成带尾斜杠的 base。
+原始 `pnpm dev` 和 `pnpm build` 同样有效，不依赖 RCoder 注入路由变量。文件缺失/解析失败/路径非法直接报错。
+
+- 改公共路径只改 TOML，不写死 Vite base、不另设环境变量或 `--base` 覆盖。保留模板的 health/入口跳转插件。
+- 改完后重启 dev 以重新生成代理配置；prod 重新构建发布。不能认为正在运行的 Vite 或已有 dist 已自动更新。
+- 两个同类前端用 CLI 分别创建，例如 `admin-web` → `/admin/`、`portal-web` → `/portal/`，不用改 Vite 配置。
+- 本模块资源使用 `import.meta.env.BASE_URL`；共享后端仍请求该后端的 `/api/...`。默认 hash router 不需要逐模块改配置。
+- 检查每个入口、JS Content-Type、HMR 和 prod 资源；多个同类前端要检查不同页面内容，防止串路由。
+- 存量模板不会自动升级。先安装 `smol-toml` 开发依赖、同步 helper 及 Vite/tsconfig 接线，保留业务插件，
+  再使用这一规则；完整步骤见 `template-cli docs` 的 `04-pingap-routing.md`。不要只把旧项目 base 改成 `/`。
 
 ### 路由规则
 
@@ -208,7 +223,7 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
   workspace 必用本策略(纯后端时此页是应用唯一门面,至少写清应用名与各 API 用途)
 - **可选策略 = 主前端接管 `/`**:仅当用户明确要求"打开即是应用本身"且只有一个主前端时。
   改主前端 `[proxy].path = "/"` 并删除 `index.html`,联动清单(缺一即 404/白屏):
-  1. 构建工具 base 同步改 `/`(React/Vue 模板原默认 `/react/`、`/vue/`)
+  1. 新 React/Vue 模板的 base 从 TOML 自动读取 `/`，无需另改；存量模板先按上节升级
   2. 前端路由器 base 同步(hash router 不受影响)
   3. `strip_prefix` 保持 true(产物按根路径打包)
   4. 后端 `/api/*` 前缀不受影响,前端调用仍用相对路径
@@ -413,7 +428,7 @@ app-cli serve --workspace .local-deploy --log-dir .local-logs
 dev 源码态（替代上述产物态步骤，不同时启动）：
 
 ```bash
-app-cli gen-lock --workspace .
+app-cli gen-lock --workspace . --dev
 app-cli build --workspace . --dev
 APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 ```
@@ -426,7 +441,7 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 - 单服务失败(migrate/spawn/探测超时)**不阻塞**其余服务;任务终态 failed 的
   error 为逐服务汇总,已启动服务保留运行(dev/list 可查)
 - 事件经 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)
-- `type = "static"` 服务(无进程):`[run]` 禁止、`[build].artifact`=静态内容目录
+- `type = "static"` 服务(prod 无业务进程):`[run]` 禁止、`[build].artifact`=静态内容目录
   (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
   启动恒成功(`service_start_ok` 即时);dev 源码态配了 `[devrun]` 时端口让给
   dev server(vite dev 热加载),托管跳过
@@ -489,7 +504,7 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 - HTTP 路径:以 `/` 开头,不含 `..`/`?`/`#`
 - 路由:path 唯一;最多一个 `/`
 - worker 不能声明 `[proxy]`
-- static 服务禁配 `[run].command`/`[run].migrate`(无进程,整段省略,内置静态托管)
+- static 服务禁配 `[run].command`/`[run].migrate`(prod 无业务进程,整段省略,内置静态托管；dev 可用 `[devrun]`)
 - depends_on:引用已存在且 enabled 的 service_id;不能自依赖/成环
 - 新服务启动建表:建表段包单事务并先取 `pg_advisory_xact_lock(424242)`(**跨服务契约 key,勿改**,见任一后端 db 初始化)——PG 的 `CREATE TABLE IF NOT EXISTS` 非原子,多服务并发首启会撞 pg_type 唯一键(23505);drizzle 类运行时迁移用会话级 `pg_advisory_lock` 包整个 migrate(见 userapp-next migrate.ts)
 - 至少一个 enabled 服务
@@ -533,7 +548,7 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 | `duplicate proxy path` | 路由重复 | 改唯一 |
 | `multiple catch-all routes` | 两个 `/` | 只留一个 |
 | `worker must not declare [proxy]` | worker 配了代理 | 删 [proxy] |
-| `static service must not declare [run].command` | static 服务配了 [run] 启动/迁移命令 | 删 [run] 段(无进程);要跑进程则 type 改 `node` 等 |
+| `static service must not declare [run].command` | static 服务配了 [run] 启动/迁移命令 | 删 [run] 段(prod 内置静态托管，dev 可用 `[devrun]`);prod 要跑业务进程时 type 改 `node` 等 |
 | 报错含 `逃逸出 [proxy].path` 或 `翻译后找不到` | static 产物资源引用与 [proxy] 错配(base/strip_prefix/产物布局) | 构建工具 `base` 设为 `[proxy].path`;`strip_prefix` 与产物布局对齐(`strip=true`+无前缀产物 / `strip=false`+带前缀产物 二选一) |
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
 | gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |

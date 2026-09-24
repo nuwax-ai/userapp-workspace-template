@@ -2,7 +2,7 @@
 /**
  * test-local.mjs —— 本地 E2E 测试脚本。
  *
- * 和 CI workflow 里的 E2E 测试保持一致,让本地也能 npm test。
+ * 本地、日常 CI 与发布 workflow 共用此入口,避免维护多份测试漂移。
  *
  * 运行: npm test
  */
@@ -10,7 +10,7 @@
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import os from 'node:os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -67,6 +67,7 @@ try {
   const appDir = path.join(WORKDIR, 'test-app');
 
   assert(fs.existsSync(path.join(appDir, 'workspace.manifest.toml')), 'workspace.manifest.toml 存在');
+  assert(fs.existsSync(path.join(appDir, 'index.html')), '非 catch-all workspace 生成入口首页');
   assert(fs.existsSync(path.join(appDir, 'backend-go', 'project.manifest.toml')), 'backend-go manifest 存在');
   assert(fs.existsSync(path.join(appDir, 'frontend-react-vite', 'project.manifest.toml')), 'react manifest 存在');
 
@@ -108,7 +109,7 @@ try {
   const agentsPath = path.join(appDir, 'AGENTS.md');
   assert(fs.existsSync(agentsPath), 'AGENTS.md 存在');
   const agentsContent = fs.readFileSync(agentsPath, 'utf-8');
-  assert(agentsContent.includes('npx skills add nuwax-ai/userapp-workspace-template'), 'AGENTS.md 含 skills 安装命令');
+  assert(agentsContent.includes('npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main'), 'AGENTS.md 含 skills 安装命令');
   assert(agentsContent.includes('| /api/go/ |'), 'AGENTS.md 结构表含服务路由列');
   assert(agentsContent.includes('template-cli list backend'), 'AGENTS.md 含模板发现命令');
   assert(agentsContent.includes('结构快照'), 'AGENTS.md 声明为结构快照(规范以 skills 为准)');
@@ -134,14 +135,19 @@ try {
   const cargo = fs.readFileSync(cargoPath, 'utf-8');
   assert(cargo.includes('name = "my-rust-api"'), 'Cargo crate 名派生为 my-rust-api');
   assert(cargo.includes('"axum", "vendored"'), 'utoipa-swagger-ui 启用 vendored(构建期零外网)');
+  const mavenWrapper = fs.readFileSync(
+    path.join(CLI_DIR, 'templates', 'backend-java', '.mvn', 'wrapper', 'maven-wrapper.properties'),
+    'utf-8',
+  );
+  assert(mavenWrapper.includes('maven.aliyun.com'), 'Java Maven wrapper 保留国内镜像');
 
-  // === init: react 自定义 service_id + path(pack 占位符注入 + VITE_BASE 派生回归) ===
+  // === init: react 自定义 service_id + path(运行时读取 TOML,不生成第二份 base) ===
   console.log('\n=== init: react custom service_id + path ===');
   const packedVite = fs.readFileSync(
     path.join(CLI_DIR, 'templates', 'frontend-react-vite', 'vite.config.ts'),
     'utf-8',
   );
-  assert(packedVite.includes('__VITE_BASE__'), 'pack 注入 vite.config.ts 占位符');
+  assert(packedVite.includes('readManifestBase('), 'pack 保留 manifest 路由读取入口');
   const packedClaude = fs.readFileSync(
     path.join(CLI_DIR, 'templates', 'frontend-react-vite', 'CLAUDE.md'),
     'utf-8',
@@ -152,15 +158,42 @@ try {
   const webDir = path.join(WORKDIR, 'test-web', 'my-web');
   const webVite = fs.readFileSync(path.join(webDir, 'vite.config.ts'), 'utf-8');
   assert(
-    webVite.includes("base: command === 'serve' ? '/' : '/admin/',") && !webVite.includes('__VITE_BASE__'),
-    'vite build base 派生为 /admin/',
+    webVite === packedVite,
+    '自定义路由不改写 vite.config.ts',
   );
 
   const webManifest = fs.readFileSync(path.join(webDir, 'project.manifest.toml'), 'utf-8');
   assert(webManifest.includes('service_id = "my-web"'), 'manifest 自定义 service_id');
   assert(webManifest.includes('path = "/admin/"'), 'manifest 自定义 proxy path');
+  assert(webManifest.includes('strip_prefix = true\ndev_strip_prefix = false'), 'react prod 剥前缀、dev 保留前缀');
   assert(webManifest.includes('type = "static"'), 'static 形态 type = static');
   assert(!webManifest.includes('[run]'), 'static 无 [run] 段(平台内置静态托管)');
+
+  // 复用 CLI 安装的 TOML 解析器,无需为生成的测试项目另做 npm install。
+  fs.symlinkSync(path.join(CLI_DIR, 'node_modules'), path.join(WORKDIR, 'node_modules'), 'junction');
+  const { readManifestBase } = await import(pathToFileURL(path.join(webDir, 'scripts/manifest-routing.mjs')).href);
+  const webManifestUrl = pathToFileURL(path.join(webDir, 'project.manifest.toml'));
+  assert(readManifestBase(webManifestUrl) === '/admin/', '自定义路由由生成的 TOML 读取');
+  fs.writeFileSync(webManifestUrl, webManifest.replace('path = "/admin/"', "  path = '/console/'"));
+  assert(readManifestBase(webManifestUrl) === '/console/', '仅改 TOML(单引号/缩进)即读取新 base');
+  let routeConflict = '';
+  try {
+    run(`${CLI} add frontend-vue3-vite --service-id portal-web --path /console`, { cwd: path.dirname(webDir) });
+  } catch (error) {
+    routeConflict = String(error.stderr);
+  }
+  assert(routeConflict.includes('proxy.path 冲突') && !fs.existsSync(path.join(path.dirname(webDir), 'portal-web')),
+    '正式解析已有 TOML,在创建目录前拒绝 /console 与 /console/ 冲突');
+  const validManifest = fs.readFileSync(webManifestUrl, 'utf-8');
+  let rejected = 0;
+  for (const content of ['[proxy', '[project]\nservice_id="my-web"', '[proxy]\npath="//other-host/"', '[proxy]\npath="/admin//"']) {
+    fs.writeFileSync(webManifestUrl, content);
+    try { readManifestBase(webManifestUrl); } catch { rejected++; }
+  }
+  fs.unlinkSync(webManifestUrl);
+  try { readManifestBase(webManifestUrl); } catch { rejected++; }
+  assert(rejected === 5, '缺文件、坏 TOML、缺路径和非法路径不回退到根路由');
+  fs.writeFileSync(webManifestUrl, validManifest);
 
   // === add: worker ===
   console.log('\n=== add: worker ===');
@@ -176,6 +209,12 @@ try {
   console.log('\n=== add: vue devbuild ===');
   run(`${CLI} add frontend-vue3-vite`, { cwd: appDir });
   const vueManifest = fs.readFileSync(path.join(appDir, 'frontend-vue3-vite', 'project.manifest.toml'), 'utf-8');
+  assert(
+    fs.readFileSync(path.join(webDir, 'scripts/manifest-routing.mjs'), 'utf-8') ===
+    fs.readFileSync(path.join(appDir, 'frontend-vue3-vite/scripts/manifest-routing.mjs'), 'utf-8'),
+    'React/Vue 共用相同的路由读取规则',
+  );
+  assert(vueManifest.includes('strip_prefix = true\ndev_strip_prefix = false'), 'vue prod 剥前缀、dev 保留前缀');
   assert(vueManifest.includes('["pnpm", "install", "--no-frozen-lockfile"]'), 'vue devbuild = install --no-frozen-lockfile');
   assert(!vueManifest.includes('--frozen-lockfile'), 'vue devbuild 不含裸 --frozen-lockfile');
   buildScriptAssert(
@@ -211,6 +250,11 @@ try {
     'utf-8',
   );
   assert(nextPkg.includes('"geist"'), 'next 字体走 geist 包(构建期零外网)');
+  assert(
+    !fs.existsSync(path.join(WORKDIR, 'test-next', 'index.html')) &&
+    !fs.readFileSync(path.join(WORKDIR, 'test-next', 'AGENTS.md'), 'utf-8').includes('index.html'),
+    'catch-all workspace 不生成首页或指引 agent 修改不存在的首页',
+  );
 
   // === --next + --backend 冲突 ===
   console.log('\n=== --next + --backend 冲突检测 ===');

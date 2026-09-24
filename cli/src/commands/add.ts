@@ -16,9 +16,10 @@ import fs from 'node:fs';
 import fse from 'fs-extra';
 import type { Command } from 'commander';
 import * as k from 'kolorist';
+import { parse } from 'smol-toml';
 
-import { getTemplate, type TemplateMeta } from '../templates.js';
-import { checkConflicts, validateServiceId, type ExistingService } from '../validate.js';
+import { getTemplate } from '../templates.js';
+import { checkConflicts, validateServiceId, validateProxyPath, type ExistingService } from '../validate.js';
 import { generateDatabaseReadme } from '../manifest.js';
 import { releaseTemplate } from './release.js';
 
@@ -138,23 +139,29 @@ function scanExistingServices(workspaceRoot: string): ExistingService[] {
     const manifestPath = path.join(workspaceRoot, entry.name, 'project.manifest.toml');
     if (!fs.existsSync(manifestPath)) continue;
 
-    const content = fs.readFileSync(manifestPath, 'utf-8');
-    const serviceId = extractTomlValue(content, 'service_id');
-    const proxyPath = extractTomlValue(content, 'path');
-    if (serviceId) {
+    try {
+      const manifest = parse(fs.readFileSync(manifestPath, 'utf-8'));
+      const project = manifest.project;
+      const proxy = manifest.proxy;
+      const serviceId = project && typeof project === 'object' && 'service_id' in project
+        ? project.service_id : undefined;
+      const proxyPath = proxy && typeof proxy === 'object' && 'path' in proxy
+        ? proxy.path : undefined;
+      if (typeof serviceId !== 'string' || validateServiceId(serviceId)) {
+        throw new Error('Invalid or missing [project].service_id');
+      }
+      if (proxy !== undefined && (typeof proxyPath !== 'string' || validateProxyPath(proxyPath))) {
+        throw new Error('Invalid or missing [proxy].path');
+      }
       results.push({
         serviceId,
-        proxyPath,
+        proxyPath: typeof proxyPath === 'string' ? proxyPath : undefined,
         directory: entry.name,
       });
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new Error(`Cannot scan existing service ${manifestPath}: ${detail}`, { cause });
     }
   }
   return results;
-}
-
-/** 简易 TOML 值提取(只处理 key = "value" 形式,够用) */
-function extractTomlValue(content: string, key: string): string | undefined {
-  const re = new RegExp(`^${key}\\s*=\\s*"([^"]+)"`, 'm');
-  const m = content.match(re);
-  return m?.[1];
 }

@@ -3,7 +3,7 @@ name: userapp-scaffold
 description: >
   UserApp workspace 模板脚手架 CLI。当用户需要创建新的 UserApp workspace 项目、
   或往已有 workspace 添加 service 时使用。支持 Go/Java/Python/Rust 后端 +
-  React/Vue 前端 + Next.js 全栈单体的任意组合。
+  React/Vue 前端(含多个同类前端) + Next.js 全栈单体的组合。
   注意:manifest 字段、路由规划、健康检查、日志、部署回滚等平台规范,
   请参考 userapp-dev-guide skill。
   触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
@@ -113,9 +113,15 @@ CLI 自动分配默认路由,用户通常不用关心:
 | frontend-vue3-vite | `/vue` | true |
 | userapp-next | `/` (catch-all) | false |
 
+React/Vue 模板还会生成 `dev_strip_prefix = false`：dev/build base 都带公共前缀，dev 交给 Vite 处理，prod 剥前缀后读取静态产物。需要 app-cli ≥ 0.3.7。
+
+新模板的 `vite.config.ts` 通过 `scripts/manifest-routing.mjs` 在 dev/build 时读取本模块 TOML。
+**公共路径只改 `[proxy].path`**，不改 Vite base、不增加路径环境变量或 `--base` 参数。
+改路径后重启 dev，prod 重新构建发布；导航卡片按实际路径更新。旧模板需先同步 helper，详见 dev-guide。
+
 **约束**:
 - 全 workspace **最多一个 `/`**(catch-all)
-- 路由 path 在 workspace 内**唯一**
+- 路由 path 在 workspace 内**唯一**，CLI 将 `/admin` 与 `/admin/` 视为冲突
 - CLI 会自动校验冲突,冲突时拒绝并提示
 
 ## 自定义 service_id
@@ -135,7 +141,7 @@ npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 
 **注意:Java 的 package 名和源码目录不自动派生**。自定义 service_id 后,Java 的 `package com.example.backendjava;` 声明和 `src/main/java/com/example/backendjava/` 目录结构保持不变(只改 artifactId)。这能正常编译,但如果需要 package 名也跟着变,需手动 rename 目录和修改 package 声明。
 
-## 同类模板的多实例(如多个 Java 后端)
+## 同类模板的多实例(含两个 Vue 前端)
 
 用户要"再加一个 java/rust/... 后端"时,**直接 `add backend-java` 会被拒绝**——默认身份
 (service_id 和 path)已被第一个实例占用。这是 Fail-Fast 设计,不是 bug。
@@ -145,8 +151,14 @@ npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 ```bash
 # workspace 里已有 backend-java(service_id=backend-java, path=/api/java/)
 npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/java-admin/
+
+# 新应用只创建两个 Vue 模块(在空 workspace 执行 init)
+npx @nuwax-ai/template-cli init . --frontend vue --service-id admin-web --path /admin/
+npx @nuwax-ai/template-cli add frontend-vue3-vite --service-id portal-web --path /portal/
 ```
 
+- 多个前端共享应用域名，分别访问 `/admin/`、`/portal/`；不需要为第二个 Vue 手改 Vite 配置。
+- 不复制目录再重命名。由 CLI 生成唯一 service_id、manifest、路径，保留模板的路由读取和健康插件。
 - 只给 `--service-id` 不给 `--path` 同样被拒(默认 path `/api/java/` 冲突);冲突报错会提示这两个参数
 - 建议路由从 service_id 派生(`java-admin` → `/api/java-admin/`),语义清晰
 - 新实例的身份派生规则(artifactId/应用名/日志文件/目录名自动跟随)见上节"自定义 service_id"

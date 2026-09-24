@@ -100,13 +100,70 @@ upstream_includes = []       # managed 下留空
 
 - **API 后端**:通常 `strip_prefix = true`。后端代码按"挂在根路径"写(`/health`、`/users`),
   不用关心自己对外挂在哪个前缀下。
-- **静态前端(SPA)**:通常 `strip_prefix = true`。前端按根路径打包,`/react` 前缀剥掉后,静态服务器
-  从根提供文件。
+- **静态前端(SPA)的 prod**：`base = "/react/"`、`strip_prefix = true`。浏览器请求 `/react/assets/x.js`，代理剥前缀后读取 `dist/assets/x.js`。
+- **Vite devrun**：base 同样为 `/react/`，另配 `dev_strip_prefix = false`，让 Vite 收到并处理 `/react/...`。不能把 dev base 改成 `/`，否则 HTML 引用的 `/@vite/client`、`/src/...` 会绕过本服务路由。Vue 同理使用 `/vue/`。
 - **全栈单体(catch-all `/`)**:`strip_prefix = false`(也是默认,可省略)。如 Next.js,它自己处理全部路由。
 
 ---
 
+`dev_strip_prefix` 从 app-cli 0.3.7 起支持，仅在 dev 模式且服务有 `[devrun]` 时生效；省略则沿用 `strip_prefix`，其他服务不受影响。managed/extend 均支持，custom 需自行维护路由。
+
+**为什么保留可选覆盖？** 开发时请求交给带 base 的 Vite，生产时请求交给以 `dist` 为根的静态托管，
+二者接收路径的约定不同。仅统一成 `true` 会剥掉 Vite 需要的前缀，统一成 `false` 则会查找
+`dist/react/assets/...` 而不是 `dist/assets/...`。要统一需另行实现静态服务的子路径挂载，
+不能只删除字段或根据命令名猜测开发服务器。dev/prod 约定一致的服务仍只配置 `strip_prefix`；
+React/Vue 由模板固定生成这两个值，日常只需修改 `path`。
+
+```toml
+[proxy]
+path = "/react"
+strip_prefix = true
+dev_strip_prefix = false
+```
+
+先升级平台 file-server 与 app-cli，再使用新字段；旧版严格解析会拒绝它。模板升级不会改写存量项目，迁移方式见下节。`app-cli gen-lock --workspace . --dev` 预览 dev 路由，省略 `--dev` 预览 prod 路由。验收必须检查 JS Content-Type 和 HMR，不能只看首页 200 或任务 completed。
+
+模板开发中间件同时响应内部 `/health` 和带前缀的 `/react/health`（Vue 同理）。当代理把无尾斜杠入口转发给 Vite 时，中间件将 GET/HEAD 跳转到带尾斜杠入口并保留查询参数；若 manifest 的 path 本身带尾斜杠，代理未必会转发裸入口。因此工作区首页卡片始终使用带尾斜杠链接。
+
 ## 4. 路由规划
+
+### React/Vue：TOML 是公共路径的唯一来源
+
+模板的 `vite.config.ts` 调用 `scripts/manifest-routing.mjs`，用 TOML 解析器读取**该子项目**的
+`project.manifest.toml`。`proxy.path = "/admin"` 或 `"/admin/"` 都得到 `base = "/admin/"`；
+`path = "/"` 得到 `base = "/"`。读取位置相对配置文件，不依赖执行命令时的当前目录。
+文件缺失、TOML 无法解析或路径非法时，dev/build 直接报错，不回退到 `/`。
+
+**改模块公共路径只改 TOML**，不改 Vite base、不加 `--base` 覆盖，也不新增环境变量保存第二份路由。
+这同时适用于平台启动和直接运行 `pnpm dev` / `pnpm build`。改完后重启 dev 服务，让平台重新生成路由；
+prod 需要重新构建并发布，已产出的 `dist` 不会随 TOML 自动改变。导航卡片、跨模块业务链接也需更新。
+已有 Vite 进程不承诺热更新 manifest。
+
+同一个应用域名下可以放两个 Vue 模块，CLI 为它们创建独立目录与 manifest：
+
+```bash
+# 在空 workspace 初始化第一个前端
+template-cli init . --frontend vue --service-id admin-web --path /admin/
+# 在 workspace 根追加同一种模板
+template-cli add frontend-vue3-vite --service-id portal-web --path /portal/
+```
+
+| 服务 | TOML 路径 | 应用域名下的入口 |
+|---|---|---|
+| `admin-web` | `/admin/` | `/admin/` |
+| `portal-web` | `/portal/` | `/portal/` |
+
+不要复制整个子项目来创建新服务；`service_id` 和路径必须分别唯一。CLI 按 TOML section 读取已有服务，
+支持单引号、缩进等合法写法，并拒绝 `/admin` 与 `/admin/` 的重复分配。
+React/Vue 模板的 `strip_prefix = true`、`dev_strip_prefix = false` 已由 CLI 生成，通常保持不变。
+业务代码引用本模块的公共资源可用 `import.meta.env.BASE_URL`；共享后端仍使用它自己的 `/api/...` 路由。
+模板默认使用 hash router，增加同类模块不需要修改 router；主动切换 history router 时再适配该框架的 base。
+
+**存量项目升级**：增加 `smol-toml` 开发依赖并同步本模板的 `scripts/manifest-routing.mjs`；
+在 Vite 配置中导入 `readManifestBase`，将 base 改为
+`readManifestBase(new URL('./project.manifest.toml', import.meta.url))`，保留原有业务插件。
+同时合入模板的 health/无尾斜杠跳转插件、`tsconfig.node.json` 的 helper 引用和 manifest 的 dev/prod 配对。
+旧项目仍写死 base 时，单独改 TOML 不会自动修复。
 
 ### 典型布局:前端 SPA + 多个后端 API
 

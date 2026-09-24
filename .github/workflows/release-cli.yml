@@ -4,8 +4,8 @@ name: Release CLI
 # 正式版:  v0.1.0          → npm publish --tag latest
 # 测试版:  v0.1.0-beta.1   → npm publish --tag beta
 #
-# 版本号从 tag 名解析,CI 会自动同步到 cli/package.json,
-# 所以你打 tag 时不需要手动改 package.json 的 version 字段。
+# tag 必须与已提交的 cli/package.json / package-lock.json 版本一致。
+# 正式版升级先 npm version patch --no-git-tag-version，再提交并创建对应 tag。
 #
 # 常用流程:
 #   git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1   # 发测试版
@@ -123,56 +123,9 @@ jobs:
         working-directory: cli
         run: npm run build
 
-      - name: Smoke test (list + docs)
+      - name: Test generated workspaces
         working-directory: cli
-        run: |
-          node dist/index.js list
-          node dist/index.js docs
-
-      # ── 端到端测试 ─────────────────────────────────────────
-      - name: E2E test
-        run: |
-          set -e
-          CLI="node $(pwd)/cli/dist/index.js"
-          WORKDIR="$(mktemp -d)"
-
-          echo "=== init: go + react ==="
-          $CLI init "$WORKDIR/test-app" --backend go --frontend react
-          test -f "$WORKDIR/test-app/workspace.manifest.toml"
-          grep -q 'service_id = "backend-go"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
-          grep -q 'path = "/api/go/"' "$WORKDIR/test-app/backend-go/project.manifest.toml"
-
-          echo "=== workspace manifest has comment template ==="
-          grep -q '\[pingap\]' "$WORKDIR/test-app/workspace.manifest.toml"
-          grep -q 'bridge_service' "$WORKDIR/test-app/workspace.manifest.toml"
-
-          echo "=== add: rust with custom service_id ==="
-          cd "$WORKDIR/test-app"
-          $CLI add backend-rust --service-id my-rust-api --path /api/rust-v2/
-          grep -q 'name = "my-rust-api"' "$WORKDIR/test-app/my-rust-api/Cargo.toml"
-
-          echo "=== add: worker (no [proxy], kind=worker) ==="
-          $CLI add backend-python --kind worker --service-id bg-worker
-          grep -q 'kind = "worker"' "$WORKDIR/test-app/bg-worker/project.manifest.toml"
-          if grep -q '\[proxy\]' "$WORKDIR/test-app/bg-worker/project.manifest.toml"; then
-            echo "ERROR: worker 不应有 [proxy] 段"; exit 1
-          fi
-
-          echo "=== AGENTS.md generated ==="
-          test -f "$WORKDIR/test-app/AGENTS.md"
-          grep -q 'npx skills add nuwax-ai/userapp-workspace-template' "$WORKDIR/test-app/AGENTS.md"
-
-          echo "=== conflict detection ==="
-          if $CLI add backend-go 2>/dev/null; then
-            echo "ERROR: 应该拒绝重复"; exit 1
-          fi
-
-          echo "=== init: next fullstack ==="
-          $CLI init "$WORKDIR/test-next" --next
-          grep -q 'migrate' "$WORKDIR/test-next/userapp-next/project.manifest.toml"
-          grep -q 'userapp-next-standalone.zip' "$WORKDIR/test-next/userapp-next/project.manifest.toml"
-
-          echo "✓ 所有 E2E 测试通过"
+        run: npm test
 
       # ── 发布到 npm ─────────────────────────────────────────
       - name: Publish to npm

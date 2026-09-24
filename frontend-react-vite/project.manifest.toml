@@ -31,3 +31,5 @@ readiness_path = "/health"
 [proxy]
 path = "/react"
 strip_prefix = true
+# dev 的 Vite 处理 /react/；prod 静态托管接收剥前缀后的 /assets/。
+dev_strip_prefix = false

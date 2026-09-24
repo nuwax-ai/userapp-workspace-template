@@ -50,7 +50,7 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     lines.push('', '[devbuild]', `command = ${formatArgv(buildInfo.devbuild)}`);
   }
 
-  // run 段 —— static 形态（无进程，内置静态托管承载）省略整段
+  // run 段 —— static 的 prod 形态（无业务进程，内置静态托管承载）省略整段
   if (buildInfo.run.length > 0) {
     const runLines: string[] = ['', '[run]', `command = ${formatArgv(buildInfo.run)}`];
     if (buildInfo.migrate) {
@@ -86,10 +86,13 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     if (d.stripPrefix) {
       proxyLines.push('strip_prefix = true');
     }
+    if (d.devStripPrefix !== undefined) {
+      proxyLines.push(`dev_strip_prefix = ${d.devStripPrefix}`);
+    }
     lines.push(...proxyLines);
   }
 
-  // logs 段 —— static 形态（无进程）不生成（无运行时文件日志）；
+  // logs 段 —— static 的 prod 形态（无业务进程）不生成（无运行时文件日志）；
   // 其余模板替换 logGlob 里的 __SERVICE_ID__ 占位符
   const logLines: string[] = [];
   if (template.type !== 'static') {
@@ -190,17 +193,20 @@ export function generateAgentsMd(
 > 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。**本文件只是生成时刻的结构快照**:
 > 开发规范、默认技术选型等可变策略以 skills / 系统提示词为准,与本文冲突时以它们为准。
 
-## Skills(按需)
+## Skills(按任务读取)
 
 若运行环境已预置这些 skills(如平台沙箱),直接使用即可,**跳过安装**;
 本地开发可安装以获得完整规范指引:
 
 \`\`\`bash
-npx skills add nuwax-ai/userapp-workspace-template
+npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
 \`\`\`
 
 - **userapp-scaffold**: CLI 脚手架使用(init/add/list 命令)
 - **userapp-dev-guide**: 平台开发规范(manifest 字段/路由/健康检查/日志/部署/排错)
+
+创建/追加模块前读取 scaffold；修改路由/manifest 或排查预览前读取 dev-guide 的对应章节，
+并阅读目标子项目的 AGENTS.md。找不到 skill 时用 \`template-cli docs\` 查同一契约。
 
 ## 项目结构
 
@@ -218,8 +224,8 @@ ${tableNote}
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
 4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
 5. **回滚不执行 down migration** — \`[run].migrate\` 必须幂等,遵循 expand/contract
-6. **\`type = "static"\` 服务无进程** — 禁止 \`[run]\` 段,\`[build].artifact\` 为静态内容目录,
-   由平台内置静态托管承载
+6. **\`type = "static"\` 的 prod 不启动业务进程** — 禁止 \`[run]\` 段,\`[build].artifact\` 为静态内容目录;
+   dev 配了 \`[devrun]\` 时仍要启动、检查 Vite 等实际进程
 7. **database/ 目录的 SQL 执行规则** — 详见 workspace 根 \`database/README.md\`(init 已生成)
 
 ## 规范与工具入口
@@ -230,7 +236,9 @@ ${tableNote}
 - **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看可用模板,
   在 workspace 根执行 \`npx @nuwax-ai/template-cli add <模板id>\`;同类模板的第二个实例
   须同时指定新身份与路由(默认身份会冲突被拒),如
-  \`add backend-java --service-id java-admin --path /api/java-admin/\`。
+  \`add frontend-vue3-vite --service-id portal-web --path /portal/\`。
+- **React/Vue 公共路径**以子项目 TOML 的 \`[proxy].path\` 为准。新模板的 Vite 配置自动读取它,
+  不用改 base 或添加路径环境变量。改后重启 dev、重新构建 prod,并更新导航卡片;细节见路由 skill。
 `;
 }
 

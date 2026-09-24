@@ -47,6 +47,7 @@ const SKIP_FILE_PATTERNS = [
   /\.pyc$/,
   /\.class$/,
   /\.log$/,
+  /\.tsbuildinfo$/,
 ];
 
 /* ── 占位符注入规则 ────────────────────────────────────────
@@ -134,14 +135,6 @@ const PLACEHOLDER_RULES = {
     'package.json': [
       { from: '"name": "@nuwax-ai/react-vite"', to: '"name": "__PACKAGE_NAME__"' },
     ],
-    // base 按 command 分流:dev serve 用 '/',build 产物带前缀;
-    // __VITE_BASE__ 占位整个字面量(含尾斜杠,渲染时随 [proxy].path 派生)
-    '**/vite.config.ts': [
-      {
-        from: "base: command === 'serve' ? '/' : '/react/',",
-        to: "base: command === 'serve' ? '/' : '__VITE_BASE__',",
-      },
-    ],
     '**/index.html': [
       { from: '<title>React Vite App</title>', to: '<title>__HTML_TITLE__</title>' },
     ],
@@ -150,12 +143,6 @@ const PLACEHOLDER_RULES = {
   'frontend-vue3-vite': {
     'package.json': [
       { from: '"name": "@nuwax-ai/vue3-vite"', to: '"name": "__PACKAGE_NAME__"' },
-    ],
-    '**/vite.config.ts': [
-      {
-        from: "base: command === 'serve' ? '/' : '/vue/',",
-        to: "base: command === 'serve' ? '/' : '__VITE_BASE__',",
-      },
     ],
     '**/index.html': [
       { from: '<title>Vue3 Vite App</title>', to: '<title>__HTML_TITLE__</title>' },

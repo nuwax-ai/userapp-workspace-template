@@ -2,6 +2,10 @@
 
 UserApp workspace 模板脚手架 CLI。按需组合多语言前后端模板,生成可发布的 workspace 结构。
 
+**运行时要求：** 0.1.14 生成的 React/Vue 模板需要 app-cli ≥ 0.3.7 和支持
+`[proxy].dev_strip_prefix` 的 RCoder。请先配套升级运行时再构建、启动这些模板；
+旧版运行时会拒绝新增的 manifest 字段。CLI 升级不会自动迁移已有项目。
+
 ## 安装
 
 ```bash
@@ -101,7 +105,10 @@ template-cli docs --open  # 用系统默认程序打开(macOS: open / Linux: xdg
 - **模块/包名**: Go module、Rust crate、Java artifactId 等跟随 service_id
 - **日志文件名**: 各语言日志文件前缀跟随 service_id
 - **路由前缀**: project.manifest.toml 的 proxy.path
-- **Vite base**: 前端打包的 base 路径
+
+React/Vue 的 **Vite base 不再由 CLI 写入常量**：模板配置每次 dev/build 读取本模块
+`project.manifest.toml` 的 `[proxy].path`。修改公共路径只改 TOML，再重启 dev 或重新构建 prod。
+无额外路由环境变量；详细的多前端示例及存量模板升级见 [路由文档](docs/04-pingap-routing.md)。
 
 自定义 service_id 时,所有身份相关变量会自动派生。例如:
 ```bash
@@ -116,7 +123,7 @@ template-cli add backend-go --service-id my-api
 CLI 会校验以下平台规则(对齐 Fail-Fast):
 
 - `service_id` 在 workspace 内唯一
-- `proxy.path` 在 workspace 内唯一
+- `proxy.path` 在 workspace 内唯一，CLI 将 `/admin` 与 `/admin/` 视为同一路由
 - 全 workspace**最多一个 `/`**(catch-all,通常给 Next.js)
 - `service_id` 符合 DNS-1123(小写字母/数字/横杠)
 

@@ -30,14 +30,14 @@ export function validateServiceId(serviceId: string): string | null {
 
 /**
  * 校验 proxy.path 格式。
- * 规则:以 / 开头,不含 .. / ? / #。
+ * 规则:绝对 URL 路径,不含 ..、查询/片段、反斜杠或空白。
  */
 export function validateProxyPath(proxyPath: string): string | null {
   if (!proxyPath.startsWith('/')) {
     return `proxy.path 必须以 / 开头: "${proxyPath}"`;
   }
-  if (/\.\.|[?#]/.test(proxyPath)) {
-    return `proxy.path 不能含 .. ? #: "${proxyPath}"`;
+  if (proxyPath.includes('//') || /\.\.|[?#\\\s]/.test(proxyPath)) {
+    return `proxy.path 不能含 //、..、?、#、反斜杠或空白: "${proxyPath}"`;
   }
   return null;
 }
@@ -70,8 +70,10 @@ export function checkConflicts(
     const pathErr = validateProxyPath(newProxyPath);
     if (pathErr) errors.push(pathErr);
 
-    // path 唯一
-    const pathConflict = existing.find((s) => s.proxyPath === newProxyPath);
+    // Vite base 与剥前缀路由会归一尾斜杠,不能把 /admin 与 /admin/ 分给两个服务。
+    const canonicalPath = newProxyPath.replace(/\/+$/, '') || '/';
+    const pathConflict = existing.find((s) => s.proxyPath !== undefined &&
+      (s.proxyPath.replace(/\/+$/, '') || '/') === canonicalPath);
     if (pathConflict) {
       errors.push(
         `proxy.path 冲突: "${newProxyPath}" 已被 ${pathConflict.serviceId} (${pathConflict.directory}/) 占用。\n` +

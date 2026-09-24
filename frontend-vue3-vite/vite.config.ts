@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import path from 'path';
+import { readManifestBase } from './scripts/manifest-routing.mjs';
 // https://vitejs.dev/config/
-// base 按 command 分流：build 产物引用带 /vue/ 前缀（平台 [proxy] 路由）；
-// dev server（devrun 热加载）用 '/'——pingap strip_prefix=true 剥掉 /vue
-// 前缀后转发，vite 以无前缀 base 接收才不 404。
-export default defineConfig(({ command }) => ({
-  base: command === 'serve' ? '/' : '/vue/',
+// dev 与 build 的资源 URL 都保留公共前缀；dev 由 Vite 处理前缀，
+// prod 由代理剥前缀后映射 dist/assets。见 manifest 的 dev_strip_prefix。
+export default defineConfig({
+  // 修改公共路径只改 manifest；dev/build 都在加载配置时读取，不再写死 base。
+  base: readManifestBase(new URL('./project.manifest.toml', import.meta.url)),
   plugins: [
     // Keep the Vue SFC plugin first for standard Vue compilation.
     vue(),
@@ -15,9 +16,25 @@ export default defineConfig(({ command }) => ({
     // 无此端点 dev server 会被 pingap 摘流（经 9080 的 /vue 预览 503）。
     // 仅 dev server 生效（configureServer），不进构建产物。
     {
-      name: 'health-endpoint',
+      name: 'health-and-base',
       configureServer(server) {
-        server.middlewares.use('/health', (_req, res) => {
+        server.middlewares.use((req, res, next) => {
+          // 内部 readiness 探测用 /health；预览路径保留 base，二者都返回 JSON。
+          const pathname = req.url?.split('?', 1)[0];
+          const base = server.config.base;
+          if (
+            base !== '/' && pathname === base.slice(0, -1) &&
+            (req.method === 'GET' || req.method === 'HEAD')
+          ) {
+            res.statusCode = 302;
+            res.setHeader('Location', base + (req.url?.slice(pathname.length) ?? ''));
+            res.end();
+            return;
+          }
+          if (pathname !== '/health' && pathname !== `${server.config.base}health`) {
+            next();
+            return;
+          }
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ status: 'ok' }));
@@ -38,4 +55,4 @@ export default defineConfig(({ command }) => ({
     host: true,
     strictPort: true,
   },
-}));
+});

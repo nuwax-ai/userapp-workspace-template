@@ -24,6 +24,15 @@ pnpm check       # Required gate: type-check + lint
 4. Implement with framework-native style (React function components + hooks).
 5. Run `pnpm check` before finalizing.
 
+## UserApp 公共路由
+
+- 修改路由前读取 `userapp-dev-guide` 的路由章节；追加模块用 `userapp-scaffold`，不要复制目录。
+- 公共路径只改本目录 `project.manifest.toml` 的 `[proxy].path`。Vite 通过 `scripts/manifest-routing.mjs`
+  自动读取 dev/build base；不写死 base、不加路径环境变量或 `--base` 覆盖。
+- 保留模板的 `strip_prefix = true`、`dev_strip_prefix = false`、PORT、health 和入口跳转逻辑。
+- 改路径后重启 dev，重新构建 prod，更新导航链接。模块公共资源可用 `import.meta.env.BASE_URL`。
+- 追加同类前端须唯一 service_id/path；分别检查真实 JS、HMR 和页面内容，首页 200 不代表脚本可用。
+
 ## Isomorphic Structure Mapping
 
 Use these module locations in this React template:

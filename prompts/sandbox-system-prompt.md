@@ -34,6 +34,8 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 # 工作流程
 
+**先读对应规范再改文件**：创建或追加模块前读取 `userapp-scaffold` skill；修改 manifest、路由或处理预览问题前读取 `userapp-dev-guide` 的路由章节，并读取目标子项目的 `AGENTS.md`。平台已安装 skills 时直接读取；找不到时使用 `template-cli docs` 中的对应章节，不自行猜测配置字段。
+
 ## 第 1 步：判断新建还是迭代
 
 每次收到开发需求，先检查当前工作目录下的 `workspace.manifest.toml` 是否存在：
@@ -77,6 +79,9 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 # 追加一个后端服务并自定义 service_id 和路由
 npx @nuwax-ai/template-cli add backend-python --service-id data-api --path /api/data/
 
+# 追加第二个 Vue 前端：独立身份、独立路径，无需修改 Vite 配置
+npx @nuwax-ai/template-cli add frontend-vue3-vite --service-id portal-web --path /portal/
+
 # 追加一个后台任务（不对外提供 HTTP）
 npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind worker
 ```
@@ -95,7 +100,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 3. **service_id 是服务的稳定身份**：DNS-1123、workspace 内唯一；一旦上线不要修改（它决定日志目录、路由 upstream、依赖引用）。改目录名不影响身份，但一般也没必要改。
 
-4. **路由**：`[proxy].path` 在 workspace 内唯一；**最多一个服务用 `/`**（catch-all，通常给 Next.js 单体或主前端）；每个后端用独立前缀（如 `/api/go/`）。
+4. **路由**：应用有独立域名，各模块共享该域名、按 `[proxy].path` 分流；路径在 workspace 内唯一（`/admin` 与 `/admin/` 视为同一路由），最多一个服务用 `/`。React/Vue 新模板的 Vite 配置通过 `scripts/manifest-routing.mjs` 自动读取 TOML，**改公共路径只改 `[proxy].path`**，保留生成的 `strip_prefix = true` 与 `dev_strip_prefix = false`。不要写死 Vite base、加 `--base` 覆盖或用环境变量维护第二份路径；旧模板先按路由文档升级。多个同类前端用 `template-cli add` 并指定唯一 `--service-id`、`--path`，不复制目录。改路径后重启 dev，prod 重新构建发布，并更新导航链接。本模块资源可用 `import.meta.env.BASE_URL`；后端请求仍走后端自身的 `/api/...`。
 
 5. **worker 约束**：`kind = "worker"` 的服务不监听端口，禁止声明 `[proxy]`。
 
@@ -115,11 +120,11 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 13. **database/ 目录 = 发布时平台自动执行的 SQL**：workspace 根 `database/`（建库、扩展、平台侧初始化类）与各服务目录 `{服务}/database/`（该服务的初始化 SQL）下的 `.sql` 文件，会在**发布（activate）后由平台按序自动执行**——根先、服务按目录名字典序、目录内按文件名字典序（建议 `001_`、`002_` 前缀）。约束：**SQL 必须幂等**（每次发布都会重跑全部文件，用 `CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`）；**文件名只能用字母/数字/`.`/`_`/`-`**（中文或含空格的文件名会被平台静默跳过，如 `建表.sql` 不会执行）；只扫 `database/` 直接子层，子目录不递归；单文件失败仅记日志、**不阻断发布**。**开发阶段这些 SQL 不会自动执行**——写完必须先手动执行一遍（连接方式见铁律 7）再启动服务验证，否则表不存在服务起不来。应用随版本迭代的 schema 演进走 `[run].migrate`（失败会阻断启动）；`database/` 适合一次性的建库/扩展/初始化。
 
-14. **static 服务约束**：`type = "static"` 的服务**无进程**（两个前端 SPA 模板均为此类型）：省略 `[run]` 整段（声明了构建直接失败），`[build].artifact` 为静态内容目录，由平台内置静态托管承载（自动 SPA fallback）。不要试图给 static 服务加启动命令或健康探针改造；确实需要跑进程，把 `type` 改成 `node` 等进程类型。
+14. **static 服务约束**：`type = "static"` 在 **prod 产物态**不启动业务进程：省略 `[run]`，`[build].artifact` 为静态内容目录，由平台内置静态托管。**dev 源码态**可以有 `[devrun]`，React/Vue 模板通过它启动 Vite，必须保留 `$PORT`、`/health`、HMR 和 base 读取逻辑；不要因为 static 就删除 devrun 或跳过预览验证。生产确实需要业务进程时，再选择 `node` 等进程类型。
 
 15. **index.html 入口首页维护**：workspace 根的 `index.html` 是用户打开应用看到的第一眼（根路径/未匹配路径的兜底页；改完刷新即生效，无构建耦合）。init 生成的只是**脚手架占位页**——标题是目录名（会话 ID）、卡片是模板默认文案。**每轮开发结束时必须把它更新为当前应用的真实首页**：
     - 标题与应用名一致（取 `workspace.manifest.toml` 的 `[workspace].name` 或用户口中的应用名，不用会话 ID/目录名）；
-    - 卡片用真实功能名 + 一句话描述替换模板默认文案，链接仍指向各服务 `[proxy].path`；
+    - 卡片用真实功能名 + 一句话描述替换模板默认文案，链接指向各服务 `[proxy].path`（前端入口补尾斜杠，如 `/admin/`）；
     - 追加/删除对外服务时同步增删卡片（`add` **不会**自动更新此文件）；
     - 纯后端 workspace 没有前端服务，此页就是应用的唯一门面——至少写清应用名与各 API 用途；
     - 仅当某服务占 `/`（catch-all）时此文件不生效、应删除；用户明确要求"打开即是应用本身"时才考虑让主前端接管 `/`，联动清单见 userapp-dev-guide「入口首页策略」，默认不做。
@@ -145,11 +150,12 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
-1. **manifest/路由确定性校验**：执行 `app-cli gen-lock --workspace .`（沙箱预装；与平台构建同一套校验规则，秒级完成、零依赖）。校验失败会**一次列出全部问题**，修复后重跑直到通过；它会生成 `release.lock.toml` 并打印 Pingap 路由配置预览——lock 是本地预览产物，不要手改、不要当作交付物。
+1. **manifest/路由确定性校验**：执行 `app-cli gen-lock --workspace .`，有 devrun 时追加 `app-cli gen-lock --workspace . --dev`，分别核对 prod/dev 路由（沙箱预装；与平台构建同一套校验规则）。校验失败先修复；生成的 `release.lock.toml` 是派生产物，不要手改、不要当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
 2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace .` 一条命令跑全部服务）；
-3. **启动验证**：有进程的服务以模拟端口启动（如 `PORT=4100`），确认监听 `0.0.0.0:$PORT`、`[health]` 各路径返回 2xx；**static 服务（前端 SPA）无进程，跳过本条**，只确认构建产物正常生成；
+3. **启动验证**：按当前运行形态验证进程监听和健康端点。React/Vue 的 devrun 是实际 Vite 进程，不能因 `type = "static"` 跳过；prod 静态形态检查构建产物。已有平台实例按下一条操作，不另起进程争抢端口；
 4. **接口验证**：后端用 curl 打通至少一个核心业务接口；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
+   - 每个前端分别检查入口、真实 JS 响应（不能是 HTML fallback）、HMR；prod 检查构建后的 JS URL。多个同类前端用不同页面内容确认没有串到另一个模块。`completed` 和首页 200 均不能替代这些检查。
    - **平台沙箱**：优先使用平台提供的启动/重启操作及返回的预览入口，逐路由验证实际响应。已有平台管理的实例时，不再执行第二套 `app-cli serve/run`，不终止已有所有者、不删除锁文件，也不通过换管理端口绕过所有权保护。只有端口可达不能证明它属于当前应用；实例身份或控制方式不明确时，报告验证受阻及诊断信息。
    - **独立本地环境**（确认没有平台管理实例，且管理 API、Pingap 及各服务端口均无冲突）：先生成 lock、构建并组装产物，再启动唯一的常驻所有者：
 

@@ -14,6 +14,10 @@ workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个�
 
 不用手动复制和删目录。用 `@nuwax-ai/template-cli` 按需组合,一条命令生成干净的 workspace:
 
+**运行时要求：** `template-cli` 0.1.14 的 React/Vue 模板使用 `dev_strip_prefix`，需要
+app-cli ≥ 0.3.7，以及支持该字段的 RCoder。旧运行时严格解析 manifest 时会拒绝该字段；
+平台应先配套升级运行时，再构建或启动新模板生成的应用。
+
 ```bash
 # 前后端分离:Python 后端 + React 前端
 npx @nuwax-ai/template-cli init my-app --backend python --frontend react
@@ -35,8 +39,11 @@ npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/
 安装 Skill(让 AI Agent 自动使用):
 
 ```bash
-npx skills add nuwax-ai/userapp-workspace-template
+npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
 ```
+
+安装命令显式选择 `main`，避免使用仓库默认分支上的其他版本。已安装的 skills 和平台系统提示词
+须另行同步，发布 npm 包不会更新正在运行的沙箱。
 
 CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/template-cli list` 查看。
 
@@ -151,7 +158,7 @@ schema_version = 1
 [project]
 service_id = "backend-go"           # 必填,稳定身份,DNS-1123,workspace 内唯一
 name        = "Go Backend"          # 必填,人类可读名
-type        = "go"                  # 必填:node / java / python / go / rust / static(无进程静态服务)
+type        = "go"                  # 必填:node / java / python / go / rust / static(prod 无业务进程的静态服务)
 kind        = "web"                 # 可选,默认 web。web / worker
 enabled     = true                  # 可选,默认 true
 
@@ -221,7 +228,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 |---|:---:|---|---|
 | `service_id` | ✅ | — | 服务的**稳定身份**。必须符合 **DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾必须是字母或数字(不能大写、不能下划线、不能有点)。workspace 内唯一。**决定了日志目录 `/app/logs/<service_id>`、路由 upstream、依赖引用。** |
 | `name` | ✅ | — | 人类可读名称,非空。 |
-| `type` | ✅ | — | 运行时语言类型:`node` / `java` / `python` / `go` / `rust` / `static`。**`static` = 无进程静态服务**:省略 `[run]`,`[build].artifact` 为静态内容目录(如 `dist`),平台内置托管并 SPA fallback。 |
+| `type` | ✅ | — | 运行时语言类型:`node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:省略 `[run]`,`[build].artifact` 为静态内容目录(如 `dist`),平台内置托管并 SPA fallback；dev 可以通过 `[devrun]` 启动 Vite。 |
 | `kind` | ❌ | `web` | `web` = 对外提供 HTTP(可声明 `[proxy]`);`worker` = 后台任务(不监听端口,**不能**声明 `[proxy]`)。 |
 | `enabled` | ❌ | `true` | `false` 时该服务不参与构建/启动(但至少要有一个 enabled 服务)。 |
 
@@ -275,6 +282,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 |---|:---:|---|---|
 | `path` | ✅(若有本段) | — | 路由前缀,绝对 URL 路径,以 `/` 开头。**workspace 内必须唯一**;全 workspace**最多一个 `/`**(catch-all,通常给 Next.js 单体)。不能含 `..`/`?`/`#`。 |
 | `strip_prefix` | ❌ | `false` | `true` = 转发前剥掉 `path` 前缀(后端收到的路径不含前缀);`false` = 原样转发。 |
+| `dev_strip_prefix` | ❌ | 沿用 `strip_prefix` | app-cli ≥ 0.3.7；仅 dev 模式且本服务运行 `[devrun]` 时覆盖。Vite 子路径模板设 `false`，配合 dev/build 一致的带前缀 base；prod 仍用 `strip_prefix`。 |
 | `plugins` | ❌ | `[]` | extend 模式下引用的 pingap 插件名。managed 下留空。 |
 | `upstream_includes` | ❌ | `[]` | extend 模式下引用的 upstream 片段名。managed 下留空。 |
 
@@ -355,7 +363,7 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 - **HTTP 路径**:`proxy.path` 和三个 health path 必须以 `/` 开头,不含 `..`/`?`/`#`。
 - **路由**:`proxy.path` 在 enabled 服务间唯一;**最多一个 `/`**(catch-all)。
 - **worker 约束**:`kind = "worker"` 的服务**不能**声明 `[proxy]`。
-- **static 约束**:`type = "static"` 的服务**不能**配置 `[run].command` / `[run].migrate`(无进程,`[run]` 整段省略,平台内置静态托管承载)。
+- **static 约束**:`type = "static"` 的服务**不能**配置 `[run].command` / `[run].migrate`(prod 无业务进程,`[run]` 整段省略,平台内置静态托管承载；dev 使用 `[devrun]`)。
 - **依赖**:`depends_on` 引用必须是**已存在且 enabled**的 `service_id`;不能自依赖、不能成环。
 - **日志**:`logs.sources.id` DNS-1123 且本服务内唯一;`multiline_start_pattern` 仅 `text` 可用。
 - **保留环境变量**:`[env]` 的 key 不能是 `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、`APP_RELEASE_ID`,也不能以 `RCODER_` 开头。
@@ -389,8 +397,8 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 | `backend-java` | java | web | `/api/java/` | true | text(多行) | Java 后端,`multiline_start_pattern` 处理堆栈 |
 | `backend-python` | python | web | `/api/python/` | true | text(多行) | Python 后端 |
 | `backend-rust` | rust | web | `/api/rust/` | true | jsonl | Rust 后端 |
-| `frontend-react-vite` | static | web | `/react` | true | — | React SPA,平台内置静态托管(无进程) |
-| `frontend-vue3-vite` | static | web | `/vue` | true | — | Vue3 SPA,平台内置静态托管(无进程) |
+| `frontend-react-vite` | static | web | `/react` | true | — | React SPA,prod 内置静态托管；dev 为 Vite |
+| `frontend-vue3-vite` | static | web | `/vue` | true | — | Vue3 SPA,prod 内置静态托管；dev 为 Vite |
 | `userapp-next` | node | web | `/` | false | text | Next.js 单体,**catch-all**(`/` 全站) |
 
 > 注意:`userapp-next` 占了唯一的 `/` catch-all。校验层面它和 SPA 的 `/react`、`/vue`
@@ -441,7 +449,7 @@ depends_on = ["backend-go"]     # ← 后端的 service_id;平台保证 backend-
 ```
 
 (注意:`depends_on` 只控制**启动顺序**,不是运行时服务发现。前端仍通过 pingap 路由访问后端。
-`type = "static"` 的前端如 `frontend-react-vite` 无进程、无 `[run]` 段,不适用本例。)
+`type = "static"` 的前端如 `frontend-react-vite` 在 prod 无业务进程、无 `[run]` 段,不适用本例。)
 
 ### 场景 D:换日志格式 / 加 access 日志
 
@@ -484,6 +492,10 @@ format = "text"
 
 ## 11. 常见错误对照
 
+React/Vue 新模板的 Vite dev/build base 自动读取子项目 `[proxy].path`。
+新增第二个 Vue 等同类模块只需 `template-cli add` 的 `--service-id`、`--path`，不手改 Vite 配置。
+改公共路径后重启 dev、重新构建 prod；多前端及存量升级见 [路由文档](docs/04-pingap-routing.md#4-路由规划)。
+
 | 报错关键词 | 多半原因 | 怎么改 |
 |---|---|---|
 | `unsupported schema_version` | 漏写或不是 1 | 加 `schema_version = 1` |
@@ -492,7 +504,7 @@ format = "text"
 | `duplicate service_id` / `duplicate proxy path` | 两个服务用了相同 id 或路由 | 改成唯一 |
 | `multiple catch-all routes` | 两个服务都声明 `path = "/"` | 只留一个 `/`(通常给 Next.js 单体) |
 | `worker service must not declare [proxy]` | worker 配了代理 | 删掉 worker 的 `[proxy]` 段 |
-| `static service must not declare [run].command` | `type = "static"` 服务配了启动/迁移命令 | 删掉 `[run]` 段(无进程,内置静态托管);确实要跑进程就把 `type` 改回 `node` 等 |
+| `static service must not declare [run].command` | `type = "static"` 服务配了启动/迁移命令 | 删掉 `[run]` 段(prod 内置静态托管，dev 可用 `[devrun]`);prod 确实要跑业务进程时改为 `node` 等 |
 | `index.html 引用 ... 逃逸出 [proxy].path` / `... 按 strip_prefix=... 翻译后找不到 ...` | static 产物资源引用与 `[proxy]` 错配(构建工具 base 与 path 不一致,或 `strip_prefix` 与产物布局不符) | 构建工具 `base`/publicPath 设为 `[proxy].path`;`strip_prefix` 与产物布局对齐(两种合法布局二选一:`strip=true`+无前缀产物 / `strip=false`+带前缀产物) |
 | `service ... depends on missing or disabled service` | `depends_on` 写了目录名/写错/对方 disabled | 填对方**且 enabled**的 `service_id` |
 | `service dependency cycle` | 依赖成环 | 打破循环 |

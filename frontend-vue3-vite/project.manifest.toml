@@ -30,3 +30,5 @@ readiness_path = "/health"
 [proxy]
 path = "/vue"
 strip_prefix = true
+# dev 的 Vite 处理 /vue/；prod 静态托管接收剥前缀后的 /assets/。
+dev_strip_prefix = false
