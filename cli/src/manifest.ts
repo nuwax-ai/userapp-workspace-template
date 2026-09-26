@@ -151,6 +151,7 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
     '#',
     '# [health]',
     '# bridge_service = "backend-go" # 可选:把整个 workspace 的 /ready 桥接到该后端深检查',
+    '#                               # （/ready 是 app-cli 管理端口 :3010 的容器探针,不是业务域名的路径）',
     '',
   );
   return lines.join('\n');

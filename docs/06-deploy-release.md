@@ -152,7 +152,7 @@ workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文
 |---|---|---|
 | **startup**(启动) | `/health` | 决定服务是否启动完成 |
 | **readiness**(就绪) | `/health` | 不 ready → **摘流**(不转发请求,但不重启) |
-| **liveness**(存活) | `/health` | 连续失败 → **重启容器** |
+| **liveness**(存活) | `/health` | 存活探针声明(不等于"失败即重启容器"——是否装配容器级探针由平台运行时配置决定) |
 
 在 `project.manifest.toml` 的 `[health]` 里改:
 

@@ -109,7 +109,7 @@ shutdown_timeout_seconds = 30       # 【可选,默认 30】优雅关闭超时�
 [health]
 startup_path = "/health"            # 【可选,默认 /health】启动探针
 readiness_path = "/ready"           # 【可选,默认 /health】就绪探针:不 ready 摘流,不重启
-liveness_path = "/health"           # 【可选,默认 /health】存活探针:连续失败重启容器
+liveness_path = "/health"           # 【可选,默认 /health】存活探针(见下:不等同于"失败即重启容器")
 
 # ─── 反向代理路由(managed 模式由平台读取;worker 禁止)──────────
 [proxy]
@@ -182,11 +182,21 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 整段可选。三个路径默认都是 `/health`。平台探活发 `GET` 期望 2xx。路径必须以 `/` 开头,不含 `..`/`?`/`#`。
 
+健康有三层,职责不同、不要混用:
+
+| 层 | 端点 | 回答的问题 |
+|---|---|---|
+| 服务自己的健康路径(本段声明) | 你的进程内路由(如 `/health`、`/api/health`) | 这个服务进程与它声明的依赖是否正常 |
+| app-cli 容器探针 | 容器管理端口 `:3010` 的 `/health`、`/ready`(app-cli 自身,不是业务域名路径) | 编排器/容器是否就绪 |
+| RCoder 业务就绪查询 | `GET /api/v1/userapp/{app_id}/{app_stage}/readiness`(平台 API) | 当前实例声明的服务集合 + 代理入口是否整体可访问 |
+
+健康端点应**廉价、只读、直接返回**结果(如 DB 轻量 ping);不要在健康路径里做昂贵操作或修改状态。
+
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `startup_path` | 字符串 | `/health` | 启动探针。 |
 | `readiness_path` | 字符串 | `/health` | 就绪探针:不 ready **摘流**(不转发请求),不重启容器。**dev 启动判定也用它**(dev/start·restart 逐服务探测,通过即 `service_start_ok` 事件)。 |
-| `liveness_path` | 字符串 | `/health` | 存活探针:连续失败**重启容器**。不参与 dev 启动判定。 |
+| `liveness_path` | 字符串 | `/health` | 存活探针声明。**注意**:它不等同于"连续失败就重启整个容器"——是否装配为容器级 liveness 探针由平台运行时配置决定(当前 prod 容器探针走管理端口 `/health`/`/ready`,不逐项目消费该字段);不要按"会自动重启"设计依赖。 |
 | `startup_timeout_seconds` | 整数 | `25` | dev 启动就绪探测窗口(秒)。readiness 在窗口内未 2xx → `service_start_fail`(不阻塞其余服务);慢启动服务(如 Spring Boot 冷启动)按需调大。必须 `> 0`。 |
 
 > 纯静态前端可用 `"/"`。是否把"后端 ready"上升为"整个 app ready",由 workspace 的 `[health].bridge_service` 控制。

@@ -112,7 +112,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 9. **日志**：文件日志写入 `$APP_LOG_DIR`（即 `/app/logs/<service_id>/`），推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
 
-10. **健康检查**：模板自带健康端点，保持可用；改动路由时同步检查 `[health]` 三个路径（默认 `/health`；Java 模板用 Actuator 路径、Next 模板用 `/api/health`，以各服务 manifest 实际声明为准）。
+10. **健康检查**：模板自带健康端点，保持可用；改动路由时同步检查 `[health]` 三个路径（默认 `/health`；Java 模板用 Actuator 路径、Next 模板用 `/api/health`，以各服务 manifest 实际声明为准）。健康端点必须**廉价、只读、直接返回**（轻量 DB ping 可以，昂贵查询/写操作不行）；不能为了让查询变绿而关闭检查或固定返回成功。平台判断"业务是否可访问"用只读就绪查询 `GET /api/v1/userapp/{app_id}/{app_stage}/readiness`（消费你声明的健康路径，查询本身不启动/唤醒任何服务）；`[health].liveness_path` 只是声明，不等于"失败即重启容器"。
 
 11. **manifest 严格模式**：只能写平台文档列出的字段，禁止添加任何未列出的字段。
 

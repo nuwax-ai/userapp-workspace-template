@@ -13,3 +13,4 @@ description = "多语言 UserApp workspace 示例"
 #
 # [health]
 # bridge_service = "backend-go" # 把整个 workspace 的 /ready 桥接到该后端深检查
+#                                # （/ready 是 app-cli 管理端口 :3010 的容器探针,不是业务域名的路径）
