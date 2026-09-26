@@ -31,7 +31,7 @@ userapp-workspace-template/
 
 ## 平台核心约束(开发时必须遵守)
 
-1. **服务必须监听 `0.0.0.0:$PORT`** — 不能硬编码端口
+1. **当前模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口** — 不能硬编码端口。`kind=worker` 仅表示不公开代理路由,不表示删除内部健康服务；不能把 HTTP worker 改成无监听循环。`type=static` 的 prod 由平台托管,不启动业务进程
 2. **两个 manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`
 3. **严格校验,Fail Fast** — 未知字段/非法枚举/重复路由/依赖环 → 构建直接失败
 4. **service_id 是稳定身份** — 不是目录名,决定日志目录/路由 upstream/依赖引用

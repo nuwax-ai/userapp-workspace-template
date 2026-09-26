@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import os from 'node:os';
+import { parse as parseToml } from 'smol-toml';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = path.resolve(__dirname, '..');
@@ -203,6 +204,16 @@ try {
   const workerManifest = fs.readFileSync(path.join(appDir, 'bg-worker', 'project.manifest.toml'), 'utf-8');
   assert(workerManifest.includes('kind = "worker"'), 'worker kind = worker');
   assert(!workerManifest.includes('[proxy]'), 'worker 无 [proxy] 段');
+  const workerConfig = parseToml(workerManifest);
+  const workerEntry = fs.readFileSync(path.join(appDir, 'bg-worker', 'main.py'), 'utf-8');
+  assert(
+    workerConfig.health?.readiness_path === '/ready'
+      && !('startup_probe' in workerConfig.health)
+      && workerEntry.includes('uvicorn.run(app, host="0.0.0.0", port=settings.port)')
+      && agentsContent.includes('kind=worker')
+      && agentsContent.includes('不公开代理路由'),
+    'worker 生成物与 AGENTS 一致：保留 HTTP 健康入口，不提前输出新探针字段',
+  );
   assert(fs.existsSync(path.join(appDir, 'database', 'README.md')), 'add 兜底补齐根 database/README.md');
 
   // === add: vue(add 入口的 devbuild 断言) ===

@@ -146,12 +146,12 @@ workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文
 
 ## 7. 健康检查
 
-平台用三个探针判断你的服务状态(发 `GET`,期望 2xx):
+以下为服务健康路径声明,不是三套已装配的容器探针。当前 builtin 对 dev + devrun 做 TCP 检查,对其他进程做 `readiness_path` HTTP 2xx 检查；supervisord 使用进程启动确认及可选 workspace bridge。worker 仍须保留模板的健康服务,不能因无公开路由就删除监听。
 
-| 探针 | 默认路径 | 失败后果 |
+| 字段 | 默认路径 | 当前作用 |
 |---|---|---|
-| **startup**(启动) | `/health` | 决定服务是否启动完成 |
-| **readiness**(就绪) | `/health` | 不 ready → **摘流**(不转发请求,但不重启) |
+| **startup**(启动) | `/health` | 启动健康路径声明,不取代上述实际检查路径 |
+| **readiness**(就绪) | `/health` | 供对应启动检查、web 业务就绪查询及显式 bridge 使用；查询本身不改运行状态 |
 | **liveness**(存活) | `/health` | 存活探针声明(不等于"失败即重启容器"——是否装配容器级探针由平台运行时配置决定) |
 
 在 `project.manifest.toml` 的 `[health]` 里改:
@@ -163,8 +163,7 @@ readiness_path = "/ready"      # 建议 readiness 做更深的检查(含 DB 等�
 liveness_path = "/health"
 ```
 
-**建议**:`readiness` 覆盖数据库等必需依赖(连不上 DB 时返回非 2xx,让平台摘流);`liveness` 只反映
-进程本身是否活着(别把外部依赖放进 liveness,否则依赖抖动会导致容器被反复重启)。
+**建议**:`readiness` 廉价、只读地覆盖数据库等必需依赖,连接失败返回非 2xx；`liveness` 只反映进程自身。不能依赖这些声明自动重启容器,也不能将一次业务就绪查询当成启动、唤醒或摘流命令。
 
 ### workspace 级就绪桥接(可选)
 

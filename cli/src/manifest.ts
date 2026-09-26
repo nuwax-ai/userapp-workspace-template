@@ -31,7 +31,7 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
     `type = "${template.type}"`,
   ];
 
-  // worker 不输出 kind(web 是默认值,省略)
+  // worker 显式输出 kind；web 是默认值,省略。
   if (template.kind === 'worker') {
     lines[lines.length - 1] += `\nkind = "worker"`;
   }
@@ -219,7 +219,7 @@ ${tableNote}
 
 ## 平台核心约束(manifest 契约,长期向后兼容)
 
-1. **服务必须监听 \`0.0.0.0:$PORT\`** — \`PORT\` 由平台注入,任何地方硬编码端口都是 bug
+1. **当前模板的进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环
 2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个一级子目录 \`project.manifest.toml\`,
    文件名必须完全一致;平台只扫描一级子目录
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败

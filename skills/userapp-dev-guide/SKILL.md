@@ -40,7 +40,7 @@ app_id = my-app
 
 1. **两级 Manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`。平台**只认**这两个确切文件名
 2. **严格校验,Fail Fast** — 未知字段、非法枚举、重复路由、依赖环 → 构建立即失败。每段 `deny_unknown_fields`
-3. **端口由平台定** — 必须监听 `0.0.0.0:$PORT`(`PORT` 由平台注入,4000–7999)。**硬编码端口 = 必错**
+3. **端口由平台定** — 当前模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口(`PORT` 由平台注入,4000–7999),worker 也一样；static 的 prod 由平台托管。**硬编码端口 = 必错**
 4. **镜像/资源/端口由平台管** — 不在 TOML 里配
 5. **service_id 是稳定身份** — 不是目录名。决定日志目录、路由 upstream、依赖引用。一旦上线别改
 6. **命令是 argv,不走 shell** — 需要 shell 功能要显式 `["sh","-c","..."]`
@@ -100,8 +100,8 @@ command = ["pnpm", "exec", "vite"]  # 配置即切源码态且声明dev态自足
 
 [health]                            # 整段可选,默认 /health
 startup_path = "/health"
-readiness_path = "/ready"           # 不ready摘流,不重启
-liveness_path = "/health"           # 连续失败重启容器
+readiness_path = "/ready"           # 就绪检查路径;查询本身不摘流、不重启
+liveness_path = "/health"           # 存活路径声明,不等于失败会重启容器
 
 [proxy]                             # 可选;worker禁止
 path = "/api/"                      # workspace内唯一,最多一个/
@@ -211,7 +211,7 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 - proxy.path 在 workspace 内**唯一**
 - 全 workspace**最多一个 `/`**(catch-all,通常给主前端)
 - 具体前缀优先于 catch-all 命中
-- **worker 不能声明 [proxy]**
+- **worker 不能声明 [proxy]**,但保留内部 HTTP 健康接口；“无公开路由”不等于“无监听”
 
 ### 入口首页(index.html)策略
 
@@ -261,15 +261,17 @@ UserApp 页面默认支持在平台的跨站 iframe 中使用。用户可以自�
 
 ## 健康检查
 
-三个探针(发 GET,期望 2xx):
+三个健康路径声明不等于三套已装配的容器探针。当前 builtin 在 dev + devrun 时检查 TCP,其他进程检查 `readiness_path` 的 HTTP 2xx；supervisord 使用进程启动确认及可选 workspace bridge。worker 没有自动跳过检查的规则。
 
-| 探针 | 默认路径 | 失败后果 |
+| 字段 | 默认路径 | 当前作用 |
 |---|---|---|
-| **startup** | `/health` | 决定是否启动完成 |
-| **readiness** | `/health` | 不 ready → **摘流**(不转发),不重启 |
-| **liveness** | `/health` | 连续失败 → **重启容器** |
+| **startup_path** | `/health` | 启动健康路径声明,不取代上述实际启动判据 |
+| **readiness_path** | `/health` | 对应服务启动检查、web 业务就绪查询和显式 bridge 的健康路径 |
+| **liveness_path** | `/health` | 存活路径声明,不意味着失败后自动重启整个容器 |
 
-**建议**:readiness 覆盖 DB 等依赖(连不上返非2xx摘流);liveness 只反映进程本身(别放外部依赖)。
+**建议**:readiness 廉价、只读地检查必要依赖,失败返回非 2xx；liveness 只反映进程本身。业务就绪查询是观察,不会因查询而启动/唤醒服务、摘流或重启容器。
+
+**后台 worker**：用 `template-cli add backend-python --kind worker` 后,保留 FastAPI/Uvicorn 与 `$PORT` 监听,在应用生命周期内启动/停止后台任务。不能把 HTTP 入口改成仅任务循环,不能依据自建需求文档删除健康接口；当前尚未提供无监听纯进程启动策略。worker 不参与 web 可访问性查询,但其启动失败仍会使本次启动操作失败。
 
 workspace 级桥接(可选):`[health].bridge_service = "api"` → 该后端不 ready 整个应用摘流,但 `/health` 仍 200。
 

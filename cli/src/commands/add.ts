@@ -27,7 +27,7 @@ export interface AddOptions {
   serviceId?: string;
   path?: string;
   force?: boolean;
-  /** 覆盖 kind: web(默认) / worker(后台任务,不监听 HTTP,不声明 proxy) */
+  /** 覆盖 kind: web(默认) / worker(后台服务,保留内部健康接口,不声明 proxy) */
   kind?: 'web' | 'worker';
 }
 
@@ -37,7 +37,7 @@ export function registerAddCommand(program: Command): void {
     .description('往当前 workspace 追加一个 service')
     .option('--service-id <id>', '覆盖默认 service_id')
     .option('--path <path>', '覆盖默认 proxy.path')
-    .option('--kind <kind>', '服务类型: web(默认) / worker(后台任务,不声明 proxy)')
+    .option('--kind <kind>', '服务类型: web(默认) / worker(后台服务,保留健康接口,不声明 proxy)')
     .option('--force', '覆盖已存在的目录')
     .action(async (templateId: string, opts: AddOptions) => {
       await runAdd(templateId, opts);

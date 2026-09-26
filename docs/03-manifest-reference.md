@@ -90,7 +90,7 @@ schema_version = 1                  # 【必填】配置版本号,当前 = 1(用
 service_id = "api"                  # 【必填】稳定身份,DNS-1123,workspace 内唯一
 name = "My API"                     # 【必填】人类可读名,非空
 type = "go"                         # 【必填】node/java/python/go/rust/static
-kind = "web"                        # 【可选,默认 web】web / worker(worker 不监听 HTTP、不能声明 [proxy])
+kind = "web"                        # 【可选,默认 web】worker 不公开 [proxy],保留内部 HTTP 健康服务
 enabled = true                      # 【可选,默认 true】false 则不参与构建/启动
 
 # ─── 构建 ──────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
 | `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
 | `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
-| `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台任务,**不能**声明 `[proxy]`)。 |
+| `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台服务,**不能**声明 `[proxy]`,但保留内部 HTTP 健康接口)。kind 不免除启动检查。 |
 | `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。整个 workspace 至少要有一个 enabled 服务。 |
 
 ### 字段表:`[build]`
@@ -194,10 +194,12 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 | 字段 | 类型 | 默认 | 说明 |
 |---|---|---|---|
-| `startup_path` | 字符串 | `/health` | 启动探针。 |
-| `readiness_path` | 字符串 | `/health` | 就绪探针:不 ready **摘流**(不转发请求),不重启容器。**dev 启动判定也用它**(dev/start·restart 逐服务探测,通过即 `service_start_ok` 事件)。 |
+| `startup_path` | 字符串 | `/health` | 启动健康路径声明,不单独取代当前启动检查使用的 `readiness_path`。 |
+| `readiness_path` | 字符串 | `/health` | 服务就绪路径。当前 builtin 对非 devrun 进程做该路径的 HTTP 2xx 检查；dev + devrun 使用 TCP。业务就绪查询消费参与聚合的 web 服务,不会查询 worker 的 HTTP 健康。 |
 | `liveness_path` | 字符串 | `/health` | 存活探针声明。**注意**:它不等同于"连续失败就重启整个容器"——是否装配为容器级 liveness 探针由平台运行时配置决定(当前 prod 容器探针走管理端口 `/health`/`/ready`,不逐项目消费该字段);不要按"会自动重启"设计依赖。 |
-| `startup_timeout_seconds` | 整数 | `25` | dev 启动就绪探测窗口(秒)。readiness 在窗口内未 2xx → `service_start_fail`(不阻塞其余服务);慢启动服务(如 Spring Boot 冷启动)按需调大。必须 `> 0`。 |
+| `startup_timeout_seconds` | 整数 | `25` | builtin 单服务启动检查预算(秒),按实际路径做 TCP/HTTP 检查；失败进入服务/操作失败清单,不能按“其他服务已起”报告全体成功。必须 `> 0`。 |
+
+这些字段不是三套已经运行的容器探针。supervisord 沿用其进程启动确认和可选 workspace bridge,不与 builtin 的逐服务探测完全等价。当前没有 worker 自动免探测规则：保留模板生成的健康接口与 `$PORT` 监听；不要添加尚未支持的新探针字段。
 
 > 纯静态前端可用 `"/"`。是否把"后端 ready"上升为"整个 app ready",由 workspace 的 `[health].bridge_service` 控制。
 

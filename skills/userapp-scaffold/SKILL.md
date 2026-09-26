@@ -81,7 +81,7 @@ npx @nuwax-ai/template-cli add <模板id>
 | 前后端分离（未指定技术栈） | Python API + React SPA | `init <dir> --backend python --frontend react` |
 | 全栈单体(DB + 前端) | `userapp-next` | `init <dir> --next` |
 | 多个后端 | 主后端 + 追加 | init 后用 add 追加;**同类多实例须 `--service-id` + `--path`** |
-| 加后台 worker | 任意后端模板 + `--kind worker` | `add backend-python --kind worker` |
+| 加后台 worker | 后端模板 + `--kind worker`，保留内部健康服务 | `add backend-python --kind worker` |
 
 ### 语言/框架特性对比
 
@@ -173,10 +173,13 @@ npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-work
 ```
 
 Worker 与 web 服务的区别:
-- **不监听 HTTP 端口**,不声明 `[proxy]`(平台禁止 worker 声明 proxy)
+- **不公开代理路由**,不声明 `[proxy]`；这不禁止内部 HTTP 健康接口
 - manifest 里输出 `kind = "worker"`,无 `[proxy]` 段
 - 仍参与拓扑排序/启动/日志,可在别的服务的 `depends_on` 里引用
-- 代码里需要自行实现任务循环(替代 HTTP server 的事件循环)
+- 当前 CLI 保留所选后端模板的 HTTP 入口与 `[health]`。Python worker 仍运行 FastAPI/Uvicorn,监听 `0.0.0.0:$PORT`；不要把 `main.py` 替换成只有任务循环的程序
+- 在应用生命周期中启动后台任务并处理关闭；阻塞任务不能占住 HTTP 事件循环。健康接口应反映初始化与必要依赖状态,不能固定返回成功
+
+当前模板与运行时的共同契约仍要求可探测的常驻服务。无监听的纯进程 worker 需要平台显式支持相应启动检查后才能使用,不能仅凭 `kind`、模块名称或应用自己的设计文档推断支持,也不要自行写入未列出的 manifest 字段。正常退出的批处理脚本不是常驻 worker。
 
 ## 生成后的典型操作
 

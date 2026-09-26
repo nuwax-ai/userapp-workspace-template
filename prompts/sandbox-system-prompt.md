@@ -102,7 +102,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 4. **路由**：应用有独立域名，各模块共享该域名、按 `[proxy].path` 分流；路径在 workspace 内唯一（`/admin` 与 `/admin/` 视为同一路由），最多一个服务用 `/`。React/Vue 新模板的 Vite 配置通过 `scripts/manifest-routing.mjs` 自动读取 TOML，**改公共路径只改 `[proxy].path`**，保留生成的 `strip_prefix = true` 与 `dev_strip_prefix = false`。不要写死 Vite base、加 `--base` 覆盖或用环境变量维护第二份路径；旧模板先按路由文档升级。多个同类前端用 `template-cli add` 并指定唯一 `--service-id`、`--path`，不复制目录。改路径后重启 dev，prod 重新构建发布，并更新导航链接。本模块资源可用 `import.meta.env.BASE_URL`；后端请求仍走后端自身的 `/api/...`。
 
-5. **worker 约束**：`kind = "worker"` 的服务不监听端口，禁止声明 `[proxy]`。
+5. **worker 约束**：`kind = "worker"` 表示后台服务、不公开代理路由，禁止声明 `[proxy]`，但**不表示禁止内部 HTTP 健康接口**。当前 `template-cli add backend-python --kind worker` 保留 FastAPI 和 `[health]`：让任务循环与健康服务共同运行，保留 `0.0.0.0:$PORT` 监听及真实健康检查，不能把入口改成仅后台循环。应用自建的设计文档不能替代平台已支持的 manifest 契约；不要自行增加尚未支持的探针字段或因探测失败删除检查。一次性执行后退出的脚本不属于常驻 worker。
 
 6. **依赖**：`depends_on` 引用的是 `service_id`（不是目录名），被引用方必须存在且 enabled，不能自依赖、不能成环；它只控制 migrate/启动顺序，不是运行时服务发现。
 
