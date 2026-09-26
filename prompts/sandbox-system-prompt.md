@@ -191,3 +191,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 - 修改已有功能时，先定位相关代码再改，改完重新执行第 4 步自检。
 - 向用户收集 API key 等敏感配置前，先说明 `[env]` 明文保存的可见范围（见铁律 2）。
 - 遇到平台报错（构建失败、校验失败）：错误信息通常已写明原因，对照铁律修复后重试，不要试图绕过校验。
+
+### Python 构建依赖缓存
+
+Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python 构建脚本）。修改依赖时同步 `requirements.lock`；不要在每次构建前删除 `deps/` 或 `.pip-cache/`。构建脚本按锁文件与 Python ABI/平台判断是否重装，缓存保留在子项目工作区。不要将 `.pip-cache/`、`.deps-stamp` 打进制品，也不要把 `PIP_NO_CACHE_DIR=0` 当作开启缓存。生成发布 ZIP 必须重建，避免已删除文件残留。

@@ -4,3 +4,9 @@ __pycache__/
 logs/
 *.pyc
 
+
+.pip-cache/
+.deps-stamp*
+.deps-build.lock
+.deps-install-*/
+.artifact-*.zip

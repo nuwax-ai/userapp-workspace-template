@@ -38,7 +38,7 @@ const TEMPLATE_SOURCES = {
 /* ── 要过滤掉的产物/无关目录和文件 ──────────────────────── */
 const SKIP_DIRS = new Set([
   'node_modules', 'target', 'dist', '.next', 'deps', '__pycache__',
-  'logs', '.git', 'out', 'build', 'coverage', '.turbo',
+  'logs', '.git', 'out', 'build', 'coverage', '.turbo', '.pip-cache',
 ]);
 const SKIP_FILES = new Set([
   'artifact.zip', 'server', 'app.jar', '.DS_Store',
@@ -49,6 +49,8 @@ const SKIP_FILE_PATTERNS = [
   /\.class$/,
   /\.log$/,
   /\.tsbuildinfo$/,
+  /^\.deps-(stamp|build\.lock)/,
+  /^\.artifact-.*\.zip$/,
 ];
 
 /* ── 占位符注入规则 ────────────────────────────────────────
@@ -201,7 +203,7 @@ function matchGlob(filePath, pattern) {
 /* ── 主流程 ──────────────────────────────────────────────── */
 
 function shouldSkipDir(name) {
-  return SKIP_DIRS.has(name);
+  return SKIP_DIRS.has(name) || name.startsWith('.deps-install-');
 }
 
 function shouldSkipFile(name) {

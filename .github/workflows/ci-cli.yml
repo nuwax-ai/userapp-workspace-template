@@ -56,3 +56,6 @@ jobs:
       - name: Test generated workspaces
         working-directory: cli
         run: npm test
+
+      - name: Test Python dependency cache with local wheels
+        run: python3 -m unittest discover -s backend-python/tests -p test_build_cache.py -v

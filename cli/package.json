@@ -1,6 +1,6 @@
 {
   "name": "@nuwax-ai/template-cli",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "UserApp workspace 模板脚手架 CLI — 按需组合多语言前后端模板",
   "type": "module",
   "bin": {

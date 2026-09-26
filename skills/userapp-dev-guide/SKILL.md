@@ -553,3 +553,7 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
 | gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |
 | 本地编排起不来 | run.command 需要的产物没构建 / 端口被占用 / PG 60s 未就绪(报错退出) | 先跑 build 脚本;确保 PG 可达或设 `APP_CLI_SKIP_PG_WAIT=1`;看 app-cli.log 与 runtime.{out,err}.log 定位 |
+
+### Python 构建依赖缓存
+
+Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python 构建脚本）。修改依赖时同步 `requirements.lock`；不要在每次构建前删除 `deps/` 或 `.pip-cache/`。构建脚本按锁文件与 Python ABI/平台判断是否重装，缓存保留在子项目工作区。不要将 `.pip-cache/`、`.deps-stamp` 打进制品，也不要把 `PIP_NO_CACHE_DIR=0` 当作开启缓存。生成发布 ZIP 必须重建，避免已删除文件残留。
