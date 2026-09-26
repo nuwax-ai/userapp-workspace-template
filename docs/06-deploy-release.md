@@ -146,7 +146,7 @@ workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文
 
 ## 7. 健康检查
 
-以下为服务健康路径声明,不是三套已装配的容器探针。当前 builtin 对 dev + devrun 做 TCP 检查,对其他进程做 `readiness_path` HTTP 2xx 检查；supervisord 使用进程启动确认及可选 workspace bridge。worker 仍须保留模板的健康服务,不能因无公开路由就删除监听。
+以下为服务健康路径声明,不是三套已装配的容器探针。未声明 startup_probe 时 builtin 对 dev + devrun 做 TCP 检查,对其他进程做 `readiness_path` HTTP 2xx 检查；supervisord 使用进程启动确认及可选 workspace bridge。HTTP worker 仍须保留模板的健康服务,不能因无公开路由就删除监听。显式 process worker 使用 app-cli >= 0.3.9 的启动检查，见 [worker 模式](08-worker.md)。
 
 | 字段 | 默认路径 | 当前作用 |
 |---|---|---|

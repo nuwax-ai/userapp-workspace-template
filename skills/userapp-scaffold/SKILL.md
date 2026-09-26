@@ -179,7 +179,7 @@ Worker 与 web 服务的区别:
 - 当前 CLI 保留所选后端模板的 HTTP 入口与 `[health]`。Python worker 仍运行 FastAPI/Uvicorn,监听 `0.0.0.0:$PORT`；不要把 `main.py` 替换成只有任务循环的程序
 - 在应用生命周期中启动后台任务并处理关闭；阻塞任务不能占住 HTTP 事件循环。健康接口应反映初始化与必要依赖状态,不能固定返回成功
 
-当前模板与运行时的共同契约仍要求可探测的常驻服务。无监听的纯进程 worker 需要平台显式支持相应启动检查后才能使用,不能仅凭 `kind`、模块名称或应用自己的设计文档推断支持,也不要自行写入未列出的 manifest 字段。正常退出的批处理脚本不是常驻 worker。
+当前模板与运行时的共同契约仍要求可探测的常驻服务。无监听 worker 使用 `add worker-python --service-id queue-worker`，它显式生成 `startup_probe="process"`，要求 app-cli >= 0.3.9 且 owner 声明 `startup-probe-v1`；配套运行时未发布/版本不可确认时不要使用。不能仅凭 kind、模块名称或应用自己的设计文档推断支持。正常退出的批处理脚本不是常驻 worker。
 
 ## 生成后的典型操作
 

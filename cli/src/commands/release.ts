@@ -63,6 +63,8 @@ export async function releaseTemplate(
   targetDir: string,
   opts: ReleaseOptions,
 ): Promise<void> {
+  // Validate generated semantics before --force can remove an existing directory.
+  const manifestContent = generateProjectManifest({ template, serviceId: opts.serviceId, proxyPath: opts.proxyPath });
   const sourceDir = findTemplateSourceDir(template.id);
   const replaceMap = buildReplaceMap({
     serviceId: opts.serviceId,
@@ -80,11 +82,6 @@ export async function releaseTemplate(
   walkAndRelease(sourceDir, targetDir, template.id, replaceMap);
 
   // 重新生成 project.manifest.toml
-  const manifestContent = generateProjectManifest({
-    template,
-    serviceId: opts.serviceId,
-    proxyPath: opts.proxyPath,
-  });
   fse.writeFileSync(path.join(targetDir, 'project.manifest.toml'), manifestContent);
   console.log(k.green('  ✓ ') + 'project.manifest.toml');
 }

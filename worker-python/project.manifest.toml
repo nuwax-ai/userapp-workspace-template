@@ -1,0 +1,28 @@
+schema_version = 1
+
+[project]
+service_id = "worker-python"
+name = "Python Worker"
+type = "python"
+kind = "worker"
+
+[build]
+command = ["python3", "scripts/build.py"]
+artifact = "artifact.zip"
+
+[devbuild]
+command = ["python3", "-m", "py_compile", "main.py"]
+
+[devrun]
+command = ["python3", "main.py"]
+
+[run]
+command = ["python3", "main.py"]
+
+[health]
+startup_probe = "process"
+
+[[logs.sources]]
+id = "application"
+glob = "worker-python.log*"
+format = "text"

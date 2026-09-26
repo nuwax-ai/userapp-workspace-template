@@ -102,7 +102,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 4. **路由**：应用有独立域名，各模块共享该域名、按 `[proxy].path` 分流；路径在 workspace 内唯一（`/admin` 与 `/admin/` 视为同一路由），最多一个服务用 `/`。React/Vue 新模板的 Vite 配置通过 `scripts/manifest-routing.mjs` 自动读取 TOML，**改公共路径只改 `[proxy].path`**，保留生成的 `strip_prefix = true` 与 `dev_strip_prefix = false`。不要写死 Vite base、加 `--base` 覆盖或用环境变量维护第二份路径；旧模板先按路由文档升级。多个同类前端用 `template-cli add` 并指定唯一 `--service-id`、`--path`，不复制目录。改路径后重启 dev，prod 重新构建发布，并更新导航链接。本模块资源可用 `import.meta.env.BASE_URL`；后端请求仍走后端自身的 `/api/...`。
 
-5. **worker 约束**：`kind = "worker"` 表示后台服务、不公开代理路由，禁止声明 `[proxy]`，但**不表示禁止内部 HTTP 健康接口**。当前 `template-cli add backend-python --kind worker` 保留 FastAPI 和 `[health]`：让任务循环与健康服务共同运行，保留 `0.0.0.0:$PORT` 监听及真实健康检查，不能把入口改成仅后台循环。应用自建的设计文档不能替代平台已支持的 manifest 契约；不要自行增加尚未支持的探针字段或因探测失败删除检查。一次性执行后退出的脚本不属于常驻 worker。
+5. **worker 约束**：`kind = "worker"` 表示后台服务、不公开代理路由，禁止声明 `[proxy]`，但**不表示禁止内部 HTTP 健康接口**。当前 `template-cli add backend-python --kind worker` 保留 FastAPI 和 `[health]`：让任务循环与健康服务共同运行，保留 `0.0.0.0:$PORT` 监听及真实健康检查，不能把入口改成仅后台循环。应用自建的设计文档不能替代平台已支持的 manifest 契约；若明确需要无监听 worker，使用 `worker-python` 与 `startup_probe="process"`，仅限 app-cli >= 0.3.9 且 owner 支持 `startup-probe-v1`；配套运行时未发布或不能确认时保留 HTTP worker。不能因健康检查失败切成 process 掩盖业务错误。一次性执行后退出的脚本不属于常驻 worker。
 
 6. **依赖**：`depends_on` 引用的是 `service_id`（不是目录名），被引用方必须存在且 enabled，不能自依赖、不能成环；它只控制 migrate/启动顺序，不是运行时服务发现。
 
@@ -112,7 +112,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 9. **日志**：文件日志写入 `$APP_LOG_DIR`（即 `/app/logs/<service_id>/`），推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
 
-10. **健康检查**：模板自带健康端点，保持可用；改动路由时同步检查 `[health]` 三个路径（默认 `/health`；Java 模板用 Actuator 路径、Next 模板用 `/api/health`，以各服务 manifest 实际声明为准）。健康端点必须**廉价、只读、直接返回**（轻量 DB ping 可以，昂贵查询/写操作不行）；不能为了让查询变绿而关闭检查或固定返回成功。平台判断"业务是否可访问"用只读就绪查询 `GET /api/v1/userapp/{app_id}/{app_stage}/readiness`（消费你声明的健康路径，查询本身不启动/唤醒任何服务）；`[health].liveness_path` 只是声明，不等于"失败即重启容器"。
+10. **健康检查**：HTTP 模板自带健康端点，保持可用；改动路由时同步检查 `[health]` 三个路径（默认 `/health`；Java 模板用 Actuator 路径、Next 模板用 `/api/health`，以各服务 manifest 实际声明为准）。健康端点必须**廉价、只读、直接返回**（轻量 DB ping 可以，昂贵查询/写操作不行）；不能为了让查询变绿而关闭检查或固定返回成功。显式 process worker 不添加 HTTP 路径，其进程检查不代表业务健康。平台判断"业务是否可访问"用只读就绪查询 `GET /api/v1/userapp/{app_id}/{app_stage}/readiness`（消费 web 服务声明的健康路径，查询本身不启动/唤醒任何服务）；`[health].liveness_path` 只是声明，不等于"失败即重启容器"。
 
 11. **manifest 严格模式**：只能写平台文档列出的字段，禁止添加任何未列出的字段。
 

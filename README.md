@@ -4,9 +4,9 @@
 workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个后端、带数据库的 Next.js 单体……)。
 整个 workspace 作为一个整体被**构建、发布、回滚**——这是 UserApp 的核心模型。
 
-仓库里现成放了一个**最复杂的组合**:7 个子项目(React / Vue / Next.js + Go / Java / Python / Rust),
+仓库里现成放了一个**最复杂的组合**:8 个子项目(React / Vue / Next.js + Go / Java / Python / Rust + Python worker),
 用来演示多前端、多后端、不同日志格式和路由前缀如何共存。你可以直接删掉用不到的目录,只要保留
-**至少一个 `enabled = true` 的服务**即可。
+**至少一个 `enabled = true` 的 web 服务**（managed 模式不支持只有 worker）。
 
 ---
 
@@ -58,7 +58,7 @@ CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/template-cli li
 | 1 | **workspace 是发布原子** | 不能单独发布/回滚某一个服务。前后端、路由、数据库迁移必须整套一起上,所以一个 workspace 内的服务要彼此配套。 |
 | 2 | **两级 Manifest** | 仓库根一个 `workspace.manifest.toml`;每个一级子目录一个 `project.manifest.toml`。平台只认这两个文件。 |
 | 3 | **严格校验,Fast Fail** | 写错一个字段(拼写、未知字段、非法枚举、重复路由、依赖环……)**构建直接失败并报清楚原因**,不会带着错误配置默默上线。每个 section 都是 `deny_unknown_fields`,多写一个字会报错。 |
-| 4 | **端口由平台定,不由你定** | 当前模板的进程服务保留 **`0.0.0.0:$PORT`** 监听与健康接口,包括 worker；static 的 prod 由平台托管。`PORT` 写进 `release.lock.toml`(确定性端口,范围 4000–7999)。代码里**硬编码端口 = 必错**。 |
+| 4 | **端口由平台定,不由你定** | HTTP/TCP 模板的进程服务保留 **`0.0.0.0:$PORT`** 监听与健康接口,包括 HTTP worker；static 的 prod 由平台托管。`PORT` 写进 `release.lock.toml`(确定性端口,范围 4000–7999)。代码里**硬编码端口 = 必错**。 |
 | 5 | **镜像/资源/端口由平台管** | 运行时镜像、CPU/内存、存储大小、版本保留数都是**平台策略**,不在 TOML 里。需要的环境变量(含数据库连接串、API Key 等)写在 `[env]` 里,以明文随源码和发布包保存——按应用的访问范围评估其敏感度即可。 |
 | 6 | **`service_id` 是稳定身份** | 服务的真实身份是 `service_id`,**不是目录名**。改目录名不影响服务身份;但 `service_id` 一旦上线就不要随便改(它决定了日志目录、路由 upstream、依赖关系)。 |
 
@@ -229,8 +229,8 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 | `service_id` | ✅ | — | 服务的**稳定身份**。必须符合 **DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾必须是字母或数字(不能大写、不能下划线、不能有点)。workspace 内唯一。**决定了日志目录 `/app/logs/<service_id>`、路由 upstream、依赖引用。** |
 | `name` | ✅ | — | 人类可读名称,非空。 |
 | `type` | ✅ | — | 运行时语言类型:`node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:省略 `[run]`,`[build].artifact` 为静态内容目录(如 `dist`),平台内置托管并 SPA fallback；dev 可以通过 `[devrun]` 启动 Vite。 |
-| `kind` | ❌ | `web` | `web` = 对外提供 HTTP(可声明 `[proxy]`);`worker` = 后台服务(**不能**声明 `[proxy]`,但保留内部 HTTP 健康接口)。不能仅修改 kind 就删除监听服务。 |
-| `enabled` | ❌ | `true` | `false` 时该服务不参与构建/启动(但至少要有一个 enabled 服务)。 |
+| `kind` | ❌ | `web` | `web` = 对外提供 HTTP(可声明 `[proxy]`);`worker` = 后台服务(**不能**声明 `[proxy]`,HTTP worker 保留内部健康接口，纯进程 worker 需显式 startup_probe)。不能仅修改 kind 就删除监听服务。 |
+| `enabled` | ❌ | `true` | `false` 时该服务不参与构建/启动；至少保留一个 enabled 服务，managed 模式还须有 enabled web。 |
 
 > 💡 **`service_id` 是你自己定义的(就在这里写),所以你本来就知道它。** 它不是内部隐藏字段——部署后
 > 它会出现在你直接用到的地方:① 查日志时的 `serviceId` 选择器;② custom pingap 的 `rcoder://<service_id>`;
@@ -260,7 +260,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 
 ### 4.4 `[health]` — 健康检查路径
 
-这三个字段声明服务自己的健康路径,不等于平台为每个服务装配了三种容器探针。整段可选,三个字段默认都是 `/health`。当前 builtin 启动检查在 dev + devrun 时检查 TCP,其余进程检查 `readiness_path` 的 HTTP 2xx；没有 `kind=worker` 免检查规则。supervisord 的启动确认与可选 workspace bridge 是独立路径,不能依赖某一种引擎偶然通过来删除健康服务。
+这三个字段声明服务自己的健康路径,不等于平台为每个服务装配了三种容器探针。整段可选,三个字段默认都是 `/health`。未声明 startup_probe 时 builtin 启动检查在 dev + devrun 时检查 TCP,其余进程检查 `readiness_path` 的 HTTP 2xx；没有 `kind=worker` 免检查规则。supervisord 的启动确认与可选 workspace bridge 是独立路径,不能依赖某一种引擎偶然通过来删除健康服务。
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
@@ -367,7 +367,7 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 - **依赖**:`depends_on` 引用必须是**已存在且 enabled**的 `service_id`;不能自依赖、不能成环。
 - **日志**:`logs.sources.id` DNS-1123 且本服务内唯一;`multiline_start_pattern` 仅 `text` 可用。
 - **保留环境变量**:`[env]` 的 key 不能是 `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、`APP_RELEASE_ID`,也不能以 `RCODER_` 开头。
-- **至少一个 enabled 服务**:全 disabled 的 workspace 直接失败。
+- **至少一个 enabled 服务**:全 disabled 的 workspace 直接失败；managed 模式至少有一个 enabled web，不能只有 worker。
 - **pingap**:managed 模式下不能写 `pingap.config`。
 
 ---
@@ -389,7 +389,7 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 
 ## 8. 本模板的 service 一览
 
-本模板 7 个服务故意覆盖了多语言、多前端、不同日志格式和路由前缀。路由分配(都是 managed 模式):
+本模板的 web 服务故意覆盖了多语言、多前端、不同日志格式和路由前缀。路由分配(都是 managed 模式):
 
 | service_id | 类型 | kind | 路由 path | strip_prefix | 日志格式 | 说明 |
 |---|---|---|---|:---:|---|---|
@@ -426,7 +426,7 @@ npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-work
 
 CLI 保留 Python 模板的 FastAPI/Uvicorn 入口、`[health]` 和 `0.0.0.0:$PORT` 监听,只将 kind 设为 worker 并省略 `[proxy]`。在应用生命周期中增加后台任务,关闭时收束任务；不要把 `main.py` 改成仅后台循环,也不要以固定成功的健康响应掩盖任务初始化失败。
 
-worker 不公开 pingap 路由,但**仍参与拓扑排序/启动/日志**,可在其他服务的 `depends_on` 里引用。当前模板不提供无监听纯进程模式,也不把正常退出的批处理脚本当成常驻服务。后续新探针能力必须由 app-cli 与模板配套发布,不能自行添加未支持的 manifest 字段。
+worker 不公开 pingap 路由,但**仍参与拓扑排序/启动/日志**,可在其他服务的 `depends_on` 里引用。`worker-python` 为显式 process 模式，需 app-cli >= 0.3.9（配套发布前不可使用）；不把正常退出的批处理脚本当成常驻服务。见 [worker 模式](docs/08-worker.md)。
 
 ### 场景 C:前端依赖后端,控制启动顺序
 

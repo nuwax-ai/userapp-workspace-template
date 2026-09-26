@@ -28,6 +28,7 @@ const TEMPLATE_SOURCES = {
   'backend-go': 'backend-go',
   'backend-java': 'backend-java',
   'backend-python': 'backend-python',
+  'worker-python': 'worker-python',
   'backend-rust': 'backend-rust',
   'frontend-react-vite': 'frontend-react-vite',
   'frontend-vue3-vite': 'frontend-vue3-vite',

@@ -21,6 +21,9 @@ export interface ProjectManifestOptions {
 export function generateProjectManifest(opts: ProjectManifestOptions): string {
   const { template, serviceId, proxyPath, includeProxy = true } = opts;
   const d = template.defaults;
+  if (d.startupProbe === 'process' && (template.kind !== 'worker' || template.type === 'static')) {
+    throw new Error('process startup probe requires a non-static worker');
+  }
 
   const lines: string[] = [
     'schema_version = 1',
@@ -67,6 +70,9 @@ export function generateProjectManifest(opts: ProjectManifestOptions): string {
 
   // health 段 —— 模板显式声明的路径都输出(即使等于默认 /health,保持与源 manifest 一致)
   const healthParts: string[] = [];
+  if (d.startupProbe) {
+    healthParts.push(`startup_probe = "${d.startupProbe}"`);
+  }
   if (d.startupPath) {
     healthParts.push(`startup_path = "${d.startupPath}"`);
   }
@@ -219,7 +225,7 @@ ${tableNote}
 
 ## 平台核心约束(manifest 契约,长期向后兼容)
 
-1. **当前模板的进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环
+1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
 2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个一级子目录 \`project.manifest.toml\`,
    文件名必须完全一致;平台只扫描一级子目录
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
@@ -386,6 +392,11 @@ interface BuildInfo {
 
 function getBuildInfo(template: TemplateMeta): BuildInfo {
   switch (template.id) {
+    case 'worker-python':
+      return {
+        command: ['python3', 'scripts/build.py'], artifact: 'artifact.zip', run: ['python3', 'main.py'],
+        devbuild: ['python3', '-m', 'py_compile', 'main.py'], devrun: ['python3', 'main.py'],
+      };
     case 'backend-go':
       return {
         command: ['sh', 'scripts/build-standalone.sh'],

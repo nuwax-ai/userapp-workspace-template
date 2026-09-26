@@ -40,7 +40,7 @@ app_id = my-app
 
 1. **两级 Manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`。平台**只认**这两个确切文件名
 2. **严格校验,Fail Fast** — 未知字段、非法枚举、重复路由、依赖环 → 构建立即失败。每段 `deny_unknown_fields`
-3. **端口由平台定** — 当前模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口(`PORT` 由平台注入,4000–7999),worker 也一样；static 的 prod 由平台托管。**硬编码端口 = 必错**
+3. **端口由平台定** — HTTP/TCP 模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口(`PORT` 由平台注入,4000–7999),HTTP worker 也一样；static 的 prod 由平台托管。**硬编码端口 = 必错**
 4. **镜像/资源/端口由平台管** — 不在 TOML 里配
 5. **service_id 是稳定身份** — 不是目录名。决定日志目录、路由 upstream、依赖引用。一旦上线别改
 6. **命令是 argv,不走 shell** — 需要 shell 功能要显式 `["sh","-c","..."]`
@@ -211,7 +211,7 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 - proxy.path 在 workspace 内**唯一**
 - 全 workspace**最多一个 `/`**(catch-all,通常给主前端)
 - 具体前缀优先于 catch-all 命中
-- **worker 不能声明 [proxy]**,但保留内部 HTTP 健康接口；“无公开路由”不等于“无监听”
+- **worker 不能声明 [proxy]**；HTTP worker 保留内部健康接口，纯进程 worker 必须显式声明 startup_probe；“无公开路由”不等于“无监听”
 
 ### 入口首页(index.html)策略
 
@@ -261,7 +261,7 @@ UserApp 页面默认支持在平台的跨站 iframe 中使用。用户可以自�
 
 ## 健康检查
 
-三个健康路径声明不等于三套已装配的容器探针。当前 builtin 在 dev + devrun 时检查 TCP,其他进程检查 `readiness_path` 的 HTTP 2xx；supervisord 使用进程启动确认及可选 workspace bridge。worker 没有自动跳过检查的规则。
+三个健康路径声明不等于三套已装配的容器探针。未声明 startup_probe 时 builtin 在 dev + devrun 时检查 TCP,其他进程检查 `readiness_path` 的 HTTP 2xx；supervisord 使用进程启动确认及可选 workspace bridge。worker 没有自动跳过检查的规则。
 
 | 字段 | 默认路径 | 当前作用 |
 |---|---|---|
@@ -271,7 +271,7 @@ UserApp 页面默认支持在平台的跨站 iframe 中使用。用户可以自�
 
 **建议**:readiness 廉价、只读地检查必要依赖,失败返回非 2xx；liveness 只反映进程本身。业务就绪查询是观察,不会因查询而启动/唤醒服务、摘流或重启容器。
 
-**后台 worker**：用 `template-cli add backend-python --kind worker` 后,保留 FastAPI/Uvicorn 与 `$PORT` 监听,在应用生命周期内启动/停止后台任务。不能把 HTTP 入口改成仅任务循环,不能依据自建需求文档删除健康接口；当前尚未提供无监听纯进程启动策略。worker 不参与 web 可访问性查询,但其启动失败仍会使本次启动操作失败。
+**后台 worker**：用 `template-cli add backend-python --kind worker` 后,保留 FastAPI/Uvicorn 与 `$PORT` 监听,在应用生命周期内启动/停止后台任务。不能把 HTTP 入口改成仅任务循环,不能依据自建需求文档删除健康接口；纯进程需求使用 `worker-python` 并显式 `startup_probe="process"`，前提是 app-cli >= 0.3.9 且 owner 声明 `startup-probe-v1`；配套版本未发布或不可确认时继续使用 HTTP worker。worker 不参与 web 可访问性查询,但其启动失败仍会使本次启动操作失败。
 
 workspace 级桥接(可选):`[health].bridge_service = "api"` → 该后端不 ready 整个应用摘流,但 `/health` 仍 200。
 
@@ -438,11 +438,9 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 `[devrun].command` 优先、`[run].command` 兜底；后者依赖的产物须在源码目录可用。
 
 启动判定(app-cli builtin 引擎,dev/start·restart 的 SSE 逐服务事件):
-- `service_start_ok` = readiness 探测通过(`[health].readiness_path` 在
-  `[health].startup_timeout_seconds`(默认 25s,慢启动服务按需调大)窗口内 2xx)
-- 单服务失败(migrate/spawn/探测超时)**不阻塞**其余服务;任务终态 failed 的
-  error 为逐服务汇总,已启动服务保留运行(dev/list 可查)
-- 事件经 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)
+- `service_start_ok` = 本次启动检查通过；策略由 `startup_probe` 决定，省略保持旧行为。process 仅证明根进程连续存活，不证明业务初始化成功；服务仍须自行在初始化失败时非零退出。
+- 单服务失败(migrate/spawn/探测超时)会记录具体服务和原因；`serve` owner 的启动操作失败时收束已启动的业务进程，不能将部分 `service_start_ok` 当作任务完成。
+- 事件经 owner 事件接口或 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)，以对应操作的终态为准。
 - `type = "static"` 服务(prod 无业务进程):`[run]` 禁止、`[build].artifact`=静态内容目录
   (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
   启动恒成功(`service_start_ok` 即时);dev 源码态配了 `[devrun]` 时端口让给

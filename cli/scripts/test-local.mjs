@@ -216,6 +216,25 @@ try {
   );
   assert(fs.existsSync(path.join(appDir, 'database', 'README.md')), 'add 兜底补齐根 database/README.md');
 
+  // Process worker is a distinct generated contract; legacy HTTP worker stays intact.
+  run(`${CLI} add worker-python --service-id queue-worker`, { cwd: appDir });
+  const queueDir = path.join(appDir, 'queue-worker');
+  const queue = parseToml(fs.readFileSync(path.join(queueDir, 'project.manifest.toml'), 'utf8'));
+  assert(queue.project.kind === 'worker' && queue.health.startup_probe === 'process'
+    && !queue.proxy && !queue.health.readiness_path && queue.run.command.join(' ') === 'python3 main.py',
+    'process worker 的 kind/探针/run 一致，无 proxy 或 HTTP 路径');
+  run('python3 scripts/build.py', { cwd: queueDir });
+  assert(fs.statSync(path.join(queueDir, 'artifact.zip')).size > 0, 'process worker 可构建独立制品');
+  const sentinel = path.join(appDir, 'invalid-worker');
+  fs.mkdirSync(sentinel);
+  fs.writeFileSync(path.join(sentinel, 'keep.txt'), 'preserve');
+  for (const options of ['worker-python --kind web', 'frontend-vue3-vite --kind worker', 'worker-python --path /queue/']) {
+    let rejected = false;
+    try { run(`${CLI} add ${options} --service-id invalid-worker --force`, { cwd: appDir }); }
+    catch { rejected = true; }
+    assert(rejected && fs.readFileSync(path.join(sentinel, 'keep.txt'), 'utf8') === 'preserve', `非法组合在覆盖目录前拒绝: ${options}`);
+  }
+
   // === add: vue(add 入口的 devbuild 断言) ===
   console.log('\n=== add: vue devbuild ===');
   run(`${CLI} add frontend-vue3-vite`, { cwd: appDir });

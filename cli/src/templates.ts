@@ -34,6 +34,8 @@ export interface TemplateDefaults {
   readinessPath?: string;
   startupPath?: string;
   livenessPath?: string;
+  /** Explicit startup strategy. Requires app-cli >= 0.3.9. */
+  startupProbe?: 'http' | 'tcp' | 'process';
   /** logs.sources 的 id(后端用 "application",前端/全栈用 "runtime") */
   logSourceId: string;
 }
@@ -75,10 +77,18 @@ export interface TemplateMeta {
 }
 
 /**
- * 全部 7 个模板的注册表。
+ * 全部模板的注册表。
  * 按"后端 → 前端 → 全栈"排列,选择器按此序展示。
  */
 export const TEMPLATES: TemplateMeta[] = [
+  {
+    id: 'worker-python', name: 'Python Worker', category: 'backend', type: 'python', kind: 'worker',
+    framework: 'stdlib', description: '无监听的前台常驻 worker；需 app-cli >= 0.3.9，不支持单独组成 managed workspace',
+    tags: ['python', 'worker', 'background'],
+    defaults: { serviceId: 'worker-python', proxyPath: '', stripPrefix: false, startupProbe: 'process',
+      logGlob: '__SERVICE_ID__.log*', logFormat: 'text', logSourceId: 'application' },
+    variables: {},
+  },
   // ── 后端(4)─────────────────────────────────────────────
   {
     id: 'backend-go',

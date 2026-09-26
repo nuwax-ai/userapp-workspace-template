@@ -53,4 +53,6 @@ npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
 
 本版纠正“worker 不监听端口”的旧说明,不新增运行时能力或 manifest 字段。当前 HTTP worker 保留内部健康服务与 `$PORT` 监听,只是不公开 `[proxy]` 路由。无端口进程模式须等 app-cli 显式支持后再提供,不能靠文档提前启用。
 
+开发分支另行准备 `worker-python` / `startup_probe="process"`，要求 app-cli >= 0.3.9 和 owner 的 `startup-probe-v1` 能力。运行时发布前不发布这部分模板；条件和迁移见 [worker 说明](../docs/08-worker.md)。
+
 升级需要分别核对 npm 生成物、沙箱安装的两份 skills、平台实际注入的系统提示词。存量 workspace 的 `AGENTS.md` 和应用自建设计文档不会被自动更新；只修正相关 worker 条款,保留用户自己的规则和代码。已经改成无监听循环的应用仍需维护者恢复真实健康服务,不能仅更新说明就声称启动问题已修复。

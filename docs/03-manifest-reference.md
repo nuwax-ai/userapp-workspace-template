@@ -90,7 +90,7 @@ schema_version = 1                  # 【必填】配置版本号,当前 = 1(用
 service_id = "api"                  # 【必填】稳定身份,DNS-1123,workspace 内唯一
 name = "My API"                     # 【必填】人类可读名,非空
 type = "go"                         # 【必填】node/java/python/go/rust/static
-kind = "web"                        # 【可选,默认 web】worker 不公开 [proxy],保留内部 HTTP 健康服务
+kind = "web"                        # 【可选,默认 web】worker 不公开 [proxy]；HTTP worker 保留内部健康服务
 enabled = true                      # 【可选,默认 true】false 则不参与构建/启动
 
 # ─── 构建 ──────────────────────────────────────────────────────
@@ -143,8 +143,8 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
 | `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
 | `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
-| `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台服务,**不能**声明 `[proxy]`,但保留内部 HTTP 健康接口)。kind 不免除启动检查。 |
-| `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。整个 workspace 至少要有一个 enabled 服务。 |
+| `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台服务,**不能**声明 `[proxy]`,按 health.startup_probe 决定启动检查，省略保持旧行为)。kind 不免除启动检查。 |
+| `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。至少保留一个 enabled 服务；managed 模式还须有 enabled web。 |
 
 ### 字段表:`[build]`
 
@@ -176,11 +176,11 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
-| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。**并应答 `[health].readiness_path`**(vite 模板经 `configureServer` 插件实现 `/health`)——否则 dev server 会被 pingap 健康探针摘流(经 9080 的预览 503);Vite 的 dev/build `base` 都应与 `[proxy].path` 对齐(如 `/react/`)，devrun 配 `dev_strip_prefix = false`，让浏览器资源 URL 留在子路径内；prod 静态托管仍用 `strip_prefix = true`。 |
+| `command` | 字符串数组(argv) | ✅(若有本段) | dev 启动命令。HTTP/TCP 服务**须监听 `0.0.0.0:$PORT`**(注入同 `[run]`;vite 经 `vite.config.ts` 的 `server.port = Number(process.env.PORT)` 对接)。**并应答 `[health].readiness_path`**(vite 模板经 `configureServer` 插件实现 `/health`)——否则 dev server 会被 pingap 健康探针摘流(经 9080 的预览 503);Vite 的 dev/build `base` 都应与 `[proxy].path` 对齐(如 `/react/`)，devrun 配 `dev_strip_prefix = false`，让浏览器资源 URL 留在子路径内；prod 静态托管仍用 `strip_prefix = true`。 |
 
 ### 字段表:`[health]`
 
-整段可选。三个路径默认都是 `/health`。平台探活发 `GET` 期望 2xx。路径必须以 `/` 开头,不含 `..`/`?`/`#`。
+整段可选。HTTP 检查的三个路径默认都是 `/health`，请求期望 2xx。显式 process 不发网络请求。路径必须以 `/` 开头,不含 `..`/`?`/`#`。
 
 健康有三层,职责不同、不要混用:
 
@@ -199,7 +199,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `liveness_path` | 字符串 | `/health` | 存活探针声明。**注意**:它不等同于"连续失败就重启整个容器"——是否装配为容器级 liveness 探针由平台运行时配置决定(当前 prod 容器探针走管理端口 `/health`/`/ready`,不逐项目消费该字段);不要按"会自动重启"设计依赖。 |
 | `startup_timeout_seconds` | 整数 | `25` | builtin 单服务启动检查预算(秒),按实际路径做 TCP/HTTP 检查；失败进入服务/操作失败清单,不能按“其他服务已起”报告全体成功。必须 `> 0`。 |
 
-这些字段不是三套已经运行的容器探针。supervisord 沿用其进程启动确认和可选 workspace bridge,不与 builtin 的逐服务探测完全等价。当前没有 worker 自动免探测规则：保留模板生成的健康接口与 `$PORT` 监听；不要添加尚未支持的新探针字段。
+这些字段不是三套已经运行的容器探针。supervisord 沿用其进程启动确认和可选 workspace bridge,不与 builtin 的逐服务探测完全等价。worker 不自动免探测。app-cli >= 0.3.9 支持可选 `startup_probe="http"/"tcp"/"process"`；省略保持上述旧行为。process 仅限非 static 的 worker，不声明代理、bridge 或 HTTP 路径；详见 [worker 模式](08-worker.md)。
 
 > 纯静态前端可用 `"/"`。是否把"后端 ready"上升为"整个 app ready",由 workspace 的 `[health].bridge_service` 控制。
 
@@ -269,7 +269,7 @@ PG 启动等待由运行环境决定，不写入模板清单。RCoder 的 UserAp
 - `service_id` 必须是 DNS-1123 label(小写/数字/`-`,1–63,首尾字母数字);
 - `service_id` 在 enabled 服务间**唯一**;
 - `logs.sources.id` 是 DNS-1123 且**本 service 内唯一**;
-- 至少一个 `enabled = true` 的服务。
+- 至少一个 `enabled = true` 的服务；managed 模式至少有一个 enabled web，不能只有 worker。
 
 **命令(argv)**
 - `build.command` / `run.command` 非空 argv,每个参数非空、不含 NUL;

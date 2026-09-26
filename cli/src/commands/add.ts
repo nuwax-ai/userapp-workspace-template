@@ -37,7 +37,7 @@ export function registerAddCommand(program: Command): void {
     .description('往当前 workspace 追加一个 service')
     .option('--service-id <id>', '覆盖默认 service_id')
     .option('--path <path>', '覆盖默认 proxy.path')
-    .option('--kind <kind>', '服务类型: web(默认) / worker(后台服务,保留健康接口,不声明 proxy)')
+    .option('--kind <kind>', '服务类型: web / worker(默认沿用模板；worker 不声明 proxy)')
     .option('--force', '覆盖已存在的目录')
     .action(async (templateId: string, opts: AddOptions) => {
       await runAdd(templateId, opts);
@@ -71,8 +71,15 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
   }
 
   // 确定 kind(web 默认 / worker 后台任务)
-  const kind = opts.kind || 'web';
+  const kind = opts.kind ?? template.kind;
   const isWorker = kind === 'worker';
+  if (!['web', 'worker'].includes(kind)
+      || (template.defaults.startupProbe === 'process' && !isWorker)
+      || (template.type === 'static' && isWorker)
+      || (isWorker && opts.path !== undefined)) {
+    console.error(k.red('✗ kind/path 与模板不兼容：process 仅用于 worker；static 不支持 worker；worker 不能声明 --path。'));
+    process.exit(1);
+  }
 
   // worker 不能声明 proxy.path
   const proxyPath = isWorker ? '' : opts.path || template.defaults.proxyPath;
@@ -108,7 +115,7 @@ async function runAdd(templateId: string, opts: AddOptions): Promise<void> {
   }
 
   // worker 覆盖模板的 kind 字段(用于 manifest 生成)
-  const templateForRelease = isWorker ? { ...template, kind: 'worker' as const } : template;
+  const templateForRelease = { ...template, kind: kind as 'worker' | 'web' };
 
   await releaseTemplate(templateForRelease, targetDir, {
     serviceId,

@@ -64,7 +64,7 @@ template-cli add backend-go --service-id my-api --path /api/v2/
 参数:
 - `--service-id <id>`: 覆盖默认 service_id
 - `--path <path>`: 覆盖默认 proxy.path
-- `--kind <kind>`: 服务类型,`web`(默认,对外 HTTP)/ `worker`(后台服务,不声明 proxy、不参与路由校验)。worker 保留所选后端模板的 HTTP 健康服务与 `$PORT` 监听,不是自动转换成无端口进程。
+- `--kind <kind>`: `web` / `worker`，默认使用模板类型。HTTP 后端改 worker 保留健康服务；`worker-python` 默认 worker，以显式 process 检查启动（需 app-cli >= 0.3.9）。不允许 worker 搭配 `--path`、static worker 或 process 模板改 web。
 - `--force`: 覆盖已存在的目录
 
 **追加同类模板的第二个实例**(如 workspace 已有 backend-java,再加一个 java 后端):默认身份

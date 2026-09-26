@@ -6,12 +6,13 @@
 
 ```
 userapp-workspace-template/
-├── workspace.manifest.toml          # 开发用 workspace(含全部 7 个模板)
+├── workspace.manifest.toml          # 开发用 workspace(含全部模板)
 ├── index.html                       # 开发用 workspace 的入口首页(根路径兜底,改完刷新即生效)
 ├── database/                        # workspace 根 SQL 约定目录(发布时平台自动执行,规则见其 README)
 ├── backend-go/                      # Go (Gin + GORM) 后端模板源
 ├── backend-java/                    # Java (Spring Boot + MyBatis-Plus) 后端模板源
 ├── backend-python/                  # Python (FastAPI + SQLAlchemy) 后端模板源
+├── worker-python/                   # Python 纯进程 worker(需配套 app-cli 0.3.9)
 ├── backend-rust/                    # Rust (Axum + sqlx) 后端模板源
 ├── frontend-react-vite/             # React 18 + Vite 前端模板源
 ├── frontend-vue3-vite/              # Vue 3 + Vite 前端模板源
@@ -20,7 +21,7 @@ userapp-workspace-template/
 │   ├── src/                         # CLI 源码(TypeScript)
 │   ├── scripts/                     # pack-templates.mjs(打包) + release.mjs(发版)
 │   └── templates/                   # [pack 产物] 参数化模板(gitignore)
-├── docs/                            # UserApp 平台开发者文档(7 篇)
+├── docs/                            # UserApp 平台开发者文档
 ├── skills/                          # AI Agent skills
 │   ├── userapp-scaffold/            # CLI 脚手架使用指南
 │   └── userapp-dev-guide/           # 平台开发规范(manifest/路由/部署/排错/app-cli 本地开发测试)
@@ -31,7 +32,7 @@ userapp-workspace-template/
 
 ## 平台核心约束(开发时必须遵守)
 
-1. **当前模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口** — 不能硬编码端口。`kind=worker` 仅表示不公开代理路由,不表示删除内部健康服务；不能把 HTTP worker 改成无监听循环。`type=static` 的 prod 由平台托管,不启动业务进程
+1. **HTTP/TCP 进程服务保留 `0.0.0.0:$PORT` 监听与健康接口** — 不能硬编码端口。`kind=worker` 仅表示不公开代理路由,不表示删除内部健康服务；不能只改 kind 就把 HTTP worker 改成无监听循环。app-cli >= 0.3.9 才支持显式 `startup_probe="process"` 的无监听 worker，见 docs/08-worker.md。`type=static` 的 prod 由平台托管,不启动业务进程
 2. **两个 manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`
 3. **严格校验,Fail Fast** — 未知字段/非法枚举/重复路由/依赖环 → 构建直接失败
 4. **service_id 是稳定身份** — 不是目录名,决定日志目录/路由 upstream/依赖引用

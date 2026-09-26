@@ -58,6 +58,10 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
 
   // 解析为安装计划(带各自的 serviceId / proxyPath)
   const plan = buildPlan(templates, opts);
+  if (!templates.some((template) => template.kind === 'web')) {
+    console.error(k.red('✗ managed workspace 至少需要一个 web 服务；请搭配 --frontend，或在已有 workspace 中 add worker。'));
+    process.exit(1);
+  }
 
   // 多模板时做两两校验
   const allConflicts = checkAllConflicts(plan);
@@ -98,7 +102,7 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   } else {
     const indexContent = generateIndexHtml(
       wsName,
-      plan.map((p) => ({ name: p.template.name, proxyPath: p.proxyPath })),
+      plan.filter((p) => p.template.kind === 'web').map((p) => ({ name: p.template.name, proxyPath: p.proxyPath })),
     );
     fse.writeFileSync(path.join(absTarget, 'index.html'), indexContent);
     console.log(k.green('  ✓ ') + 'index.html(入口导航页,可自行修改)');
@@ -119,7 +123,7 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
     name: p.template.name,
     dir: p.dirName,
     type: p.template.type,
-    proxyPath: p.proxyPath,
+    proxyPath: p.template.kind === 'worker' ? undefined : p.proxyPath,
   }));
   const agentsContent = generateAgentsMd(wsName, servicesInfo, !hasCatchall);
   fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
@@ -212,7 +216,7 @@ function checkAllConflicts(plan: PlanItem[]): { ok: boolean; errors: string[] } 
   // 收集所有 service
   const all = plan.map((p) => ({
     serviceId: p.serviceId,
-    proxyPath: p.proxyPath,
+    proxyPath: p.template.kind === 'worker' ? undefined : p.proxyPath,
     directory: p.dirName,
   }));
   // 两两检查
