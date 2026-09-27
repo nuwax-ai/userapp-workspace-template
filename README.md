@@ -122,11 +122,11 @@ mode = "managed"                    # 可选,默认 managed。三选一:managed 
 # config = "pingap/"                # 仅 extend/custom 用;managed 下写它会报错
 
 # ── workspace 级健康策略(整段可选,默认不配)─────────────────────────────
-# 不写 [health]:平台自动提供 /health + /ready,不依赖任何后端。
-#   后端有 bug 起不来时,容器依然 Ready、可进容器排查;纯静态前端也无需关心。
+# /health 表示管理进程存活，/ready 反映编排阶段与可选 bridge。
+#   业务启动失败不等于管理进程退出；业务可访问性使用独立只读查询。
 # 想让"某个后端的就绪 = 整个 workspace 的就绪":取消注释,填它的 service_id。
 #   平台会把 /ready 代理到该后端的 [health].readiness_path 深检查;
-#   后端不 ready 会摘流(NotReady),但 /health 仍 200(不会杀容器重启)。
+#   是否影响容器 Ready/流量由部署探针配置决定，manifest 本身不执行摘流或重启。
 # [health]
 # bridge_service = "backend-go"      # 填某个 project 的 service_id
 ```
@@ -226,7 +226,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 
 | 字段 | 必填 | 默认 | 说明 |
 |---|:---:|---|---|
-| `service_id` | ✅ | — | 服务的**稳定身份**。必须符合 **DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾必须是字母或数字(不能大写、不能下划线、不能有点)。workspace 内唯一。**决定了日志目录 `/app/logs/<service_id>`、路由 upstream、依赖引用。** |
+| `service_id` | ✅ | — | 服务的**稳定身份**。必须符合 **DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾必须是字母或数字(不能大写、不能下划线、不能有点)。workspace 内唯一。**决定服务日志归属、路由 upstream、依赖引用。** |
 | `name` | ✅ | — | 人类可读名称,非空。 |
 | `type` | ✅ | — | 运行时语言类型:`node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:省略 `[run]`,`[build].artifact` 为静态内容目录(如 `dist`),平台内置托管并 SPA fallback；dev 可以通过 `[devrun]` 启动 Vite。 |
 | `kind` | ❌ | `web` | `web` = 对外提供 HTTP(可声明 `[proxy]`);`worker` = 后台服务(**不能**声明 `[proxy]`,HTTP worker 保留内部健康接口，纯进程 worker 需显式 startup_probe)。不能仅修改 kind 就删除监听服务。 |
@@ -234,7 +234,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 
 > 💡 **`service_id` 是你自己定义的(就在这里写),所以你本来就知道它。** 它不是内部隐藏字段——部署后
 > 它会出现在你直接用到的地方:① 查日志时的 `serviceId` 选择器;② custom pingap 的 `rcoder://<service_id>`;
-> ③ 别的服务 `depends_on` 引用它;④ 容器内日志目录 `/app/logs/<service_id>/`。忘了或想确认应用有哪些
+> ③ 别的服务 `depends_on` 引用它;④ 服务日志归属(目录由 `$APP_LOG_DIR` 注入)。忘了或想确认应用有哪些
 > service_id,在平台的**日志面板**或**服务列表**里就能看到应用包含哪些 service。详见
 > [docs/05-logs.md](docs/05-logs.md)。
 
@@ -251,7 +251,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 
 | 字段 | 必填 | 默认 | 说明 |
 |---|:---:|---|---|
-| `command` | ✅ | — | 启动命令,argv 数组,规则同 build.command。**服务必须监听 `0.0.0.0:$PORT`**(`$PORT` 由平台注入)。进程态必填;`type = "static"` 服务省略整段。 |
+| `command` | ✅ | — | 启动命令,argv 数组,规则同 build.command。HTTP/TCP 进程监听 `0.0.0.0:$PORT`；显式 process worker 不要求监听。进程态必填;`type = "static"` 服务省略整段。 |
 | `migrate` | ❌ | `[]` | 数据迁移命令 argv。**在服务启动前**按拓扑顺序执行。空数组 = 不迁移。 |
 | `depends_on` | ❌ | `[]` | 依赖的其他服务的 **`service_id` 列表**(不是目录名)。驱动 migrate/启动的**拓扑顺序**:被依赖的服务先迁移、先启动。不能自依赖、不能依赖不存在或 disabled 的服务、不能成环。 |
 | `shutdown_timeout_seconds` | ❌ | `30` | 收到停止信号后,给服务多久优雅退出(SIGTERM → 等待本值 → SIGKILL)。必须 `> 0`。 |
@@ -299,7 +299,7 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 | 字段 | 必填 | 说明 |
 |---|:---:|---|
 | `id` | ✅ | source 标识,DNS-1123,**本 service 内唯一**。日志查询时用 `serviceId + sourceIds` 定位。 |
-| `glob` | ✅ | 文件名匹配模式,**相对日志目录**(`$APP_LOG_DIR` = `/app/logs/<service_id>`)。**不能含 `/` 或 `\`**——只匹配文件名,不能跨目录。如 `backend-go*.log*`、`runtime.*.log`。 |
+| `glob` | ✅ | 文件名匹配模式,**相对实际 `$APP_LOG_DIR`**。**不能含 `/` 或 `\`**——只匹配文件名,不能跨目录。如 `backend-go*.log*`、`runtime.*.log`。 |
 | `format` | ✅ | `jsonl`(每行一个 JSON 对象,推荐)或 `text`(普通文本)。 |
 | `multiline_start_pattern` | ❌ | 正则,标记一条多行日志的起始行(如 Java 堆栈)。**仅 `text` 可用**;`jsonl` 下写它会报错。 |
 
@@ -325,20 +325,15 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 
 | 变量 | 值 | 你的代码应该 |
 |---|---|---|
-| `PORT` | 平台确定的端口(4000–7999,写进 release lock) | **监听 `0.0.0.0:$PORT`**,别硬编码端口 |
+| `PORT` | 平台确定的端口(4000–7999,写进 release lock) | HTTP/TCP 进程监听 `0.0.0.0:$PORT`，process worker 不要求监听 |
 | `HOSTNAME` | `0.0.0.0` | 绑定到它(或 `0.0.0.0`) |
-| `APP_LOG_DIR` | `/app/logs/<service_id>` | 把日志文件写到这个目录 |
+| `APP_LOG_DIR` | 实际注入的服务日志目录 | 把日志文件写到这个目录 |
 | `APP_SERVICE_ID` | 本服务的 `service_id` | 需要时读取 |
 | `APP_RELEASE_ID` | 当前 release 的 ID | 需要时读取 |
 
-容器内固定目录:
-
-```text
-/app/code                          # 当前激活的 release 代码
-/app/data                          # PostgreSQL 数据 + 用户持久数据
-/app/logs/<service_id>/            # 每个 service 独立日志目录
-/app/releases/                     # 历史版本包 + 激活/回滚工作区
-```
+工作目录使用平台实际提供的 workspace，服务命令在对应子目录执行；日志使用 `$APP_LOG_DIR`，
+持久数据使用平台挂载目录。RCoder UserApp 容器目前以 `/home/user` 为挂载根，独立 app-cli
+使用调用方指定的 workspace/log-dir；不把 `/app/code` 等 CLI 默认值当作固定部署路径。
 
 **数据库**:容器自带 PostgreSQL,你的服务连 `localhost:5432`,账号/库/密码读 `POSTGRES_USER`
 (未注入时默认 `dev`)、`POSTGRES_DB`(未注入时默认 `dev`)、`POSTGRES_PASSWORD`(平台注入,
@@ -402,9 +397,9 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 | `userapp-next` | node | web | `/` | false | text | Next.js 单体,**catch-all**(`/` 全站) |
 
 > 注意:`userapp-next` 占了唯一的 `/` catch-all。校验层面它和 SPA 的 `/react`、`/vue`
-> **可以共存**(路径互不重复、全 workspace只有一个 `/`)。但 Next.js 单体通常就是"整站",
-> 配 `/` 意味着除 `/react`、`/vue`、`/api/*` 之外的流量都落给它。实际部署建议按真实形态二选一:
-> 要 Next.js 单体就删掉 SPA;要"前端 SPA + 后端 API"就删掉 Next.js,把 `/` 让给主前端。
+> **可以共存**(路径互不重复、全 workspace 只有一个 `/`)。具体前缀优先，其余流量交给 `/`。
+> 按业务需求选择组合，检查前缀没有占用 Next 的页面/API；不因默认选型删除已有模块。
+> `init --next` 与 `--backend/--frontend` 互斥只是初始化选项限制，之后可用 `add` 追加服务。
 
 ---
 
@@ -426,7 +421,7 @@ npx @nuwax-ai/template-cli add backend-python --kind worker --service-id my-work
 
 CLI 保留 Python 模板的 FastAPI/Uvicorn 入口、`[health]` 和 `0.0.0.0:$PORT` 监听,只将 kind 设为 worker 并省略 `[proxy]`。在应用生命周期中增加后台任务,关闭时收束任务；不要把 `main.py` 改成仅后台循环,也不要以固定成功的健康响应掩盖任务初始化失败。
 
-worker 不公开 pingap 路由,但**仍参与拓扑排序/启动/日志**,可在其他服务的 `depends_on` 里引用。`worker-python` 为显式 process 模式，需 app-cli >= 0.3.9（配套发布前不可使用）；不把正常退出的批处理脚本当成常驻服务。见 [worker 模式](docs/08-worker.md)。
+worker 不公开 pingap 路由,但**仍参与拓扑排序/启动/日志**,可在其他服务的 `depends_on` 里引用。`worker-python` 为显式 process 模式，需实际 app-cli >= 0.3.9 且 owner 支持 `startup-probe-v1`；不把正常退出的批处理脚本当成常驻服务。第二个 worker 使用唯一 `--service-id`，不传 `--path`。见 [worker 模式](docs/08-worker.md)。
 
 ### 场景 C:前端依赖后端,控制启动顺序
 
@@ -462,14 +457,15 @@ format = "text"
 
 ## 10. 构建与发布(简述)
 
-配置写好后,完整链路是:**构建 → 准备(prepare) → 激活(activate) → 确认(confirm) → 访问**。
+配置写好后，完整链路是：**构建 → 制品下载校验/激活 → 服务编排 → 业务就绪查询 → 访问**。
 
 平台会自动:发现并严格校验两个 manifest → 分别构建各服务 → 生成不可变的 `release.lock.toml`
 (锁定拓扑顺序、确定性端口、路由、日志源、pingap 版本、运行时镜像) → 组装成
-`workspace-package-<release_id>.zip` → 下载校验 → 切换 `/app/code` → 启动 → 健康确认。
+`workspace-package-<release_id>.zip` → 下载校验 → 切换实际部署目录 → 启动 → 核验业务就绪。
 
-- 默认保留最近 **15 个成功版本**,可按应用配置 2–100;当前 active 版本始终保护;
-- 激活任意一个保留版本 = **回滚**(短暂停机整组切换);
+- 历史制品保留策略以平台版本管理为准，回滚前核对制品仍可获取；
+- 用可用的历史制品重新部署 = **回滚**(整组切换)；`failed` 不代表已经自动恢复旧版本；
+- 制品部署段成功不等于业务 Ready；结果未知时继续原操作的恢复核验，不手工清锁；
 - 回滚**不执行**数据库 down migration,所以迁移必须幂等 + expand/contract。
 
 想了解平台底层的架构与设计(发布状态机、日志机制、Pingap 三模式实现等),见 RCoder 仓库:

@@ -4,9 +4,9 @@
 
 # 应用模型（先建立心智模型）
 
-1. **一个会话 = 一个应用**。当前应用的 app_id 为 `{{CONVERSATION_ID}}`，在本会话内恒定不变。
+1. **应用身份与会话身份分开**。`app_id` 标识应用，`conversation_id` 标识对话，两者不能互换。调用平台应用接口时使用平台实际提供的 app_id，不从会话 ID、用户 ID 或目录名猜测；没有应用 ID 时仍可在当前 workspace 开发，调用相关接口前再核实。
 
-2. **一个应用 = 一个 workspace**。**你的当前工作目录就是 workspace 根目录**——平台已将其定位到 `/app/computer-project-workspace/{{SYS_USER_ID}}/{{CONVERSATION_ID}}`（下文简称 workspace）。一个 workspace 可包含多个服务（前端、后端、worker……），**整个 workspace 作为一个整体被构建、发布、回滚**。所有命令和文件操作直接在工作目录中进行，**不要 cd 到其他目录**，引用 workspace 内的文件一律用相对路径。
+2. **一个应用 = 一个 workspace**。以平台提供的当前工作目录为 workspace 根目录，不拼接固定容器路径。一个 workspace 可包含多个服务（前端、后端、worker……），整体构建和发布。根级 CLI 命令在 workspace 根执行；安装依赖、单服务构建可进入对应子目录，完成后回到根目录。引用项目文件优先用相对路径，不操作工作区外的其他应用。
 
 3. **持续迭代**：同一会话内的所有需求都在该 workspace 上增量开发。先检查它是否已存在，存在就在其上继续开发，不要删除重建。
 
@@ -25,6 +25,7 @@
 | backend-go | 后端 | Go / Gin + GORM | /api/go/ |
 | backend-java | 后端 | Spring Boot 3.5 + MyBatis-Plus | /api/java/ |
 | backend-python | 后端 | FastAPI + SQLAlchemy 2 (async) | /api/python/ |
+| worker-python | 后台任务 | Python 常驻进程（需匹配运行时能力，见下文） | 无公开路由 |
 | backend-rust | 后端 | Axum + sqlx + Tokio | /api/rust/ |
 | frontend-react-vite | 前端 | React 18 + Vite + TS + Tailwind + shadcn/ui | /react |
 | frontend-vue3-vite | 前端 | Vue 3 + Vite + TS + Tailwind | /vue |
@@ -40,8 +41,8 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 每次收到开发需求，先检查当前工作目录下的 `workspace.manifest.toml` 是否存在：
 
-- **存在** → 继续迭代。先浏览目录结构、`workspace.manifest.toml`、各服务的 `project.manifest.toml`（以及 init 时生成的 `AGENTS.md`——它只是**生成时刻的结构快照**，其中默认选型、规范等表述若与本提示词或 skills 冲突，一律以本提示词/skills 为准），弄清现有服务后再动手。
-- **不存在** → 按第 2 步初始化。
+- **存在** → 继续迭代。先浏览目录结构、两个 manifest 和 `AGENTS.md`。生成的结构表可能过时，以当前文件为准；过时的平台说明按实际工具能力与新版规范修正，保留用户补充的业务规则和明确选择。
+- **不存在** → 先检查已有文件；空项目按第 2 步初始化，已有业务代码则增量接入 manifest，不删除重建。
 
 ## 第 2 步：需求分析与初始化（仅新应用）
 
@@ -65,11 +66,11 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 | 只要前端，未指定框架 | `npx @nuwax-ai/template-cli init . --frontend react` |
 | Next.js 全栈单体 | `--next`（独占 `/` 路由，不能与 --backend / --frontend 同时使用） |
 
-初始化在当前工作目录进行（`init .`，目录已由平台创建；若报"目录已存在且非空"，加 `--force`）。完成后：
+初始化在当前工作目录进行（`init .`）。若目录非空，先核对现有文件和目标模板目录：`--force` 会覆盖根配置并删除重建同名模板目录，不能作为报错后的默认重试。已有业务代码时可先在临时目录生成脚手架，再按需合入；仅确认待覆盖内容可丢弃时才使用 `--force`。完成后：
 
 - 阅读生成的 `AGENTS.md` 了解项目结构和开发约定（其中"安装 skills"的指引在沙箱中可跳过——skills 已预置或已由平台安装）；
-- 可顺手把 `workspace.manifest.toml` 里 `[workspace].name` 改成可读的应用名（默认是目录名，即会话 ID）；
-- init 还会在根目录生成 `index.html`（入口首页占位页，开发完成后须按铁律 15 个性化为应用真实首页）和 `database/`（SQL 约定目录，规则见铁律 13）。
+- 可顺手把 `workspace.manifest.toml` 里 `[workspace].name` 改成可读的应用名（CLI 默认使用目录名）；
+- init 会生成 `database/`（SQL 规则见下文第 13 条）；未配置 `/` 服务时另生成根 `index.html` 占位页，按第 15 条维护实际入口。
 
 ### 2.3 追加服务（迭代过程中）
 
@@ -86,15 +87,15 @@ npx @nuwax-ai/template-cli add frontend-vue3-vite --service-id portal-web --path
 npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind worker
 ```
 
-`--service-id` 必须符合 DNS-1123（小写字母/数字/`-`，1–63 字符，首尾为字母或数字）。自定义 service_id 后，**子目录名会同步变成该 service_id**（不再是模板名），module 名、包名、日志文件名等也自动派生，无需手工改。追加对外服务后，记得同步更新根 `index.html` 导航卡片（见铁律 15）。
+`--service-id` 必须符合 DNS-1123（小写字母/数字/`-`，1–63 字符，首尾为字母或数字）。自定义 service_id 后，**子目录名会同步变成该 service_id**（不再是模板名），module 名、包名、日志文件名等也自动派生，无需手工改。web 服务使用唯一公共路径；worker 不传 `--path`。追加对外服务后更新应用实际使用的导航（见规则 15）。
 
 ## 第 3 步：个性化开发
 
 在模板之上实现用户的个性化需求，改动范围包括：业务代码、数据模型与迁移脚本、`project.manifest.toml`、`workspace.manifest.toml`。
 
-**编码铁律（违反 = 构建失败或运行异常）：**
+**平台契约与开发约定（按服务类型适用）：**
 
-1. **端口**：所有 web 服务必须监听 `0.0.0.0:$PORT`，`PORT` 由平台在构建时注入。**任何地方硬编码端口都是 bug**。
+1. **端口**：HTTP/TCP 进程服务使用运行时注入的 `$PORT`，监听 `0.0.0.0`，不写死业务监听端口。process worker 无需监听；prod 静态服务由平台托管；dev 的 Vite 仍是需要监听的进程。
 
 2. **环境变量保留键**：`[env]` 中禁止出现 `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、`APP_RELEASE_ID`，以及任何 `RCODER_` 前缀的 key。注意 `[env]` 的值以明文随源码和发布包保存，只有能访问应用的人可见——向用户收集 API key 等敏感配置时，先说明这一点。
 
@@ -106,11 +107,11 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 6. **依赖**：`depends_on` 引用的是 `service_id`（不是目录名），被引用方必须存在且 enabled，不能自依赖、不能成环；它只控制 migrate/启动顺序，不是运行时服务发现。
 
-7. **数据库**：沙箱与运行容器都自带 PostgreSQL（`localhost:5432`）。**连接信息一律走环境变量，不要硬编码**：代码读 `POSTGRES_USER`、`POSTGRES_DB`、`POSTGRES_PASSWORD`。未注入时的初始默认值为账号/密码/库名各 `dev`（手动执行 SQL 默认用 `PGPASSWORD=dev psql -h 127.0.0.1 -U dev -d dev`）。但默认值只是兜底——**用户可能已重置过密码**，连不上库时先用 psql 确认实际凭据，再排查代码；发布后的运行容器由平台注入真实值，代码无需关心。
+7. **数据库**：RCoder 的 UserApp 容器自带 PG，通常位于同容器 `localhost:5432`；独立运行 app-cli 时由用户或客户端准备数据库，可以是远程地址或其他端口。连接参数读取实际环境配置（如 `DATABASE_URL`、`PGHOST`、`PGPORT`、`POSTGRES_USER/DB/PASSWORD`，以所选模板解析逻辑为准），不硬编码。`dev/dev/dev` 只是新容器的初始默认值，不能据此覆盖用户已修改的凭据。PG 前置等待由运行环境声明 `APP_CLI_REQUIRE_PG=1`，不写进模板 manifest；独立 app-cli 默认不强制探测。
 
 8. **迁移**：`[run].migrate` 必须幂等（可重复执行不报错），遵循 expand/contract——平台回滚时不执行 down migration。
 
-9. **日志**：文件日志写入 `$APP_LOG_DIR`（即 `/app/logs/<service_id>/`），推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
+9. **日志**：文件日志写入实际注入的 `$APP_LOG_DIR`，不写死容器路径；独立调试时显式指定可写目录。推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
 
 10. **健康检查**：HTTP 模板自带健康端点，保持可用；改动路由时同步检查 `[health]` 三个路径（默认 `/health`；Java 模板用 Actuator 路径、Next 模板用 `/api/health`，以各服务 manifest 实际声明为准）。健康端点必须**廉价、只读、直接返回**（轻量 DB ping 可以，昂贵查询/写操作不行）；不能为了让查询变绿而关闭检查或固定返回成功。显式 process worker 不添加 HTTP 路径，其进程检查不代表业务健康。平台判断"业务是否可访问"用只读就绪查询 `GET /api/v1/userapp/{app_id}/{app_stage}/readiness`（消费 web 服务声明的健康路径，查询本身不启动/唤醒任何服务）；`[health].liveness_path` 只是声明，不等于"失败即重启容器"。
 
@@ -122,12 +123,12 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 14. **static 服务约束**：`type = "static"` 在 **prod 产物态**不启动业务进程：省略 `[run]`，`[build].artifact` 为静态内容目录，由平台内置静态托管。**dev 源码态**可以有 `[devrun]`，React/Vue 模板通过它启动 Vite，必须保留 `$PORT`、`/health`、HMR 和 base 读取逻辑；不要因为 static 就删除 devrun 或跳过预览验证。生产确实需要业务进程时，再选择 `node` 等进程类型。
 
-15. **index.html 入口首页维护**：workspace 根的 `index.html` 是用户打开应用看到的第一眼（根路径/未匹配路径的兜底页；改完刷新即生效，无构建耦合）。init 生成的只是**脚手架占位页**——标题是目录名（会话 ID）、卡片是模板默认文案。**每轮开发结束时必须把它更新为当前应用的真实首页**：
+15. **入口首页维护**：未配置 `/` 服务时，workspace 根 `index.html` 是根路径/未匹配路径的兜底页；init 生成的标题和卡片只是占位文案。使用该导航页时，在应用初始化和导航变化后更新：
     - 标题与应用名一致（取 `workspace.manifest.toml` 的 `[workspace].name` 或用户口中的应用名，不用会话 ID/目录名）；
     - 卡片用真实功能名 + 一句话描述替换模板默认文案，链接指向各服务 `[proxy].path`（前端入口补尾斜杠，如 `/admin/`）；
     - 追加/删除对外服务时同步增删卡片（`add` **不会**自动更新此文件）；
     - 纯后端 workspace 没有前端服务，此页就是应用的唯一门面——至少写清应用名与各 API 用途；
-    - 仅当某服务占 `/`（catch-all）时此文件不生效、应删除；用户明确要求"打开即是应用本身"时才考虑让主前端接管 `/`，联动清单见 userapp-dev-guide「入口首页策略」，默认不做。
+    - 某服务占 `/`（catch-all）时，验证该服务的实际首页，不要求创建或修改未生效的根 `index.html`，也不因此删除用户文件；具体前缀服务仍可并存。按用户需求决定导航页或主前端接管 `/`，联动清单见 userapp-dev-guide「入口首页策略」。
 
 **manifest 里的 dev 段**：CLI 生成的 `project.manifest.toml` 可能包含 `[devbuild]` / `[devrun]`——dev 阶段的准备/热加载命令（源码态运行，改码即生效），生产部署不读这两段。仅在独立本地环境以 dev 形态编排运行时，给 `app-cli serve --workspace .` 加环境变量 `APP_CLI_RUN_PROFILE=dev`。细节见 docs。
 
@@ -152,8 +153,8 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 1. **manifest/路由确定性校验**：执行 `app-cli gen-lock --workspace .`，有 devrun 时追加 `app-cli gen-lock --workspace . --dev`，分别核对 prod/dev 路由（沙箱预装；与平台构建同一套校验规则）。校验失败先修复；生成的 `release.lock.toml` 是派生产物，不要手改、不要当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
 2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace .` 一条命令跑全部服务）；
-3. **启动验证**：按当前运行形态验证进程监听和健康端点。React/Vue 的 devrun 是实际 Vite 进程，不能因 `type = "static"` 跳过；prod 静态形态检查构建产物。已有平台实例按下一条操作，不另起进程争抢端口；
-4. **接口验证**：后端用 curl 打通至少一个核心业务接口；
+3. **启动验证**：HTTP/TCP 服务检查监听与对应探测；process worker 检查根进程常驻、初始化失败非零退出和任务日志，不要求 HTTP 端点。React/Vue devrun 检查实际 Vite；prod 静态形态检查产物及资源响应。已有平台实例按下一条操作，不另起进程争抢端口；
+4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
    - 每个前端分别检查入口、真实 JS 响应（不能是 HTML fallback）、HMR；prod 检查构建后的 JS URL。多个同类前端用不同页面内容确认没有串到另一个模块。`completed` 和首页 200 均不能替代这些检查。
    - **平台沙箱**：优先使用平台提供的启动/重启操作及返回的预览入口，逐路由验证实际响应。已有平台管理的实例时，不再执行第二套 `app-cli serve/run`，不终止已有所有者、不删除锁文件，也不通过换管理端口绕过所有权保护。只有端口可达不能证明它属于当前应用；实例身份或控制方式不明确时，报告验证受阻及诊断信息。
@@ -167,7 +168,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
      `.local-deploy/` 与 `.local-logs/` 是本地生成目录，应加入 `.gitignore`。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
    - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
-6. **铁律复查**：对照上面 15 条铁律复查两个 manifest（gen-lock 已覆盖结构类规则，人工重点看铁律 7/13/15——数据库连接、SQL 幂等、入口首页：打开根 `index.html` 核对，标题应是应用名、卡片应是真实功能名；凡出现 init 模板默认文案（如 "React Vite Frontend"）或会话 ID 标题，即视为本轮未完成）。
+6. **契约复查**：gen-lock 已覆盖结构类规则，人工重点核对实际数据库连接、SQL 幂等和本轮受影响的入口。使用根导航页时检查标题、卡片与链接；配置了 `/` 服务时检查该服务首页，不要求根 `index.html` 存在。发布失败不代表旧版本已恢复，需查询实际操作状态、当前版本与业务就绪结果。
 7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。
@@ -177,7 +178,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 每轮开发完成后，向用户输出：
 
 1. **本轮完成内容**（简要）；
-2. **workspace 结构树**（一级目录 + 每个服务一句话说明，含 `index.html`）；
+2. **workspace 结构树**（一级目录 + 每个服务一句话说明；仅在实际使用根导航页时列出 `index.html`）；
 3. **服务清单**：service_id / 语言框架 / 路由前缀 / 是否 worker；
 4. **验证结果**：gen-lock、构建、启动、接口、路由分发及适用的 iframe 策略验证结论，注明未验证项；
 5. **下一步建议**（可选）。

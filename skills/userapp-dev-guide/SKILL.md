@@ -1,18 +1,9 @@
 ---
 name: userapp-dev-guide
 description: >
-  UserApp 平台开发规范权威指南。当用户在 UserApp workspace 里开发服务、
-  写或改 manifest 配置、规划路由、处理健康检查、声明日志、发布部署、回滚、
-  排查错误、本地运行验证时使用。覆盖:核心概念、manifest 全字段、校验规则、
-  环境变量约定、数据库连接、反向代理与路由(strip_prefix/catch-all/服务互调/入口首页策略)、
-  健康探针、日志、发布状态机、版本保留、回滚、迁移约定、database 目录 SQL 自动执行、
-  平台 iframe 嵌入、会话 Cookie 与跨域请求兼容、常见错误排查、
-  app-cli 本地开发与测试(gen-lock 秒级验证/本地编排运行)。
-  触发词:manifest 配置、project.manifest、workspace.manifest、service_id、
-  proxy path、strip_prefix、路由、Vite base、多个前端、两个 Vue、catch-all、首页、入口页、导航页、index.html、反代、pingap、健康检查、探针、
-  readiness、liveness、SIGTERM、优雅关闭、日志、发布、部署、上线、回滚、
-  迁移、migrate、database 目录、自动执行 SQL、建表、表不存在、启动失败、502、404、端口、PORT、环境变量、数据库连接、
-  app-cli、gen-lock、release.lock、本地运行、本地验证、本地测试、集成验证。
+  开发或排查 UserApp workspace 时使用：manifest、服务路由、worker 探测、数据库迁移、
+  日志、iframe、发布恢复及 app-cli 本地验证。提供平台契约与按场景选择的操作指引；
+  创建 workspace 或追加模板的 CLI 用法见 userapp-scaffold。
 ---
 
 # UserApp 平台开发指南
@@ -40,7 +31,7 @@ app_id = my-app
 
 1. **两级 Manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`。平台**只认**这两个确切文件名
 2. **严格校验,Fail Fast** — 未知字段、非法枚举、重复路由、依赖环 → 构建立即失败。每段 `deny_unknown_fields`
-3. **端口由平台定** — HTTP/TCP 模板的进程服务保留 `0.0.0.0:$PORT` 监听与健康接口(`PORT` 由平台注入,4000–7999),HTTP worker 也一样；static 的 prod 由平台托管。**硬编码端口 = 必错**
+3. **端口由平台定** — HTTP/TCP 进程监听 `0.0.0.0:$PORT`(`PORT` 由平台注入,4000–7999),HTTP worker 保留健康接口；process worker 不要求监听；static 的 prod 由平台托管
 4. **镜像/资源/端口由平台管** — 不在 TOML 里配
 5. **service_id 是稳定身份** — 不是目录名。决定日志目录、路由 upstream、依赖引用。一旦上线别改
 6. **命令是 argv,不走 shell** — 需要 shell 功能要显式 `["sh","-c","..."]`
@@ -87,7 +78,7 @@ command = ["pnpm", "run", "type-check"]  # 仅配了[devrun]的源码态dev链�
                                     # 的服务跳过编译(devrun自足不消费产物);未配[devrun]回落[build].command
 
 [run]
-command = ["./server"]              # 必填,必须监听 0.0.0.0:$PORT
+command = ["./server"]              # 进程态必填；本例 HTTP 服务监听 0.0.0.0:$PORT
 migrate = ["./migrate"]             # 可选,启动前按拓扑序执行,必须幂等
 depends_on = ["worker"]             # 可选,控制启动顺序
 shutdown_timeout_seconds = 30       # 可选,默认30
@@ -134,30 +125,33 @@ LOG_LEVEL = "debug"
 
 | 变量 | 值 | 代码应该 |
 |---|---|---|
-| `PORT` | 平台分配的端口(4000–7999) | **监听 `0.0.0.0:$PORT`** |
+| `PORT` | 平台分配的端口(4000–7999) | HTTP/TCP 进程监听 `0.0.0.0:$PORT`；process worker 不要求监听 |
 | `HOSTNAME` | `0.0.0.0` | 绑到它 |
-| `APP_LOG_DIR` | `/app/logs/<service_id>` | 日志文件写进这里 |
+| `APP_LOG_DIR` | 当前服务的实际日志目录 | 日志文件写进这里，不拼接固定容器路径 |
 | `APP_SERVICE_ID` / `APP_RELEASE_ID` | 本服务身份 | 需要时读取 |
 
 禁止 key:`PORT`/`HOST`/`HOSTNAME`/`APP_LOG_DIR`/`APP_SERVICE_ID`/`APP_RELEASE_ID`,以及 `RCODER_` 开头。
 
-### 容器内固定目录
+### 工作目录与持久目录
 
-| 目录 | 内容 |
+| 定位方式 | 内容 |
 |---|---|
-| `/app/code` | 当前激活的 release 代码 |
-| `/app/data` | PostgreSQL 数据 + 用户持久数据 |
-| `/app/logs/<service_id>/` | 每个 service 独立日志目录 |
+| 平台提供的 workspace / 服务命令的 cwd | 当前源码或部署后的服务产物；文件使用相对路径 |
+| 平台挂载的持久数据目录 | PG 等持久数据，以实际挂载及 `PGDATA` 配置为准 |
+| `$APP_LOG_DIR` | 当前 service 的文件日志目录 |
+
+RCoder UserApp 容器当前以 `/home/user` 为挂载根，独立 app-cli 的 workspace/log-dir 由调用方指定。
+不要把 CLI 默认 `/app/code`、`/app/logs` 当成所有部署的实际目录，也不根据 user_id/conversation_id 拼路径。
 
 ### 数据库(PostgreSQL)
 
-容器自带 PG(同容器 `localhost:5432`),连接串:
-```
-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
-```
-代码一律读环境变量,**不要在 [env] 里覆盖这些**。未注入时初始默认均为 `dev`
-(账号/密码/库名;开发沙箱手动执行 SQL:`PGPASSWORD=dev psql -h 127.0.0.1 -U dev -d dev`),
-平台注入时以注入值为准。
+RCoder UserApp 容器自带 PG，通常为同容器 `localhost:5432`。连接参数按模板的解析逻辑读取实际
+`DATABASE_URL` 或 PG 环境变量；平台注入凭据优先，不用 manifest 中的旧值覆盖。
+`dev/dev/dev` 是初次初始化默认值，不代表用户改密后的有效凭据。
+
+独立 app-cli 不自带数据库，也不因 manifest 有 migrate 就强制探测 PG。RCoder 通过
+`APP_CLI_REQUIRE_PG=1` 启用前置等待；独立运行时由用户/客户端准备数据库并决定是否启用，
+支持远程主机和自定义端口。详见随 CLI 分发的「Manifest 字段参考」PG 环境策略。
 
 ---
 
@@ -218,11 +212,11 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 - workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径兜底展示它(app-cli 内置
   静态服务实时读文件,改完刷新即生效);服务路由恒优先
 - **默认策略 = 保留导航页并个性化**:init 生成的是脚手架占位页(标题=目录名,卡片=模板默认
-  文案),每轮开发结束把它更新为应用真实首页——标题=应用名(与 `workspace.manifest.toml`
+  文案),初始化和导航变化后把它更新为应用真实首页——标题=应用名(与 `workspace.manifest.toml`
   的 name 一致),卡片=真实功能名+一句话描述(链接仍指 `[proxy].path`)。多服务、纯后端
-  workspace 必用本策略(纯后端时此页是应用唯一门面,至少写清应用名与各 API 用途)
-- **可选策略 = 主前端接管 `/`**:仅当用户明确要求"打开即是应用本身"且只有一个主前端时。
-  改主前端 `[proxy].path = "/"` 并删除 `index.html`,联动清单(缺一即 404/白屏):
+  workspace 可用本策略(纯后端时至少写清应用名与各 API 用途)
+- **可选策略 = 主前端接管 `/`**:按用户需求选择，主前端可与其他具体前缀服务共存。
+  改主前端 `[proxy].path = "/"` 后根 `index.html` 不再作为兜底，不要求创建、修改或删除它。联动检查：
   1. 新 React/Vue 模板的 base 从 TOML 自动读取 `/`，无需另改；存量模板先按上节升级
   2. 前端路由器 base 同步(hash router 不受影响)
   3. `strip_prefix` 保持 true(产物按根路径打包)
@@ -273,7 +267,8 @@ UserApp 页面默认支持在平台的跨站 iframe 中使用。用户可以自�
 
 **后台 worker**：用 `template-cli add backend-python --kind worker` 后,保留 FastAPI/Uvicorn 与 `$PORT` 监听,在应用生命周期内启动/停止后台任务。不能把 HTTP 入口改成仅任务循环,不能依据自建需求文档删除健康接口；纯进程需求使用 `worker-python` 并显式 `startup_probe="process"`，前提是 app-cli >= 0.3.9 且 owner 声明 `startup-probe-v1`；配套版本未发布或不可确认时继续使用 HTTP worker。worker 不参与 web 可访问性查询,但其启动失败仍会使本次启动操作失败。
 
-workspace 级桥接(可选):`[health].bridge_service = "api"` → 该后端不 ready 整个应用摘流,但 `/health` 仍 200。
+workspace 级桥接(可选):`[health].bridge_service = "api"` 让 app-cli `/ready` 反映该服务就绪状态；
+是否影响容器 Ready/流量取决于部署是否将它接入探针，不能仅凭 manifest 断言摘流。`/health` 仍用于管理进程存活。
 
 ---
 
@@ -305,17 +300,20 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 ### 发布链路(点「发布」一键完成)
 
 ```
-构建 → release.lock.toml → 发布包 → prepare(校验) → activate(切代码+启动) → confirm(探活)
-                                                                      ↓
-                                                            Active 或 Failed(+自动回滚)
+构建 → release.lock.toml → 发布包 → 下载校验/切换代码 → 服务编排 → 查询业务就绪
+                                                        ↓
+                                              失败时查询具体阶段与恢复状态
 ```
 
-| 状态 | 含义 |
+| 观察面 | 含义 |
 |---|---|
-| `Prepared` | 已下载校验存档 |
-| `PendingStart` | 代码已切,启动中 |
-| `Active` | 健康确认,正式上线 |
-| `Failed` | 激活/确认失败,已自动回滚 |
+| 制品部署段 `deploy_stage` | 只说明制品激活结果，成功不等于业务 Ready |
+| app-cli `phase` | `idle/deploying/orchestrating/running/failed`，表示编排阶段 |
+| 业务就绪 `data.ready` | 只读查询当前 web 服务与入口，不唤醒应用 |
+| 操作与恢复状态 | 按 operation ID 核对结果；副作用未知时继续原操作的恢复流程 |
+
+`failed` 不表示旧版本已恢复运行。已确认激活后的启动失败可能仍保留新版本；迁移/清理结果未知时
+需要恢复，不能删 journal、清锁或换新身份重复执行。保留具体错误与操作 ID，使用平台支持的恢复入口。
 
 ### 回滚
 
@@ -323,7 +321,7 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 
 ### 版本保留
 
-默认保留最近 **15 个成功版本**(可配2–100)。当前 Active 版本始终保护。
+历史制品保留策略以平台版本管理为准。回滚前核对制品可用性，不手工删除运行目录或 journal。
 
 ### 数据库迁移约定
 
@@ -344,7 +342,8 @@ activate 后自动按序执行(容器内 `psql -f`)。规则:
 - **文件名白名单 `[A-Za-z0-9._-]`**:中文/空格/特殊字符文件名被**静默跳过**(仅 warn 日志)
 - **幂等**:每次发布重跑全部 SQL(无执行记录表),SQL 须自带幂等
   (`CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`)
-- **失败不阻断**:单文件失败仅日志跳过,继续下一文件;`ON_ERROR_STOP=on` 保证文件内原子
+- **失败不阻断**:单文件失败记录后继续下一文件；`ON_ERROR_STOP=on` 只停止当前文件，
+  不自动回滚此前已提交语句。需要文件级原子性时显式设计事务，不能把不能在事务中执行的建库语句一起包入
 - **目标库**:运行容器内 PG(`$POSTGRES_USER`/`$POSTGRES_DB`);执行前等 PG 就绪(≤60s),
   未就绪本轮整体跳过
 
@@ -443,19 +442,18 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 - 事件经 owner 事件接口或 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)，以对应操作的终态为准。
 - `type = "static"` 服务(prod 无业务进程):`[run]` 禁止、`[build].artifact`=静态内容目录
   (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
-  启动恒成功(`service_start_ok` 即时);dev 源码态配了 `[devrun]` 时端口让给
+  托管启动成功后才记录启动结果，还需验证真实资源访问；dev 源码态配了 `[devrun]` 时端口让给
   dev server(vite dev 热加载),托管跳过
 
-启动链:等 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
+启动链:按环境策略等待 PG → 逐服务 migrate→start → 编译+`pingap -t` 校验 → 起 pingap(:9080)
 → readiness 判定 → supervise。
 
 - 前置:各服务 `[run].command` 可直接执行;需要构建产物的先本地跑 build 脚本
   (如 Next 模板 `run.command = ["node","server.js"]` 须先 build 出 standalone)
-- PG:服务依赖 DB 时须有可达 PG(连接参数读 `PGHOST`/`PGPORT`/
-  `POSTGRES_USER`/`POSTGRES_PASSWORD`,默认 localhost:5432 dev/dev——与容器
-  PG 初始凭据一致,用户可自行重置,以环境变量实际值为准);
-  **等 60s 仍不可达则 app-cli 直接报错退出**。无 DB 依赖时用
-  `APP_CLI_SKIP_PG_WAIT=1` 跳过等待(**仅本地逃生**,生产禁)
+- PG:仅运行环境声明 `APP_CLI_REQUIRE_PG=1` 才做前置探测，独立 app-cli 默认不等待；
+  服务自身仍需正确处理所需数据库。启用探测时使用实际连接目标与凭据，等待失败使本次启动操作失败，
+  不等于常驻 `serve` owner 退出。无 DB 的独立应用不需要设置跳过开关；
+  `APP_CLI_SKIP_PG_WAIT` 仅用于明确的本地诊断，不代替正确的环境策略与连接配置。
 - `serve` 是常驻控制进程，业务启动失败/停止不等于控制进程退出。通过状态与日志判断业务就绪，不能只看 PID。独立本地验证完成后，只对自己启动的前台所有者发 Ctrl-C；`run` 的直接编排退出行为不能套用到 `serve`。
 - 访问入口 = `http://127.0.0.1:9080/<proxy.path>...`(与生产同构,经反代)
 - 入口默认页:workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径
@@ -478,9 +476,9 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
 
 ### 工作流 3:单服务日常开发(不用 app-cli)
 
-正常起 dev server(`PORT=4100 pnpm dev`、`uvicorn main:app --port $PORT` 等),
-守住两条平台契约:**监听 `0.0.0.0:$PORT`**、文件日志写 `$APP_LOG_DIR`(本地手动
-起时自己 `export APP_LOG_DIR=<目录>`,生产由 app-cli 注入)。
+HTTP/TCP 服务正常起 dev server(`PORT=4100 pnpm dev` 等)，监听 `0.0.0.0:$PORT`；
+process worker 按其命令前台运行，检查任务行为与失败退出，不补无用途的 HTTP 接口。
+文件日志写 `$APP_LOG_DIR`(本地手动起时指定可写目录，生产由 app-cli 注入)。
 多服务联调或发布前验证再切工作流 1/2。
 
 ### Agent 开发规范(本地测试必守)
@@ -491,7 +489,7 @@ curl 127.0.0.1:3010/v1/proxy/upstreams          # 服务→端口映射(data.ups
    只在本地命令行用,不写进 manifest、[env] 或任何部署配置
 3. **验证路由/manifest 问题优先工作流 1**(秒级、零依赖);涉及服务真实运行行为
    才上工作流 2
-4. **监听契约不变**——本地开发同样不硬编码端口,任何时候监听 `0.0.0.0:$PORT`
+4. **按探测策略验证**——HTTP/TCP 进程不硬编码监听端口；process worker 验证根进程与任务行为；prod 静态形态验证资源响应
 
 ---
 
@@ -552,7 +550,7 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 | 报错含 `逃逸出 [proxy].path` 或 `翻译后找不到` | static 产物资源引用与 [proxy] 错配(base/strip_prefix/产物布局) | 构建工具 `base` 设为 `[proxy].path`;`strip_prefix` 与产物布局对齐(`strip=true`+无前缀产物 / `strip=false`+带前缀产物 二选一) |
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
 | gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |
-| 本地编排起不来 | run.command 需要的产物没构建 / 端口被占用 / PG 60s 未就绪(报错退出) | 先跑 build 脚本;确保 PG 可达或设 `APP_CLI_SKIP_PG_WAIT=1`;看 app-cli.log 与 runtime.{out,err}.log 定位 |
+| 本地编排起不来 | run.command 产物缺失 / 端口占用 / 已启用的 PG 前置探测失败 | 先看操作状态与日志；核对构建产物、端口所属实例、`APP_CLI_REQUIRE_PG` 和真实连接参数；不要把 owner 存活当作业务已启动 |
 
 ### Python 构建依赖缓存
 

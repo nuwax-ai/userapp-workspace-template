@@ -82,7 +82,7 @@ jobs:
           fi
 
       # ── 校验/同步版本号 ────────────────────────────────────
-      # tag 推送时,release.mjs 已在本地把版本写入 package.json 并随 commit 打 tag,
+      # tag 推送时,两个版本文件已在本地同步提交,再在该 commit 上打 tag,
       # 这里只需校验一致;手动触发时才需要写入。
       - name: Verify/sync version
         working-directory: cli
@@ -99,7 +99,7 @@ jobs:
             npm version "$TAG_VERSION" --no-git-tag-version --allow-pre-releases
           else
             echo "✗ tag 版本($TAG_VERSION)和 package.json 版本($PKG_VERSION)不一致!"
-            echo "  请用 npm run release:beta / npm run release 打 tag,确保版本同步。"
+            echo "  请先同步并提交 cli/package.json 与 package-lock.json，再创建匹配版本的 tag。"
             exit 1
           fi
 

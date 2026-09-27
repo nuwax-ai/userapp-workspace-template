@@ -15,6 +15,9 @@
 
 一句话:`app_id` → 一个 `workspace` → 多个 `service`。
 
+`app_id` 与 `conversation_id` 分别标识应用与对话，不能互换。workspace 使用平台提供的当前目录，
+不根据会话 ID、用户 ID 推导路径；同一应用的后续开发应复用已有源码。
+
 ```
 app_id = my-app
  │
@@ -70,7 +73,7 @@ app_id = my-app
 | 多服务进程编排、启动顺序、优雅关闭 | 声明路由前缀 `[proxy]`、日志源 `[[logs.sources]]` |
 | 版本包管理、激活、回滚、保留 | 数据库迁移脚本(且保证幂等) |
 | 文件日志聚合查询、stdout 捕获 | 应用日志框架(写文件 + 轮转) |
-| 闲置回收、流量唤醒 | 监听 `0.0.0.0:$PORT`、日志写 `$APP_LOG_DIR` |
+| 闲置回收、流量唤醒 | HTTP/TCP 进程监听 `0.0.0.0:$PORT`；process worker 保持常驻；日志写 `$APP_LOG_DIR` |
 
 ---
 
@@ -89,13 +92,13 @@ app_id = my-app
    组装发布包                 workspace-package-<release_id>.zip(含 manifest + lock + 各服务产物)
         │
         ▼
-   prepare(准备)             下载、校验 SHA-256、存档。release → Prepared
+   下载与校验                核对制品完整性与身份，准备候选目录
         │
         ▼
-   activate(激活)             解压、切到 /app/code、启动服务。release → PendingStart
+   制品激活                  切到实际部署目录；部署段完成不代表业务 Ready
         │
         ▼
-   confirm(确认)              平台探活健康端点;健康 → Active;不健康 → 自动回滚
+   服务编排与就绪核验        按探测策略启动；失败时查询操作错误与恢复状态
         │
         ▼
    运行中                     经应用子域名对外服务;日志可查;可被回收/唤醒
@@ -103,8 +106,8 @@ app_id = my-app
 
 关键点:
 
-- **回滚 = 激活任意一个历史保留版本**(短暂停机整组切换)。没有单独的"回滚"动作。
-- **默认保留最近 15 个成功版本**,可按应用配置 2–100;当前运行版本始终保护。
+- **失败不代表自动回滚**：新制品可能已激活，需读取实际版本与恢复状态；结果未知时继续原操作的恢复核验。
+- **回滚 = 用仍可获取的历史制品重新部署**，仍有整组切换和启动过程；制品保留策略以平台版本管理为准。
 - **回滚不执行数据库 down migration**——所以你的迁移必须幂等,且遵守 expand/contract。
 
 详见 [部署、发布与回滚](06-deploy-release.md)。
@@ -113,47 +116,49 @@ app_id = my-app
 
 ## 6. 运行时:平台"免费"给你的东西
 
-应用启动时,平台会给每个 service 注入一组**环境变量**和**固定目录**。你的代码照约定用就行。
+应用启动时,平台会给每个 service 注入环境变量并设置工作目录。代码使用这些实际值，不依赖固定容器布局。
 
 ### 注入的环境变量(都是保留的,你的 `[env]` 不能覆盖)
 
 | 变量 | 值 | 你应该 |
 |---|---|---|
-| `PORT` | 平台分配的端口(4000–7999) | **监听 `0.0.0.0:$PORT`** |
+| `PORT` | 平台分配的端口(4000–7999) | HTTP/TCP 进程监听 `0.0.0.0:$PORT`；process worker 不要求监听 |
 | `HOSTNAME` | `0.0.0.0` | 绑到它 |
-| `APP_LOG_DIR` | `/app/logs/<service_id>` | 把日志文件写进这个目录 |
+| `APP_LOG_DIR` | 运行时注入的服务日志目录 | 把日志文件写进这个目录 |
 | `APP_SERVICE_ID` | 本服务的 `service_id` | 需要时读取 |
 | `APP_RELEASE_ID` | 当前 release 的 ID | 需要时读取 |
 
 > ⚠️ `[env]` 里的 key **不能**是 `PORT`、`HOST`、`HOSTNAME`、`APP_LOG_DIR`、`APP_SERVICE_ID`、
 > `APP_RELEASE_ID`,也不能以 `RCODER_` 开头。这些是平台的。
 
-### 容器内固定目录
+### 工作目录与持久目录
 
-| 目录 | 内容 |
+| 定位方式 | 内容 |
 |---|---|
-| `/app/code` | 当前激活的 release 代码(你的服务在这里跑) |
-| `/app/data` | PostgreSQL 数据 + 你的持久数据 |
-| `/app/logs/<service_id>/` | 每个 service 独立的日志目录 |
-| `/app/releases/` | 历史版本包 + 激活/回滚的内部工作区 |
+| 平台提供的 workspace / 服务 cwd | 当前源码或激活后的服务产物，项目文件使用相对路径 |
+| 实际持久卷与 `PGDATA` 配置 | PostgreSQL 等持久数据，停止/重启保留 |
+| `$APP_LOG_DIR` | 当前服务的日志目录 |
+
+RCoder UserApp 容器目前以 `/home/user` 为挂载根；独立 app-cli 由调用方指定目录。
+CLI 默认 `/app/code`、`/app/logs` 不等于各部署的实际路径，不在业务代码中写死。
 
 ### 数据库(PostgreSQL)
 
-app-runtime 镜像自带 PostgreSQL(和 pgweb 管理台),跑在**同一个应用容器**里,数据落在应用持久卷
-(`/app/data/pg`,重启不丢)。你的服务用本地连接串连它;数据库迁移通过 `run.migrate` 在服务启动前
-执行(平台会先等 PG 就绪再跑 migrate)。
+RCoder 的 UserApp 运行镜像自带 PostgreSQL，跑在同一应用容器内，数据目录由 `PGDATA` 与持久卷配置确定。
+数据库迁移通过 `run.migrate` 在服务启动前执行。RCoder 通过 `APP_CLI_REQUIRE_PG=1` 声明 PG 前置等待；
+独立 app-cli 默认不做该探测，数据库由用户或客户端准备，允许远程主机与自定义端口。
 
 **连接信息**(容器环境变量,你的服务直接读):
 
 | 项 | 环境变量 | 默认值 |
 |---|---|---|
-| 主机 | 直连同容器 | `localhost`(`127.0.0.1`) |
+| 主机 | `PGHOST` 或连接串 | 容器通常为 `localhost`(`127.0.0.1`) |
 | 端口 | `PGPORT` | `5432` |
 | 用户名 | `POSTGRES_USER` | `dev` |
 | 密码 | `POSTGRES_PASSWORD` | 平台注入时以注入值为准;未注入时 `dev` |
 | 默认库 | `POSTGRES_DB` | `dev`(首次 initdb 时自动建) |
 
-连接串示例:
+同容器连接串示例（其他环境使用实际主机/端口，连接参数解析以所选模板为准）:
 
 ```
 postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
@@ -163,9 +168,8 @@ postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 
 - 需要新建数据库时,用平台的「建库」操作(经容器内 psql 执行),别自己在 migrate 里 `CREATE DATABASE`
   (没有 superuser 权限)。
-- pgweb(PG 的 web 管理台)在容器内 `8081`,经平台暴露后可用来查库。
-- 这些是**容器继承的环境变量**,直接读即可;**不要在 `[env]` 里覆盖**它们——会和 PG 实际凭据不一致,
-  导致服务连不上库。
+- 数据库管理通过平台提供的入口访问，不假定管理台端口。
+- 使用运行环境实际注入的凭据，不在 `[env]` 写入旧默认值覆盖。初次初始化的 `dev` 值不代表改密后的有效凭据。
 
 ---
 

@@ -176,17 +176,26 @@ node dist/index.js init /tmp/test-app --backend go --frontend react
 2. 如果新增/修改了硬编码的 service_id 相关值,同步更新 `scripts/pack-templates.mjs` 的占位符注入规则
 3. 运行 `npm run pack` 重新打包
 4. 运行 `npm run build` 编译
-5. 测试通过后 `npm publish`(会自动跑 build + pack)
+5. 测试通过后按下节升级版本并推送对应 tag，由 CI 发布
 
 ### 发布
 
 发布走 **tag 触发 CI**,不在本地直接 `npm publish`:
 
 ```bash
-npm run release:beta   # 0.1.3 → 0.1.3-beta.1 → 0.1.3-beta.2 ...(自动 bump + commit + tag)
-npm run release        # 0.1.3-beta.2 → 0.1.3(去 beta 后缀)
+# 在 cli 目录升级正式版，同时更新 package.json 和 package-lock.json
+npm version patch --no-git-tag-version
+npm run build && npm run pack && npm test
 
-git push origin main --tags   # 推 tag 触发 GitHub Actions 发布到 npm
+# 回到仓库根，核对并提交本次变更（含两个版本文件）后，再打匹配的 tag
+cd ..
+# 例如已提交版本为 0.1.18：
+git tag v0.1.18
+git push origin main refs/tags/v0.1.18
 ```
+
+beta 使用明确的新版本号，例如 `npm version 0.1.19-beta.1 --no-git-tag-version`；提交、tag 和
+推送步骤相同。旧辅助脚本的 `release` 只去掉 prerelease 后缀，不能用于正式版补丁升级。
+已有 tag/npm 版本不可覆盖；发布后核验 CI、npm dist-tag 与实际 CLI 版本。
 
 Tag 规则:`v0.1.3-beta.1` → npm dist-tag `beta`;`v0.1.3` → dist-tag `latest`。

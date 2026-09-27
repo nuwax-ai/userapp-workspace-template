@@ -72,7 +72,7 @@ npx @nuwax-ai/template-cli init my-app --backend python --frontend react
 npx @nuwax-ai/template-cli add backend-rust
 
 # 本地开发(改了 CLI 源码后)
-cd cli && npm run build && npm run pack
+(cd cli && npm run build && npm run pack)
 node cli/dist/index.js init /tmp/test --backend java
 ```
 
@@ -93,15 +93,22 @@ node cli/dist/index.js init /tmp/test --backend java
 ```bash
 cd cli
 
-# 发测试版(自动 bump beta 号 + 打 tag)
-npm run release:beta
+# 已发布正式版的补丁升级，同时更新 package.json 和 package-lock.json
+npm version patch --no-git-tag-version
+npm run build && npm run pack && npm test
 
-# 发正式版(去掉 beta 后缀 + 打 tag)
-npm run release
-
-# 推送触发 CI 自动发布到 npm
-git push origin main --tags
+# 回到仓库根，逐项核对并提交本次变更（含上述两个版本文件）
+cd ..
+git diff --check
+# 提交完成后，tag 必须与已提交的 cli/package.json 版本一致
+# 例如版本为 0.1.18：
+git tag v0.1.18
+git push origin main refs/tags/v0.1.18
 ```
+
+beta 使用明确的新版本号（如 `npm version 0.1.19-beta.1 --no-git-tag-version`），其余校验、提交和
+推送步骤相同。已有 tag/npm 版本不覆盖；不要批量推送与本次发布无关的 tag。
+推送后核验 GitHub Actions 发布任务、npm dist-tag 和实际 CLI 版本，才算发布完成。
 
 Tag 规则:
 - `v0.1.0-beta.1` → npm dist-tag: `beta`

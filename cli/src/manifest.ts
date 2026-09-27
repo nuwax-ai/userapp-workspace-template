@@ -173,7 +173,7 @@ export function generateWorkspaceManifest(workspaceName: string, description?: s
  * 不写可变策略(默认技术选型、工具用法细则、维护义务细则)——AGENTS.md 会被 agent 以
  * 更高优先级读取且在 init 时冻结;策略烧进来后,一旦 skills/系统提示词更新,旧 workspace
  * 里的快照就会压过新策略(历史教训:旧默认 Go+React 与新默认 Python+React 冲突)。
- * 策略一律归 skills / 系统提示词,本文件顶部声明冲突时以它们为准。
+ * 策略归 skills / 系统提示词;过时平台说明需更新,不能据此覆盖用户补充的业务规则。
  * @param hasIndexHtml workspace 根是否生成了 index.html 导航页(catch-all 服务
  *   独占 / 时 init 不生成,结构表也不列该行)。默认 true。
  */
@@ -198,7 +198,8 @@ export function generateAgentsMd(
   return `# ${workspaceName} — Agent Guide
 
 > 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。**本文件只是生成时刻的结构快照**:
-> 开发规范、默认技术选型等可变策略以 skills / 系统提示词为准,与本文冲突时以它们为准。
+> 当前结构以实际文件为准;过时的平台说明按实际工具能力与新版规范修正。
+> 保留用户补充的业务规则和明确选择,不因脚手架默认值迁移或重建应用。
 
 ## Skills(按任务读取)
 
@@ -223,7 +224,7 @@ ${serviceLines}${indexRow}
 
 ${tableNote}
 
-## 平台核心约束(manifest 契约,长期向后兼容)
+## 平台核心约束(manifest 契约，新增能力需核对运行时版本)
 
 1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
 2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个一级子目录 \`project.manifest.toml\`,
@@ -240,10 +241,11 @@ ${tableNote}
 - **完整开发规范**(manifest 字段/路由/健康检查/日志/部署/排错/铁律):参考
   **userapp-dev-guide** skill,或 \`npx @nuwax-ai/template-cli docs\` 查阅随 CLI 分发的
   开发者文档;\`database/\` 目录的 SQL 执行规则见该目录下的 README。
-- **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看可用模板,
+- **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看后端模板,\`template-cli list\` 查看全部模板,
   在 workspace 根执行 \`npx @nuwax-ai/template-cli add <模板id>\`;同类模板的第二个实例
-  须同时指定新身份与路由(默认身份会冲突被拒),如
-  \`add frontend-vue3-vite --service-id portal-web --path /portal/\`。
+  使用唯一身份。web 实例还需唯一公共路径,如
+  \`add frontend-vue3-vite --service-id portal-web --path /portal/\`;
+  worker 不传 \`--path\`,如 \`add backend-python --kind worker --service-id audit-worker\`。
 - **React/Vue 公共路径**以子项目 TOML 的 \`[proxy].path\` 为准。新模板的 Vite 配置自动读取它,
   不用改 base 或添加路径环境变量。改后重启 dev、重新构建 prod,并更新导航卡片;细节见路由 skill。
 `;
@@ -284,8 +286,10 @@ export function generateDatabaseReadme(): string {
 - **幂等性要求**：每次发布都会重新执行全部 SQL 文件（无执行记录表）——
   SQL 必须自带幂等性（如 \`CREATE TABLE IF NOT EXISTS\`、\`ON CONFLICT DO NOTHING\`）。
 - **失败语义**：单文件执行失败（语法/约束错误）只记录日志并跳过，**不阻断发布**——
-  修复 SQL 后重新发布即可；文件内 \`ON_ERROR_STOP=on\`，单个文件内出错即中止该文件。
+  \`ON_ERROR_STOP=on\` 只中止当前文件，不自动回滚先前已提交的语句。先核对已生效部分，再修复并重新发布。
   （部署请求可用 \`auto_execute_sql=false\` 关闭本机制，缺省开。）
+- **事务边界**：需要原子性的 SQL 显式使用事务；\`CREATE DATABASE\` 等不能在事务中执行的命令单独处理。
+  发布接口成功不代表本目录每个文件执行成功，应核对 SQL 执行报告与实际数据库状态。
 
 ## 与 \`run.migrate\` 的边界
 

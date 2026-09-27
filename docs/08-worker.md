@@ -9,12 +9,14 @@
 | 需要真实 HTTP / TCP 检查 | `startup_probe="http"` / `"tcp"` | 显式覆盖 devrun 的默认 TCP 与 supervisord 的默认进程确认 |
 
 **版本门槛：新增 `startup_probe` 需要 app-cli >= 0.3.9，并且实际 owner 声明 `startup-probe-v1`。**
-template-cli 0.1.16 只纠正 HTTP worker 说明，不包含本页的新模板；开发分支的新模板须等配套运行时发布后再发布到 npm。
-无法确认版本时不要手工添加该字段，更不能靠去掉健康检查绕过错误。
+当前模板源码包含 `worker-python`；使用时通过已安装 CLI 的 `list` 确认模板可用，再核对运行时版本与 owner 能力。
+CLI 包含模板不代表目标运行时已升级。无法确认能力时保留 HTTP worker，不能靠去掉健康检查绕过错误。
 
 ```bash
 # 在已有包含 web 的 workspace 中追加纯 Python worker
 template-cli add worker-python --service-id queue-worker
+# 再加一个同类 worker，只换身份，不传 --path
+template-cli add worker-python --service-id audit-worker
 ```
 
 ```toml

@@ -51,11 +51,11 @@ mode = "managed"                    # 【可选,默认 managed】managed / exten
                                    #   ⚠️ managed 模式下写 config 会报错
 
 # ─── workspace 级健康策略(整段可选)─────────────────────────────
-# 不写 [health](默认):平台自动提供 /health + /ready,不依赖任何后端。
-#   后端有 bug 起不来时,容器依然 Ready,可进容器排查;纯前端也无需关心。
+# /health 表示管理进程存活；/ready 根据编排阶段和可选 bridge 判断。
+#   业务启动失败不等于 owner 退出；业务可访问性使用独立只读查询。
 # 想让"某个后端就绪 = 整个 workspace 就绪":填 bridge_service。
 #   平台把 /ready 代理到该后端的 [health].readiness_path 深检查;
-#   后端不 ready 会摘流(NotReady),但 /health 仍 200(不重启容器)。
+#   是否影响容器 Ready/流量由部署探针配置决定，manifest 本身不执行摘流或重启。
 [health]
 bridge_service = "api"              # 【可选】填某个 service 的 service_id;不写 = 不桥接
 ```
@@ -100,7 +100,7 @@ artifact = "artifact.zip"           # 【必填】构建产物在项目目录内
 
 # ─── 运行 ──────────────────────────────────────────────────────
 [run]
-command = ["./server"]              # 【必填】启动 argv;服务必须监听 0.0.0.0:$PORT
+command = ["./server"]              # 【必填】启动 argv;本例 HTTP 服务监听 0.0.0.0:$PORT
 migrate = ["./migrate"]             # 【可选,默认 []】迁移 argv;启动前按拓扑序执行,必须幂等
 depends_on = ["worker"]             # 【可选,默认 []】依赖的其他 service_id;控制启动/迁移顺序
 shutdown_timeout_seconds = 30       # 【可选,默认 30】优雅关闭超时秒数,必须 > 0
@@ -108,7 +108,7 @@ shutdown_timeout_seconds = 30       # 【可选,默认 30】优雅关闭超时�
 # ─── 健康检查(整段可选,三路径默认 /health)──────────────────────
 [health]
 startup_path = "/health"            # 【可选,默认 /health】启动探针
-readiness_path = "/ready"           # 【可选,默认 /health】就绪探针:不 ready 摘流,不重启
+readiness_path = "/ready"           # 【可选,默认 /health】就绪路径；声明本身不触发摘流或重启
 liveness_path = "/health"           # 【可选,默认 /health】存活探针(见下:不等同于"失败即重启容器")
 
 # ─── 反向代理路由(managed 模式由平台读取;worker 禁止)──────────
@@ -142,7 +142,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 |---|---|:---:|---|---|
 | `service_id` | 字符串 | ✅ | — | 服务稳定身份。**DNS-1123 label**:小写字母/数字/`-`,1–63 字符,首尾须字母或数字(不能大写、下划线、点)。决定日志目录、路由 upstream、依赖引用。 |
 | `name` | 字符串 | ✅ | — | 人类可读名,非空。 |
-| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管 serve 该目录(lock 分配端口,pingap 路由/事件与进程态同构;`/health` 固定 200,未匹配路径 SPA fallback `index.html`),启动恒成功(`service_start_ok` 即时)。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
+| `type` | 枚举 | ✅ | — | `node` / `java` / `python` / `go` / `rust` / `static`。**`static` = prod 无业务进程的静态服务**:[run] 段禁止(校验拒绝),`[build].artifact` = 静态内容目录(如 `dist`,构建产目录无需打 zip);平台内置静态托管该目录(lock 分配端口,`/health` 固定 200,未匹配路径 SPA fallback `index.html`)。托管启动成功后才记录启动结果，还需验证真实资源访问。dev 源码态配了 `[devrun]` 时端口让给 dev server(vite dev 热加载),托管跳过。 |
 | `kind` | 枚举 | ❌ | `web` | `web`(可声明 `[proxy]`)/ `worker`(后台服务,**不能**声明 `[proxy]`,按 health.startup_probe 决定启动检查，省略保持旧行为)。kind 不免除启动检查。 |
 | `enabled` | 布尔 | ❌ | `true` | `false` 不参与构建/启动。至少保留一个 enabled 服务；managed 模式还须有 enabled web。 |
 
@@ -165,7 +165,7 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 
 | 字段 | 类型 | 必填 | 默认 | 说明 |
 |---|---|:---:|---|---|
-| `command` | 字符串数组(argv) | ✅ | — | 启动命令。**服务必须监听 `0.0.0.0:$PORT`**。 |
+| `command` | 字符串数组(argv) | ✅ | — | 启动命令。HTTP/TCP 进程监听 `0.0.0.0:$PORT`；显式 process worker 无需监听。 |
 | `migrate` | 字符串数组(argv) | ❌ | `[]` | 数据迁移命令。**启动前**按拓扑顺序执行。必须幂等。 |
 | `depends_on` | 字符串数组(service_id) | ❌ | `[]` | 依赖的其他服务。驱动 migrate/启动顺序:被依赖者先。不能自依赖、不能引用不存在/disabled 的服务、不能成环。 |
 | `shutdown_timeout_seconds` | 整数 | ❌ | `30` | 收到停止信号后给多久优雅退出(SIGTERM → 等本值 → SIGKILL)。必须 `> 0`。 |
@@ -226,7 +226,7 @@ React/Vue 新模板以 `[proxy].path` 为 Vite dev/build base 的唯一来源，
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|
 | `id` | 字符串 | ✅ | source 标识,DNS-1123,**本 service 内唯一**。日志查询用 `serviceId + sourceIds` 定位。 |
-| `glob` | 字符串 | ✅ | 文件名 glob,**相对 `$APP_LOG_DIR`**(`/app/logs/<service_id>`)。**不能含 `/` 或 `\`**——只匹配文件名,不跨目录。如 `app*.jsonl`、`runtime.*.log`。 |
+| `glob` | 字符串 | ✅ | 文件名 glob,**相对实际 `$APP_LOG_DIR`**。**不能含 `/` 或 `\`**——只匹配文件名,不跨目录。如 `app*.jsonl`、`runtime.*.log`。 |
 | `format` | 枚举 | ✅ | `jsonl`(每行一个 JSON 对象,推荐)/ `text`(普通文本)。 |
 | `multiline_start_pattern` | 字符串(正则) | ❌ | 标记一条多行日志的起始行(如 Java 堆栈)。**仅 `text` 可用**;`jsonl` 下写它会报错。 |
 

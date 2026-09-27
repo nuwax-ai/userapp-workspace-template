@@ -16,7 +16,7 @@
 两类文件都落在该服务的日志目录:
 
 ```
-/app/logs/<service_id>/
+$APP_LOG_DIR/
 ```
 
 > 注:stdout/stderr 会被自动捕获成文件,但要在日志面板查看,仍需在 `[[logs.sources]]` 里声明一个
@@ -43,11 +43,11 @@ format = "text"
 
 ### glob 规则(重要)
 
-- **相对日志目录** `/app/logs/<service_id>`,只匹配**文件名**;
+- **相对运行时注入的 `$APP_LOG_DIR`**,只匹配**文件名**;
 - **不能含 `/` 或 `\`**——即不能跨目录匹配。`backend-go*.log*` ✅,`logs/app.log` ❌;
 - 不能是绝对路径、不能含 `..`。
 
-> 你的应用代码要把日志文件写到 `$APP_LOG_DIR`(平台注入,值 = `/app/logs/<service_id>`),
+> 你的应用代码要把日志文件写到 `$APP_LOG_DIR`(平台注入的实际目录，不写死容器路径),
 > 文件名要能被你声明的 glob 匹上。否则面板里看不到日志。
 
 ### `format`:jsonl vs text

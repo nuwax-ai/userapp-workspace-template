@@ -1,13 +1,9 @@
 ---
 name: userapp-scaffold
 description: >
-  UserApp workspace 模板脚手架 CLI。当用户需要创建新的 UserApp workspace 项目、
-  或往已有 workspace 添加 service 时使用。支持 Go/Java/Python/Rust 后端 +
-  React/Vue 前端(含多个同类前端) + Next.js 全栈单体的组合。
-  注意:manifest 字段、路由规划、健康检查、日志、部署回滚等平台规范,
-  请参考 userapp-dev-guide skill。
-  触发词:创建 userapp 项目、新建 workspace、添加后端、添加前端、userapp 模板、
-  @nuwax-ai/template-cli、template-cli、init、add、worker。
+  使用 template-cli 创建 UserApp workspace 或追加后端、前端、worker，支持多个同类模块。
+  包含模板选择、唯一身份与路由、已有文件保护。修改 manifest、运行或排查现有应用时
+  使用 userapp-dev-guide 的对应章节。
 ---
 
 # UserApp 模板脚手架
@@ -27,7 +23,7 @@ description: >
 ### 查看可用模板
 
 ```bash
-npx @nuwax-ai/template-cli list            # 全部(后端 4 + 前端 2 + 全栈 1)
+npx @nuwax-ai/template-cli list            # 当前安装版本的全部模板(含 worker)
 npx @nuwax-ai/template-cli list backend    # 只看后端: go / java / python / rust
 npx @nuwax-ai/template-cli list frontend   # 只看前端: react / vue
 ```
@@ -55,10 +51,13 @@ npx @nuwax-ai/template-cli init <目录名> --frontend react
 npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
+初始化前检查目录内容。`--force` 会覆盖根配置并删除重建同名模板目录,不因“目录非空”自动加此参数。
+已有业务项目增量接入;必要时先在临时目录生成模板再合入。仅确认覆盖范围内内容可丢弃时使用 `--force`。
+
 init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入口首页占位页,catch-all 时跳过;
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;
 **`add` 追加服务不会自动更新它**,追加/删除对外服务后需手动增删导航卡片)、
-`AGENTS.md`(结构快照 + 规范/工具入口;规范与默认选型以 skills 为准,不写入该文件)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
+`AGENTS.md`(结构快照 + 契约/工具入口;过时的平台说明按实际工具能力更新,保留用户补充的业务规则)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
 `database/`(SQL 约定目录,规则见其 README);各子项目的 `project.manifest.toml` 由 CLI
 按所选模板生成(不在模板包里),子项目另有 `database/README.md`。
 
@@ -96,8 +95,9 @@ npx @nuwax-ai/template-cli add <模板id>
 - **Vue 3 (Vite)**: Composition API,中文友好。适合快速上手。
 
 **全栈**:
-- **Next.js**: SSR + API routes + Drizzle ORM + PG。前后端一体,独占 `/` 路由。
-  适合"一个项目搞定一切"。但注意它和前端 SPA **二选一**(不能 Next + React SPA 共存)。
+- **Next.js**: SSR + API routes + Drizzle ORM + PG。默认使用 `/` catch-all。
+  `init --next` 不能同时传 `--backend/--frontend`，这是初始化选项限制。已有 workspace 可用 `add`
+  组合具体前缀服务，前缀优先于 `/`；检查新增路由没有占用 Next 的实际页面/API 路径。
 
 ## 路由规划规则
 
@@ -146,7 +146,8 @@ npx @nuwax-ai/template-cli add backend-go --service-id my-api --path /api/v2/
 用户要"再加一个 java/rust/... 后端"时,**直接 `add backend-java` 会被拒绝**——默认身份
 (service_id 和 path)已被第一个实例占用。这是 Fail-Fast 设计,不是 bug。
 
-追加同类模板的第二个实例,**必须同时指定 `--service-id` 和 `--path`**:
+追加 web 实例时使用唯一 `--service-id` 和公共路径；已有实例占用默认路径时同时传 `--path`。
+追加 worker 只需要唯一身份，**不传 `--path`**，HTTP worker 和 process worker 都不公开路由：
 
 ```bash
 # workspace 里已有 backend-java(service_id=backend-java, path=/api/java/)
@@ -155,11 +156,14 @@ npx @nuwax-ai/template-cli add backend-java --service-id java-admin --path /api/
 # 新应用只创建两个 Vue 模块(在空 workspace 执行 init)
 npx @nuwax-ai/template-cli init . --frontend vue --service-id admin-web --path /admin/
 npx @nuwax-ai/template-cli add frontend-vue3-vite --service-id portal-web --path /portal/
+
+# 第二个后台任务，不声明公共路径
+npx @nuwax-ai/template-cli add backend-python --kind worker --service-id audit-worker
 ```
 
 - 多个前端共享应用域名，分别访问 `/admin/`、`/portal/`；不需要为第二个 Vue 手改 Vite 配置。
 - 不复制目录再重命名。由 CLI 生成唯一 service_id、manifest、路径，保留模板的路由读取和健康插件。
-- 只给 `--service-id` 不给 `--path` 同样被拒(默认 path `/api/java/` 冲突);冲突报错会提示这两个参数
+- web 服务只给 `--service-id`、仍沿用已占用的默认 path 时会被拒；worker 不参与公共路径冲突校验
 - 建议路由从 service_id 派生(`java-admin` → `/api/java-admin/`),语义清晰
 - 新实例的身份派生规则(artifactId/应用名/日志文件/目录名自动跟随)见上节"自定义 service_id"
 - 两个实例完全独立:各自独立构建(Maven 工程/Go module 按 service_id 命名)、独立日志目录、独立端口(平台注入 `$PORT`);同库建表由 advisory lock 串行化,并发首启安全
@@ -200,8 +204,8 @@ fetch('/api/python/items')  // 浏览器经反代路由到 backend-python
 
 ## 重要约束
 
-1. **Next.js 和前端 SPA 二选一**:Next.js 占 `/` catch-all。要后端 API + 前端 SPA,用 `--backend + --frontend`,不要用 `--next`。
-2. **端口由平台定**:代码必须读 `$PORT` 环境变量,不能硬编码。
+1. **路由唯一**:全 workspace 最多一个 `/`，可与唯一的具体前缀共存。`init --next` 的参数互斥不等于运行时禁止组合。
+2. **按服务类型验证**:HTTP/TCP 进程监听 `0.0.0.0:$PORT`；process worker 验证常驻进程与任务行为；prod 静态服务验证产物和资源访问。
 3. **页面默认支持平台 iframe**：用户明确要求禁止或限制嵌入时按其要求实现，说明平台内嵌预览可能不可用，并按用户选定策略验收；用户自行设置的明确嵌入策略不擅自覆盖，意图不明时先澄清。其余情况下，生成后及新增登录/安全中间件时，不得引入阻止平台嵌入的 X-Frame-Options 或 CSP；跨站 iframe 所需的应用会话 Cookie 使用 `SameSite=None; Secure`（会话保留 HttpOnly）。平台 ticket 不替代应用会话配置，curl 成功不代表浏览器验证通过。详细规则见 [userapp-dev-guide 的 iframe 兼容章节](../userapp-dev-guide/SKILL.md#平台-iframe-嵌入与会话兼容)。
 
 > manifest 字段、路由规则、健康检查、日志、部署回滚等平台规范,

@@ -189,7 +189,7 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
 
 - **全 workspace 只能有一个 `/`**。两个服务都写 `path = "/"` 会校验失败;
 - 如果同时有 catch-all `/` 和具体前缀(如 `/react`),具体前缀优先命中(不会被 catch-all 吞掉)。
-  但从语义上,catch-all 通常意味着"整站",建议和独立前端的 SPA 二选一,不要混用。
+  组合时检查具体前缀没有占用 catch-all 应用的页面/API 路径；不因框架类型禁止组合。
 
 ---
 
@@ -207,8 +207,8 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
 | `frontend-vue3-vite` | `/vue` | true | Vue3 SPA(`type = "static"`,平台内置静态托管) |
 | `userapp-next` | `/` | false | Next.js 单体,唯一 catch-all |
 
-> 这是一个**演示用的最复杂组合**。实际应用按需保留:要 Next.js 单体就删 SPA;要"SPA + 后端 API"
-> 就删 Next.js,把 `/` 让给主前端。
+> 这是演示组合。实际应用按需选取：可用单体，也可用 SPA + API，或保留 `/` 与不同子路径的前端。
+> 不要求删除已有模块；逐路由验证页面、静态资源和 API，避免路径占用。
 
 ---
 
@@ -217,7 +217,7 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
 ### 谁需要声明 `[proxy]`
 
 - **对外提供 HTTP 的 web 服务**:声明 `[proxy].path`,平台在应用子域名下为它生成路由。
-- **`kind = "worker"`**:后台服务,**不能**声明 `[proxy]`(会校验失败),但可以有内部 HTTP 健康接口。当前模板必须保留该接口及 `$PORT` 监听,不能把“无公开路由”理解成“无监听”。
+- **`kind = "worker"`**:后台服务，不能声明 `[proxy]`。HTTP worker 保留内部健康接口；无监听 worker 显式使用 `startup_probe="process"`，能力要求见 [worker 模式](08-worker.md)。不能仅从 kind 推断探测策略。
 - **只想给同 workspace 内其他服务调用、不对外暴露的 web 服务**:省略 `[proxy]`——它仍会启动、监听
   端口、产日志,只是子域名下访问不到。
 
@@ -229,7 +229,7 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
   监听 `:9080`,同容器进程直接访问它即可。地址固定(端口 9080 + 路径前缀),不依赖平台分配的服务端口。
   这要求被调服务声明了 `[proxy]`。
 - **直接连端口**:`http://127.0.0.1:<被调服务端口>/...`。但端口是平台按 `service_id` 确定性分配的、
-  **不在环境变量里**(要自己读 `/app/code/release.lock.toml`),所以**不推荐**。
+  **不在调用方环境变量里**(需读取实际部署 workspace 的 `release.lock.toml`)，所以通常不如代理路径方便。
 
 > ⚠️ `depends_on` 只控制**启动/迁移顺序**(被依赖的服务先起、先 migrate),**不是服务发现**——它不会
 > 把对方地址或端口注入你的环境变量。
@@ -247,7 +247,8 @@ Next.js 自己处理页面路由 + API routes,所以整个站给它。
 - 不要求公网域名或 HTTPS——需要 TLS 由外层平台终止;内网 IP / 内网域名 / HTTP 都是受支持的方式;
 - Admin 始终关闭,运行时修改不作权威配置;
 - 每类对象(server/location/upstream/plugin/certificate/storage)默认最多 256 个,总配置最多 2 MiB;
-- 文件路径限制在 `/app/code`、`/app/data`、`/app/logs`、`/run/app-cli`;
+- 文件路径按运行时允许根目录校验：容器兼容根及本次实际 workspace/Pingap 运行目录；
+  独立宿主机目录以当前运行时校验结果为准，不为绕过检查把路径写死成容器目录;
 - Pingap 二进制和配置必须锁到相同版本/commit(平台在 release.lock 里锁定)。
 
 ---
