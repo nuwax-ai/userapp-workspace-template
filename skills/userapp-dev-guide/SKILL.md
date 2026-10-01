@@ -424,7 +424,7 @@ app-cli build --workspace . --deploy-dir .local-deploy
 app-cli serve --workspace .local-deploy --log-dir .local-logs
 ```
 
-`.local-deploy/`、`.local-logs/` 加入 `.gitignore`。产物态服务在组装后的目录运行（例如 Next standalone），不要直接在源码根执行依赖产物布局的生产命令。
+`.local-deploy/`、`.local-logs/` 由 init 生成的根 `.gitignore` 忽略（存量 workspace 没有根 `.gitignore` 时手动加入）。产物态服务在组装后的目录运行（例如 Next standalone），不要直接在源码根执行依赖产物布局的生产命令。
 
 dev 源码态（替代上述产物态步骤，不同时启动）：
 

@@ -20,6 +20,9 @@
 # production
 /build
 
+# standalone 构建产物（scripts/build-standalone.mjs，见 project.manifest.toml [build].artifact）
+/userapp-next-standalone.zip
+
 # misc
 .DS_Store
 *.pem

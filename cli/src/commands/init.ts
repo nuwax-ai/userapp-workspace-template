@@ -19,7 +19,7 @@ import type { Command } from 'commander';
 import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
-import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml, generateDatabaseReadme, CLAUDE_MD_CONTENT } from '../manifest.js';
+import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml, generateDatabaseReadme, CLAUDE_MD_CONTENT, generateRootGitignore, mergeRootGitignore } from '../manifest.js';
 import { checkConflicts } from '../validate.js';
 import { releaseTemplate } from './release.js';
 
@@ -132,6 +132,24 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   // CLAUDE.md:Claude Code 经 @import 指令展开读取 AGENTS.md(其他 agent 直读 AGENTS.md)
   fse.writeFileSync(path.join(absTarget, 'CLAUDE.md'), CLAUDE_MD_CONTENT);
   console.log(k.green('  ✓ ') + 'CLAUDE.md(@AGENTS.md 导入)');
+
+  // 根 .gitignore:忽略 app-cli/平台在根目录产生的派生产物。
+  // 已存在(git init 过/手工维护过)时并集合并——与其他根文件 force 覆盖不同,
+  // .gitignore 是累积性配置,agent/用户手工加的条目不能丢。
+  const gitignorePath = path.join(absTarget, '.gitignore');
+  if (fs.existsSync(gitignorePath)) {
+    const before = fs.readFileSync(gitignorePath, 'utf-8');
+    const merged = mergeRootGitignore(before);
+    if (merged !== before) {
+      fse.writeFileSync(gitignorePath, merged);
+      console.log(k.green('  ✓ ') + '.gitignore(并集合并根产物规则,保留手工条目)');
+    } else {
+      console.log(k.gray('  - .gitignore 已覆盖根产物规则(未改动)'));
+    }
+  } else {
+    fse.writeFileSync(gitignorePath, generateRootGitignore());
+    console.log(k.green('  ✓ ') + '.gitignore(根级派生产物忽略)');
+  }
 
   // workspace 根 database/(发布时平台自动执行 SQL 的约定目录,规则见其 README)
   fse.ensureDirSync(path.join(absTarget, 'database'));

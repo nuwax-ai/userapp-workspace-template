@@ -259,6 +259,55 @@ ${tableNote}
 export const CLAUDE_MD_CONTENT = '@AGENTS.md\n';
 
 /**
+ * workspace 根 .gitignore:忽略 app-cli / 平台构建发布流程在**根目录**产生的派生产物。
+ *
+ * 只管根级别;各服务目录内的构建产物由各模板自带的 .gitignore 覆盖(生成的用户
+ * workspace 没有别的根 ignore 兜底,服务级缺口会直接暴露,test-local 的
+ * gitignoreCoverage 断言防回归)。init 对已存在的根 .gitignore 做并集合并
+ * (mergeRootGitignore),不覆盖手工条目。
+ */
+export const ROOT_GITIGNORE_ENTRIES = [
+  // app-cli 本地编排产物(gen-lock 生成;独立本地 serve 的部署与日志目录)
+  '/release.lock.toml',
+  '/.local-deploy/',
+  '/.local-logs/',
+  // 平台构建/发布流程在 workspace 根产生的目录(本地开发通常不出现,出现即忽略)
+  '/builds/',
+  '/.run/',
+  '/.previous/',
+  '/.staging/',
+] as const;
+
+export function generateRootGitignore(): string {
+  return `# UserApp workspace 根 .gitignore(@nuwax-ai/template-cli init 生成)
+# 只忽略根级别的派生产物;各服务目录内的构建产物由服务自带的 .gitignore 覆盖。
+# 重新 init 会做并集合并,手工追加的条目不会被覆盖。
+
+${ROOT_GITIGNORE_ENTRIES.join('\n')}
+`;
+}
+
+/**
+ * 已存在根 .gitignore 时做并集合并:保留全部既有行(含手工条目),只追加缺失的
+ * 根产物规则;全部已覆盖时返回原文(不写文件,保持幂等)。
+ * 逐行 trim 精确匹配,同时接受去掉前导 / 的等价写法(如 .local-deploy/)。
+ */
+export function mergeRootGitignore(existing: string): string {
+  const present = new Set(
+    existing
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#')),
+  );
+  const missing = ROOT_GITIGNORE_ENTRIES.filter(
+    (entry) => !present.has(entry) && !present.has(entry.replace(/^\//, '')),
+  );
+  if (missing.length === 0) return existing;
+  const base = existing.replace(/\s+$/, '');
+  return `${base}\n\n# --- template-cli 追加:workspace 根产物 ignore(并集合并,不覆盖上方手工条目) ---\n${missing.join('\n')}\n`;
+}
+
+/**
  * 生成 workspace 根 database/README.md(SQL 约定目录的说明)。
  *
  * 内容必须与模板仓库根 `database/README.md` **逐字一致**(test-local.mjs 强校验相等,

@@ -166,7 +166,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
      app-cli serve --workspace .local-deploy --log-dir .local-logs
      ```
 
-     `.local-deploy/` 与 `.local-logs/` 是本地生成目录，应加入 `.gitignore`。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
+     `.local-deploy/` 与 `.local-logs/` 是本地生成目录，init 生成的根 `.gitignore` 已忽略它们（存量 workspace 没有该文件时手动加入）。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
    - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
 6. **契约复查**：gen-lock 已覆盖结构类规则，人工重点核对实际数据库连接、SQL 幂等和本轮受影响的入口。使用根导航页时检查标题、卡片与链接；配置了 `/` 服务时检查该服务首页，不要求根 `index.html` 存在。发布失败不代表旧版本已恢复，需查询实际操作状态、当前版本与业务就绪结果。
 7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。

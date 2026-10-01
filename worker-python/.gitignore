@@ -1,0 +1,4 @@
+artifact.zip
+__pycache__/
+*.pyc
+logs/

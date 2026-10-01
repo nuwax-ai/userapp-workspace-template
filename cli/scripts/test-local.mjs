@@ -129,6 +129,11 @@ try {
   );
   assert(repoDbReadme.includes('开发阶段不会自动执行'), 'database README 含开发阶段说明');
 
+  // === 根 .gitignore(init 根产物) ===
+  const rootGi = fs.readFileSync(path.join(appDir, '.gitignore'), 'utf-8');
+  assert(rootGi.includes('/release.lock.toml') && rootGi.includes('/.local-deploy/') && rootGi.includes('/.local-logs/'), '根 .gitignore 忽略 app-cli 本地编排产物');
+  assert(rootGi.includes('/builds/') && rootGi.includes('/.run/') && rootGi.includes('/.previous/') && rootGi.includes('/.staging/'), '根 .gitignore 忽略平台根目录产物');
+
   // === add: rust with custom service_id ===
   console.log('\n=== add: rust custom service_id ===');
   run(`${CLI} add backend-rust --service-id my-rust-api --path /api/rust-v2/`, { cwd: appDir });
@@ -141,6 +146,28 @@ try {
     'utf-8',
   );
   assert(mavenWrapper.includes('maven.aliyun.com'), 'Java Maven wrapper 保留国内镜像');
+
+  // === 模板 .gitignore 覆盖构建产物(防回归) ===
+  // 生成的用户 workspace 没有根 .gitignore 兜底,产物 ignore 完全靠各模板自带的
+  // .gitignore 随包分发;新模板漏写或改名,产物就会被 agent 误提交进 git
+  const gitignoreCoverage = {
+    'backend-go': ['artifact.zip', '/server', '/logs/'],
+    'backend-java': ['artifact.zip', 'app.jar', '/target/', '/logs/'],
+    'backend-python': ['artifact.zip', 'deps/', '__pycache__/', '.pip-cache/', '.deps-stamp', '.pytest_cache/'],
+    'worker-python': ['artifact.zip', '__pycache__/', 'logs/'],
+    'backend-rust': ['artifact.zip', '/server', '/target/', '/logs/'],
+    'frontend-react-vite': ['node_modules/', 'dist/'],
+    'frontend-vue3-vite': ['node_modules/', 'dist/'],
+    'userapp-next': ['/node_modules', '/.next/', 'userapp-next-standalone.zip'],
+  };
+  for (const [tpl, patterns] of Object.entries(gitignoreCoverage)) {
+    const giPath = path.join(CLI_DIR, 'templates', tpl, '.gitignore');
+    assert(fs.existsSync(giPath), `模板 ${tpl} 自带 .gitignore`);
+    const gi = fs.readFileSync(giPath, 'utf-8');
+    for (const p of patterns) {
+      assert(gi.includes(p), `模板 ${tpl} .gitignore 覆盖产物规则 ${p}`);
+    }
+  }
 
   // === init: react 自定义 service_id + path(运行时读取 TOML,不生成第二份 base) ===
   console.log('\n=== init: react custom service_id + path ===');
@@ -295,6 +322,24 @@ try {
     nextConflict = true;
   }
   assert(nextConflict, '--next + --backend 被拒绝');
+
+  // === 根 .gitignore 并集合并(已存在的根 .gitignore 不被覆盖) ===
+  console.log('\n=== init: 根 .gitignore 并集合并 ===');
+  const mergeDir = path.join(WORKDIR, 'test-gitignore-merge');
+  fs.mkdirSync(mergeDir, { recursive: true });
+  // 模拟 git init 过/手工维护过的目录:含注释、手工条目、以及一条与 CLI 规则等价
+  // 但写法不同的条目(无前导 /,应识别为已覆盖、不重复追加)
+  fs.writeFileSync(path.join(mergeDir, '.gitignore'), '# 手工维护\nnotes/\n.local-deploy/\n');
+  run(`${CLI} init "${mergeDir}" --backend python --force`);
+  const mergedGiPath = path.join(mergeDir, '.gitignore');
+  const mergedGi = fs.readFileSync(mergedGiPath, 'utf-8');
+  assert(mergedGi.includes('# 手工维护') && mergedGi.includes('notes/'), '根 .gitignore 合并保留手工条目');
+  assert(!mergedGi.includes('/.local-deploy/'), '根 .gitignore 等价写法识别为已覆盖(不重复追加)');
+  assert(mergedGi.includes('/release.lock.toml') && mergedGi.includes('/.staging/'), '根 .gitignore 合并补齐缺失规则');
+  run(`${CLI} init "${mergeDir}" --backend python --force`);
+  const mergedGi2 = fs.readFileSync(mergedGiPath, 'utf-8');
+  run(`${CLI} init "${mergeDir}" --backend python --force`);
+  assert(mergedGi2 === fs.readFileSync(mergedGiPath, 'utf-8'), '根 .gitignore 合并幂等(重复 init 不追加)');
 } finally {
   fs.rmSync(WORKDIR, { recursive: true, force: true });
 }

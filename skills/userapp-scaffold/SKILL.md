@@ -58,6 +58,7 @@ init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入�
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;
 **`add` 追加服务不会自动更新它**,追加/删除对外服务后需手动增删导航卡片)、
 `AGENTS.md`(结构快照 + 契约/工具入口;过时的平台说明按实际工具能力更新,保留用户补充的业务规则)、`CLAUDE.md`(`@AGENTS.md` 导入,供 Claude Code 读)、
+`.gitignore`(忽略 app-cli/平台在根产生的派生产物,如 `release.lock.toml`、`.local-deploy/`;**已存在时 init 做并集合并**,不覆盖手工条目;服务目录内的构建产物由各服务自带 `.gitignore` 覆盖)、
 `database/`(SQL 约定目录,规则见其 README);各子项目的 `project.manifest.toml` 由 CLI
 按所选模板生成(不在模板包里),子项目另有 `database/README.md`。
 
