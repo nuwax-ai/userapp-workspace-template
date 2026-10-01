@@ -247,7 +247,12 @@ function walkAndPack(srcDir, destDir, templateId, baseDir) {
       if (shouldSkipFile(entry.name)) continue;
 
       const srcPath = path.join(srcDir, entry.name);
-      const destPath = path.join(destDir, entry.name);
+      // .gitignore → _gitignore:npm pack(npm-packlist)会把包内各目录的 .gitignore
+      // 当作打包排除规则读取——不仅 .gitignore 自身进不了 tarball,里面的规则
+      // (如 userapp-next 的 .env*、next-env.d.ts)还会连带排除同目录的其他文件
+      // (历史事故:npm 包里的模板从来没有 .gitignore)。改名绕开,释放时还原。
+      const destName = entry.name === '.gitignore' ? '_gitignore' : entry.name;
+      const destPath = path.join(destDir, destName);
       const relPath = path.relative(baseDir, srcPath);
 
       // project.manifest.toml 不打包(运行时由 manifest 生成器产出)

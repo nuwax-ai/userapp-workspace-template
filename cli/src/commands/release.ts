@@ -95,7 +95,8 @@ function walkAndRelease(
   const entries = fs.readdirSync(srcDir, { withFileTypes: true });
   for (const entry of entries) {
     const srcPath = path.join(srcDir, entry.name);
-    const destPath = path.join(destDir, entry.name);
+    // _gitignore 还原为 .gitignore(pack 阶段为绕开 npm pack 对 .gitignore 的排除而改名)
+    const destPath = path.join(destDir, entry.name === '_gitignore' ? '.gitignore' : entry.name);
 
     // 跳过 manifest(由生成器产出)
     if (entry.name === 'project.manifest.toml') continue;

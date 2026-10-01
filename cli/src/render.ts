@@ -114,7 +114,9 @@ export function isTextFile(filePath: string): boolean {
   // 无扩展名的配置文件(.gitignore, .editorconfig 等)
   if (!ext) {
     const base = path.basename(filePath);
-    return base.startsWith('.') || ['Dockerfile', 'Makefile'].includes(base);
+    // _gitignore:pack 阶段 .gitignore 的改名产物(npm pack 会排除 .gitignore),
+    // release 阶段还原成 .gitignore;按文本处理以保留占位符替换能力
+    return base.startsWith('.') || ['Dockerfile', 'Makefile', '_gitignore'].includes(base);
   }
   return textExts.has(ext);
 }

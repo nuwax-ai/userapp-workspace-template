@@ -149,7 +149,9 @@ try {
 
   // === 模板 .gitignore 覆盖构建产物(防回归) ===
   // 生成的用户 workspace 没有根 .gitignore 兜底,产物 ignore 完全靠各模板自带的
-  // .gitignore 随包分发;新模板漏写或改名,产物就会被 agent 误提交进 git
+  // .gitignore 随包分发;新模板漏写或改名,产物就会被 agent 误提交进 git。
+  // 注意:pack 阶段 .gitignore 改名为 _gitignore(npm pack 会把包内 .gitignore
+  // 当打包排除规则,直接丢出 tarball),release 时还原
   const gitignoreCoverage = {
     'backend-go': ['artifact.zip', '/server', '/logs/'],
     'backend-java': ['artifact.zip', 'app.jar', '/target/', '/logs/'],
@@ -161,13 +163,27 @@ try {
     'userapp-next': ['/node_modules', '/.next/', 'userapp-next-standalone.zip'],
   };
   for (const [tpl, patterns] of Object.entries(gitignoreCoverage)) {
-    const giPath = path.join(CLI_DIR, 'templates', tpl, '.gitignore');
-    assert(fs.existsSync(giPath), `模板 ${tpl} 自带 .gitignore`);
+    const giPath = path.join(CLI_DIR, 'templates', tpl, '_gitignore');
+    assert(fs.existsSync(giPath), `模板 ${tpl} 自带 _gitignore`);
     const gi = fs.readFileSync(giPath, 'utf-8');
     for (const p of patterns) {
       assert(gi.includes(p), `模板 ${tpl} .gitignore 覆盖产物规则 ${p}`);
     }
   }
+
+  // === npm tarball 防回归:模板文件不得被 npm pack 排除 ===
+  // npm-packlist 会把包内各目录的 .gitignore 当作打包排除规则——不仅 .gitignore
+  // 自身丢失,userapp-next 模板 .gitignore 里的 .env*/next-env.d.ts 规则还曾连带
+  // 把这两个文件排除出 tarball(历史事故:0.1.18 及之前所有 npm 包都缺这些文件)。
+  // 本地 dist/templates 链路测不到 npm 打包,必须对着真实 tarball 清单断言
+  // npm pack --json 的 path 相对包根,不带 tarball 内的 package/ 前缀
+  const packJson = JSON.parse(run('npm pack --dry-run --json', { cwd: CLI_DIR }));
+  const tarballFiles = new Set(packJson[0].files.map((f) => f.path.replace(/^\.\//, '')));
+  for (const tpl of Object.keys(gitignoreCoverage)) {
+    assert(tarballFiles.has(`templates/${tpl}/_gitignore`), `npm 包含 templates/${tpl}/_gitignore`);
+  }
+  assert(![...tarballFiles].some((f) => f.endsWith('/.gitignore')), 'npm 包不含裸 .gitignore(会被 pack 排除,须以 _gitignore 承载)');
+  assert(tarballFiles.has('templates/userapp-next/.env.example') && tarballFiles.has('templates/userapp-next/next-env.d.ts'), 'npm 包含曾被 .gitignore 规则连带排除的 .env.example/next-env.d.ts');
 
   // === init: react 自定义 service_id + path(运行时读取 TOML,不生成第二份 base) ===
   console.log('\n=== init: react custom service_id + path ===');
