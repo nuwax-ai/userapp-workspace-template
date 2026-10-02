@@ -10,7 +10,7 @@
 
 3. **持续迭代**：同一会话内的所有需求都在该 workspace 上增量开发。先检查它是否已存在，存在就在其上继续开发，不要删除重建。
 
-4. **两级 Manifest**：workspace 根目录一个 `workspace.manifest.toml`，每个一级子目录一个 `project.manifest.toml`。平台只认这两个文件，文件名必须完全一致；平台只扫描一级子目录，不会进二级目录找 manifest。
+4. **两级 Manifest**：workspace 根目录一个 `workspace.manifest.toml`，每个参与编排的一级服务目录一个 `project.manifest.toml`。普通 docs/packages/scripts 目录无需 manifest；平台只认这两个文件，文件名必须完全一致，只扫描一级服务目录，不会进二级目录找 manifest。
 
 5. **严格校验、Fast-Fail**：manifest 写错（未知字段、非法枚举、重复路由、依赖环……）构建直接失败并报明原因。所有 section 都是严格模式（deny_unknown_fields），不要自创字段。
 
@@ -31,18 +31,21 @@
 | frontend-vue3-vite | 前端 | Vue 3 + Vite + TS + Tailwind | /vue |
 | userapp-next | 全栈单体 | Next.js 16 + Drizzle ORM + PG | /（catch-all） |
 
-manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CLI 分发的 7 篇开发者文档（完整字段参考、路由、日志、部署等）。
+manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CLI 分发的开发者文档（完整字段参考、路由、日志、部署等）。
 
 # 工作流程
 
-**先读对应规范再改文件**：创建或追加模块前读取 `userapp-scaffold` skill；修改 manifest、路由或处理预览问题前读取 `userapp-dev-guide` 的路由章节，并读取目标子项目的 `AGENTS.md`。平台已安装 skills 时直接读取；找不到时使用 `template-cli docs` 中的对应章节，不自行猜测配置字段。
+**先读对应规范再改文件**：在空目录创建或追加模板模块前读取 `userapp-scaffold`；手动导入 ZIP/Git/已有代码或适配不规范项目时，先读取 `userapp-dev-guide` 的“导入已有项目”和本技能的 `references/import-existing-project.md`。修改 manifest、路由或处理预览问题前读取 dev-guide 的对应章节，并读取现有根/子项目 `AGENTS.md`。平台已安装 skills 时直接读取；找不到导入指引时使用 `template-cli docs` 列出的 `07-import-existing-project.md`，字段规则查对应文档，不自行猜测。
 
-## 第 1 步：判断新建还是迭代
+## 第 1 步：判断新建、迭代还是导入适配
 
-每次收到开发需求，先检查当前工作目录下的 `workspace.manifest.toml` 是否存在：
+每次先浏览当前目录、既有业务代码、manifest 和 `AGENTS.md`，对照用户预期服务；不能只按根 manifest 是否存在分流：
 
-- **存在** → 继续迭代。先浏览目录结构、两个 manifest 和 `AGENTS.md`。生成的结构表可能过时，以当前文件为准；过时的平台说明按实际工具能力与新版规范修正，保留用户补充的业务规则和明确选择。
-- **不存在** → 先检查已有文件；空项目按第 2 步初始化，已有业务代码则增量接入 manifest，不删除重建。
+- **空的新项目** → 按第 2 步初始化。
+- **已有服务均接入** → 在原结构上迭代。生成的结构表可能过时，以实际文件为准；保留用户业务规则和明确选择。
+- **已有代码缺少/不完整 manifest，或已有 workspace 新增未接入模块** → 先执行 dev-guide 的导入适配流程，再进入开发和自检。保留原技术栈、包管理器、锁文件、Git 和共享依赖，按实际项目补齐平台契约，不使用 `init --force` 或空模板替换原代码。
+
+导入适配的常规非破坏性改动自行完成，不要求用户逐字段确认。monorepo 可以保留原 apps/packages 和根构建配置，用一级适配目录描述服务；生产制品须自包含。先核对 `app-cli validate --help`，支持时用 `app-cli validate --workspace .` 做只读检查，核对退出码和预期服务清单；旧版兼容检查见导入指引。`gen-lock` 用于生成派生 lock，配置通过不证明构建、启动或业务可用。
 
 ## 第 2 步：需求分析与初始化（仅新应用）
 
@@ -66,7 +69,7 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 | 只要前端，未指定框架 | `npx @nuwax-ai/template-cli init . --frontend react` |
 | Next.js 全栈单体 | `--next`（独占 `/` 路由，不能与 --backend / --frontend 同时使用） |
 
-初始化在当前工作目录进行（`init .`）。若目录非空，先核对现有文件和目标模板目录：`--force` 会覆盖根配置并删除重建同名模板目录，不能作为报错后的默认重试。已有业务代码时可先在临时目录生成脚手架，再按需合入；仅确认待覆盖内容可丢弃时才使用 `--force`。完成后：
+初始化直接用于空的目标目录（`init .`）。已有业务代码先走导入适配，不以 `--force` 覆盖。若新 workspace 仅有 Git/平台元数据或用户说明而 CLI 因非空拒绝，在独立空临时目录初始化后最小合入，保留原文件，不因这些残留阻塞新项目创建。完成后：
 
 - 阅读生成的 `AGENTS.md` 了解项目结构和开发约定（其中"安装 skills"的指引在沙箱中可跳过——skills 已预置或已由平台安装）；
 - 可顺手把 `workspace.manifest.toml` 里 `[workspace].name` 改成可读的应用名（CLI 默认使用目录名）；
@@ -91,7 +94,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 ## 第 3 步：个性化开发
 
-在模板之上实现用户的个性化需求，改动范围包括：业务代码、数据模型与迁移脚本、`project.manifest.toml`、`workspace.manifest.toml`。
+在现有或新建项目上实现用户的个性化需求；导入项目沿用原业务结构，模板默认分层不是强制要求。改动范围包括：业务代码、数据模型与迁移脚本、`project.manifest.toml`、`workspace.manifest.toml`。
 
 **平台契约与开发约定（按服务类型适用）：**
 
@@ -144,14 +147,14 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 **开发习惯：**
 
 - 每个服务的 `[build].command` 必须可独立执行成功，命令的**工作目录是该服务的子目录**；
-- 新增依赖后在对应服务目录内安装，并确保 lock 文件保留；
+- 新增依赖按原包管理器和 workspace 规则在正确的依赖位置安装；monorepo 共享依赖保持根安装与根 lock，不在一级适配目录另建一套依赖；
 - 数据库 schema 变更必须落脚本（`[run].migrate` 或 `database/` 目录，见铁律 8/13），不要只手工建表；开发期先手动执行再验证；
 - 前端调用后端一律走相对路径（同子域，由平台反向代理按 `[proxy].path` 分发），不要写绝对域名；
-- 尽量复用模板自带的分层结构（handler/service/repository），保持代码风格与模板一致。
+- 模板项目尽量复用模板分层结构；导入项目保持其原有合理结构和风格，不为套模板重写业务。
 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
-1. **manifest/路由确定性校验**：执行 `app-cli gen-lock --workspace .`，有 devrun 时追加 `app-cli gen-lock --workspace . --dev`，分别核对 prod/dev 路由（沙箱预装；与平台构建同一套校验规则）。校验失败先修复；生成的 `release.lock.toml` 是派生产物，不要手改、不要当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
+1. **manifest/路由配置校验**：先执行 `app-cli validate --help` 核对安装能力；支持时执行 `app-cli validate --workspace .`，有开发运行方式时追加 `app-cli validate --workspace . --dev`，分别核对 prod/dev 路由。需要结构化诊断可加 `--json`；退出码 0 为配置通过，1 为配置错误，2 为参数错误，3 为观察/内部失败，均按具体原因处理。核对预期服务和清单完整性，不能只看 `valid` 或旧 lock。命令不写 lock、不构建、不启动；旧版兼容检查按 dev-guide，不因命令缺失新增启动/停止门禁。准备编排仍用 `gen-lock` 生成派生 `release.lock.toml`，不要手改或当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
 2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace .` 一条命令跑全部服务）；
 3. **启动验证**：HTTP/TCP 服务检查监听与对应探测；process worker 检查根进程常驻、初始化失败非零退出和任务日志，不要求 HTTP 端点。React/Vue devrun 检查实际 Vite；prod 静态形态检查产物及资源响应。已有平台实例按下一条操作，不另起进程争抢端口；
 4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
@@ -167,8 +170,8 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
      ```
 
      `.local-deploy/` 与 `.local-logs/` 是本地生成目录，init 生成的根 `.gitignore` 已忽略它们（存量 workspace 没有该文件时手动加入）。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
-   - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；新命令不支持时报告工具版本不匹配，不回退旧语法或自行安装替换平台工具。
-6. **契约复查**：gen-lock 已覆盖结构类规则，人工重点核对实际数据库连接、SQL 幂等和本轮受影响的入口。使用根导航页时检查标题、卡片与链接；配置了 `/` 服务时检查该服务首页，不要求根 `index.html` 存在。发布失败不代表旧版本已恢复，需查询实际操作状态、当前版本与业务就绪结果。
+   - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；不自行安装替换平台工具或回退顶层旧语法；未提供 validate 时仅使用上述明确的旧版兼容检查，并记录能力缺失。
+6. **契约复查**：配置校验覆盖结构类规则，人工重点核对实际数据库连接、SQL 幂等和本轮受影响的入口。使用根导航页时检查标题、卡片与链接；配置了 `/` 服务时检查该服务首页，不要求根 `index.html` 存在。发布失败不代表旧版本已恢复，需查询实际操作状态、当前版本与业务就绪结果。
 7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。
@@ -180,7 +183,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 1. **本轮完成内容**（简要）；
 2. **workspace 结构树**（一级目录 + 每个服务一句话说明；仅在实际使用根导航页时列出 `index.html`）；
 3. **服务清单**：service_id / 语言框架 / 路由前缀 / 是否 worker；
-4. **验证结果**：gen-lock、构建、启动、接口、路由分发及适用的 iframe 策略验证结论，注明未验证项；
+4. **验证结果**：配置校验（validate 或明确标注的旧版 gen-lock）、构建、启动、接口、路由分发及适用的 iframe 策略验证结论，注明未验证项；
 5. **下一步建议**（可选）。
 
 # 沟通规范

@@ -77,7 +77,9 @@ bridge_service = "api"              # 【可选】填某个 service 的 service_
 
 ## 二、`project.manifest.toml`
 
-每个一级子目录放一个,描述**一个 service**。
+参与编排的每个一级服务目录放一个,描述**一个 service**。源码、文档或共享依赖目录无需 manifest。
+平台不直接发现根目录或更深层的 `project.manifest.toml`；已有项目可保留原布局,用一级适配目录
+调用根构建并归集产物,见 [已有项目接入指引](07-import-existing-project.md)。
 
 ### 完整示例(带注释)
 

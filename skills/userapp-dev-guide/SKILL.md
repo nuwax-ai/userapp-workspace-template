@@ -1,8 +1,9 @@
 ---
 name: userapp-dev-guide
 description: >
-  开发或排查 UserApp workspace 时使用：manifest、服务路由、worker 探测、数据库迁移、
-  日志、iframe、发布恢复及 app-cli 本地验证。提供平台契约与按场景选择的操作指引；
+  开发、导入或排查 UserApp workspace 时使用：手动导入 ZIP/Git/已有代码、接入不规范项目、
+  manifest、服务路由、worker 探测、数据库迁移、日志、iframe、发布恢复及 app-cli 本地验证。
+  导入适配保留原技术栈和业务，按需读取 references/import-existing-project.md；
   创建 workspace 或追加模板的 CLI 用法见 userapp-scaffold。
 ---
 
@@ -27,9 +28,17 @@ app_id = my-app
      └── frontend-react/ ── project.manifest.toml ┘
 ```
 
+## 导入已有项目
+
+用户手动导入 ZIP、Git 项目或已有代码，要求接入 UserApp 时，**先读本技能的[导入适配指引](references/import-existing-project.md)**。根 manifest 已存在但新增模块尚未接入时，同样使用该流程。
+
+先盘点实际服务和依赖 → 保留原结构并安排一级服务目录 → 补齐真实构建、产物、启动、探测和路由 → 核对 `app-cli validate --help` 后用 `app-cli validate --workspace .` 只读校验（旧版兼容检查见导入指引） → 实际构建和访问验证。不要在业务目录使用 `init --force`，不改写技术栈或覆盖用户 AGENTS。只有空的新项目才交给 scaffold。
+
+找不到本地 reference 时执行 `template-cli docs`，阅读列出的 `07-import-existing-project.md`；平台草稿检测仅是辅助，不代表项目已经适配。
+
 ## 六条铁律
 
-1. **两级 Manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`。平台**只认**这两个确切文件名
+1. **两级 Manifest** — 根目录 `workspace.manifest.toml`，每个参与编排的一级服务目录有 `project.manifest.toml`。普通 docs/packages/scripts 目录无需 manifest；平台只扫描一级服务目录，**只认**这两个确切文件名
 2. **严格校验,Fail Fast** — 未知字段、非法枚举、重复路由、依赖环 → 构建立即失败。每段 `deny_unknown_fields`
 3. **端口由平台定** — HTTP/TCP 进程监听 `0.0.0.0:$PORT`(`PORT` 由平台注入,4000–7999),HTTP worker 保留健康接口；process worker 不要求监听；static 的 prod 由平台托管
 4. **镜像/资源/端口由平台管** — 不在 TOML 里配
@@ -222,8 +231,7 @@ RCoder UserApp 容器自带 PG，通常为同容器 `localhost:5432`。连接参
   3. `strip_prefix` 保持 true(产物按根路径打包)
   4. 后端 `/api/*` 前缀不受影响,前端调用仍用相对路径
   5. 全 workspace 仍最多一个 `/`;Next.js 单体本就占 `/`,不可再加
-- 改完跑 `app-cli gen-lock --workspace .` + 构建——static 服务会自动校验 base/path/
-  strip_prefix 与产物布局联动,错配直接报错并给修复指引
+- 改完按下文校验工作流运行 `app-cli validate --workspace .`（dev 另加 `--dev`；先核对安装能力），再实际构建并检查页面、JS/CSS 资源 URL、Content-Type 与深链接；dev 还需验证 HMR。配置和构建命令成功不能替代 base/path/strip_prefix 与真实产物路由的访问验证
 - 判定原则:拿不准就留在默认策略;接管 `/` 属路由变更,完成后必须走路由分发验证
 
 ### 服务间互调(推荐:走容器内反代)
@@ -365,7 +373,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 `app-cli` 是平台运行时编排器(生产装在 app-runtime 容器内,替代 start.sh:编排子服务
 + Pingap 反代 + 健康/日志/代理管理 API)。本地开发用它做两件事:
-**manifest/路由秒级验证**(`gen-lock`)和**多服务本地集成验证**(编排模式)。
+**manifest/路由只读配置检查**(`validate`)和**多服务本地集成验证**(编排模式)。`gen-lock` 保留生成派生 lock 的职责。
 日常单服务编码不需要它——直接 `PORT=xxxx` 起 dev server 即可。
 
 开发沙箱容器内已预装 `app-cli` 和 `pingap`(平台统一版本),命令直接可用,无需安装。
@@ -374,7 +382,8 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 统一使用 `app-cli <子命令> <参数>`。用 `app-cli --help` 查看命令、`app-cli serve --help` / `app-cli build --help` 查看各自参数。必须显式传 workspace，默认 `/app/code` 不是当前目录。
 
-- `gen-lock --workspace DIR`：校验并生成 lock，不启动服务。
+- `validate --workspace DIR [--dev] [--json]`：只读检查源码配置，不生成 lock、不构建、不启动服务；先用 `app-cli validate --help` 核对安装能力。
+- `gen-lock --workspace DIR`：校验并生成派生 lock，不启动服务。
 - `build --workspace DIR [--dev] [--deploy-dir DIR] [--only IDS]`：构建与产物组装。
 - `serve --workspace DIR`：常驻所有者与管理 API，独立本地运行首选。
 - `run --workspace DIR`：直接前台编排入口，供平台开发链路使用；不是绕过所有者的备用启动方式。
@@ -382,7 +391,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 不再支持顶层 `--workspace`、顶层 `--gen-lock`、无子命令启动或 `APP_CLI_GEN_LOCK` 选择动作，也没有 `server` 别名。安装版本不支持时报告版本不匹配，不回退旧语法。
 
-下表中 workspace 适用于 gen-lock/build/serve/run；其余运行参数只属于 serve/run。环境变量值可被命令行覆盖；build 的 `--dev/--deploy-dir/--only` 没有同名环境变量：
+下表中 workspace 适用于 validate/gen-lock/build/serve/run；其余运行参数只属于 serve/run。环境变量值可被命令行覆盖；build 的 `--dev/--deploy-dir/--only` 没有同名环境变量：
 
 | 参数 | env | 默认 | 说明 |
 |---|---|---|---|
@@ -394,23 +403,31 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 另有仅本地用的逃生 env(生产禁):`APP_CLI_SKIP_PG_WAIT=1` 跳过 60s PG 等待、
 `APP_CLI_SKIP_PINGAP_CONFIRM=1` 跳过启动时的配置生效确认。
 
-### 工作流 1:manifest/路由迭代验证(最常用,零依赖)
+### 工作流 1:manifest/路由只读校验
+
+先用 `app-cli validate --help` 核对安装能力；支持时执行：
 
 ```bash
-app-cli gen-lock --workspace <workspace根>
+app-cli validate --workspace <workspace根>
+# 有开发运行方式时另检 dev 代理规则
+app-cli validate --workspace <workspace根> --dev
+# 需要机器读取报告时
+app-cli validate --workspace <workspace根> --json
 ```
 
-读 `workspace.manifest.toml` → 自动发现子项目 → manifest 校验(**与平台构建同一套校验规则**;
-平台构建另会执行 build 命令、校验 artifact 产物,gen-lock 不涉及) →
-生成 `release.lock.toml` 到 workspace 根 → 打印服务清单、端口分配+启动拓扑序、
-Pingap 生效配置 TOML 预览。**不依赖 pingap 二进制、PG、镜像**,秒级完成。
+读取当前源码 manifest → 发现一级服务 → 校验字段、依赖、端口分配和对应 profile 的代理规则。
+不生成 lock，不启动 owner，不执行项目命令；旧 lock 不作为本轮权威。生产必填规则不因 `--dev` 放宽。
+某些 custom 配置的静态 hostname 会触发 DNS；检查不保证完全离线或秒级完成。
 
 验证检查点:
 
-1. 命令无报错 = manifest 校验通过(gen-lock 的报错 = 平台构建时 manifest 校验会报的错)
-2. 服务清单 = 预期的 enabled 服务
-3. 端口(4000–7999,确定性分配)不与本地已占用端口冲突;拓扑序符合 `depends_on`
-4. Pingap 配置预览里 path/rewrite/strip_prefix/upstream 符合路由预期
+1. 退出码 `0` 配置通过；`1` 配置错误；`2` 参数错误；`3` 观察/内部失败，不能将其误报为项目非法。
+2. 核对预期服务与实际发现清单；`services_complete=false` 表示未完整读取，不能按部分清单声称全部通过。
+3. 端口分配、依赖与 profile 路由符合预期；配置检查不检测实际端口占用或上游可达性。
+4. 配置通过后仍需构建、运行和真实业务访问；缺少 dist/zip 或尚未安装依赖不作为配置失败。
+
+未提供 validate 的旧版兼容检查按[导入指引](references/import-existing-project.md)使用既有 gen-lock，并明确它会写派生 lock；不能静默替换平台二进制，也不以新命令缺失拦截用户启动/停止。
+需要查看完整 Pingap 配置预览或准备本地编排时，仍使用 `gen-lock --workspace DIR` 生成 lock。
 
 ### 工作流 2:独立本地完整编排(集成验证)
 
@@ -487,7 +504,7 @@ process worker 按其命令前台运行，检查任务行为与失败退出，�
    字段是占位值,与平台构建产物不同)
 2. **逃生开关只许本地**——`APP_CLI_SKIP_PG_WAIT`/`APP_CLI_SKIP_PINGAP_CONFIRM`
    只在本地命令行用,不写进 manifest、[env] 或任何部署配置
-3. **验证路由/manifest 问题优先工作流 1**(秒级、零依赖);涉及服务真实运行行为
+3. **验证路由/manifest 问题优先工作流 1**(只读配置检查，custom hostname 可能需要 DNS);涉及服务真实运行行为
    才上工作流 2
 4. **按探测策略验证**——HTTP/TCP 进程不硬编码监听端口；process worker 验证根进程与任务行为；prod 静态形态验证资源响应
 
@@ -504,7 +521,7 @@ process worker 按其命令前台运行，检查任务行为与失败退出，�
 - worker 不能声明 `[proxy]`
 - static 服务禁配 `[run].command`/`[run].migrate`(prod 无业务进程,整段省略,内置静态托管；dev 可用 `[devrun]`)
 - depends_on:引用已存在且 enabled 的 service_id;不能自依赖/成环
-- 新服务启动建表:建表段包单事务并先取 `pg_advisory_xact_lock(424242)`(**跨服务契约 key,勿改**,见任一后端 db 初始化)——PG 的 `CREATE TABLE IF NOT EXISTS` 非原子,多服务并发首启会撞 pg_type 唯一键(23505);drizzle 类运行时迁移用会话级 `pg_advisory_lock` 包整个 migrate(见 userapp-next migrate.ts)
+- **本仓 PG 模板的共享初始化**:建表段包单事务并先取 `pg_advisory_xact_lock(424242)`（模板之间的契约 key，勿随意改）；PG 的并发建表需防 pg_type 唯一键冲突。模板 Drizzle 迁移沿用 migrate.ts 的锁保护。导入项目保留原数据库与可靠并发迁移机制，不强制替换成 PG、Drizzle 或这把模板锁。
 - 至少一个 enabled 服务
 - managed 模式不能写 pingap.config
 
@@ -549,7 +566,8 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 | `static service must not declare [run].command` | static 服务配了 [run] 启动/迁移命令 | 删 [run] 段(prod 内置静态托管，dev 可用 `[devrun]`);prod 要跑业务进程时 type 改 `node` 等 |
 | 报错含 `逃逸出 [proxy].path` 或 `翻译后找不到` | static 产物资源引用与 [proxy] 错配(base/strip_prefix/产物布局) | 构建工具 `base` 设为 `[proxy].path`;`strip_prefix` 与产物布局对齐(`strip=true`+无前缀产物 / `strip=false`+带前缀产物 二选一) |
 | `env key is reserved` | [env] 用了 PORT 等 | 换名 |
-| gen-lock 报错 | manifest 校验不过(字段/枚举/路由/依赖环) | 按报错逐条改,与平台构建同一套规则 |
+| validate 报错 | 配置错误或观察/内部失败 | 按退出码与诊断区分原因；不使用旧 lock 冒充通过 |
+| gen-lock 报错 | manifest/代理配置检查失败 | 按报错修复；失败可能仍保留旧 lock，不沿用旧结果 |
 | 本地编排起不来 | run.command 产物缺失 / 端口占用 / 已启用的 PG 前置探测失败 | 先看操作状态与日志；核对构建产物、端口所属实例、`APP_CLI_REQUIRE_PG` 和真实连接参数；不要把 owner 存活当作业务已启动 |
 
 ### Python 构建依赖缓存

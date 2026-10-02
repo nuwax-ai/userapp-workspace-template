@@ -2,7 +2,7 @@
  * pack-templates.mjs —— 把模板源目录转换成参数化模板,打包进 CLI 包。
  *
  * 流程:
- *  1. 遍历 7 个模板源目录(从仓库根的 ../backend-go 等)
+ *  1. 遍历模板映射表中的源目录(从仓库根的 ../backend-go 等)
  *  2. 过滤掉产物文件(node_modules/target/deps/artifact.zip/logs/dist/.next 等)
  *  3. 对文本文件做"占位符注入":把硬编码值替换成 __PLACEHOLDER__
  *  4. 删除 project.manifest.toml(运行时由 manifest 生成器产出)
@@ -269,7 +269,30 @@ function walkAndPack(srcDir, destDir, templateId, baseDir) {
   }
 }
 
+/** 读取唯一导入正文；在清理任何打包产物之前发现缺失或不可读的源文件。 */
+export function readImportGuide(sourcePath) {
+  try {
+    if (!fs.statSync(sourcePath).isFile()) {
+      throw new Error('导入正文路径必须是文件');
+    }
+    const content = fs.readFileSync(sourcePath);
+    if (!content.toString('utf-8').trim()) {
+      throw new Error('导入正文不能为空');
+    }
+    return content;
+  } catch (cause) {
+    throw new Error(`无法读取导入已有项目正文: ${sourcePath}`, { cause });
+  }
+}
+
 function packAll() {
+  const docsSrc = path.join(REPO_ROOT, 'docs');
+  if (!fs.statSync(docsSrc).isDirectory()) {
+    throw new Error(`文档源目录不可用: ${docsSrc}`);
+  }
+  const importGuide = readImportGuide(path.join(
+    REPO_ROOT, 'skills', 'userapp-dev-guide', 'references', 'import-existing-project.md',
+  ));
   console.log('▶ 打包模板到 cli/templates/\n');
 
   // 清空输出目录
@@ -300,14 +323,13 @@ function packAll() {
   console.log(`  输出: ${path.relative(REPO_ROOT, TEMPLATES_OUT)}/`);
 
   // 额外:拷贝 docs/ 到 cli/docs/(随 npm 包分发)
-  const docsSrc = path.join(REPO_ROOT, 'docs');
   const docsDest = path.join(CLI_ROOT, 'docs');
-  if (fs.existsSync(docsSrc)) {
-    if (fs.existsSync(docsDest)) fs.rmSync(docsDest, { recursive: true });
-    fs.cpSync(docsSrc, docsDest, { recursive: true });
-    const docCount = countFiles(docsDest);
-    console.log(`  ✓ docs/ (${docCount} 篇文档 → cli/docs/)`);
-  }
+  if (fs.existsSync(docsDest)) fs.rmSync(docsDest, { recursive: true });
+  fs.cpSync(docsSrc, docsDest, { recursive: true });
+  // 仓库 docs/07 是导航页；npm 分发必须携带正文，不能依赖包外的 skills/ 路径。
+  fs.writeFileSync(path.join(docsDest, '07-import-existing-project.md'), importGuide);
+  const docCount = countFiles(docsDest);
+  console.log(`  ✓ docs/ (${docCount} 篇文档 → cli/docs/)`);
 }
 
 function countFiles(dir) {
@@ -323,4 +345,7 @@ function countFiles(dir) {
   return count;
 }
 
-packAll();
+// macOS /var -> /private/var 或符号链接启动时，argv 与 import.meta.url 的字面路径不同。
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  packAll();
+}

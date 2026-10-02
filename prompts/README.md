@@ -13,7 +13,7 @@
 | 材料 | 加载方式 | 职责 |
 |---|---|---|
 | 本目录系统提示词 | 平台注入，每会话常驻 | 全局工作流、铁律、自检/汇报规范 |
-| `skills/userapp-scaffold`、`skills/userapp-dev-guide` | 按需触发（沙箱预装或 `npx skills add` 安装） | 详细规范：manifest 字段、路由、日志、app-cli 等 |
+| `skills/userapp-scaffold`、`skills/userapp-dev-guide` | 按需触发（沙箱预装或 `npx skills add` 安装） | scaffold 创建模板；dev-guide 提供导入适配、manifest、路由、运行等规范 |
 | CLI `init` 生成的 workspace `AGENTS.md` | 随生成的 workspace 就地读取 | 该 workspace 的结构、路由表、追加 service 方法 |
 
 这些文件只约定平台契约和默认开发方式。修正旧的生成说明时保留用户补充的业务规则；
@@ -31,11 +31,19 @@
 > `template-cli init/add` 复制进生成的项目（CLI 只释放 `cli/templates/<id>/` 与显式生成的
 > workspace 根文件）。
 
+### 导入已有项目的指引同步
+
+导入适配扩展已有 `userapp-dev-guide`，没有第三个 skill。其 `references/import-existing-project.md` 是详细指引的唯一正文；安装/复制该技能时必须包含整个 references 目录。`make build-skills` 的 ZIP 包含它，平台只复制 SKILL.md 不足以启用完整流程。
+
+CLI pack 将这份正文导出为随 npm 分发的 `docs/07-import-existing-project.md`；仓库 docs 下同名文件仅作导航。两份分发物须核对正文一致，缺正文不得发布。只有更新 npm 不会更新已安装 skill 或平台实际注入的系统提示词；项目 ZIP 导入也不是安装技能的替代方式。存量 workspace 只合并接入说明，不重生成覆盖用户 AGENTS/CLAUDE。
+
+配置检查优先使用只读 `validate`，通过 `app-cli validate --help` 核对实际二进制能力，不能仅凭版本号认定已发布。旧版未提供该命令时可按导入正文使用已有 gen-lock，并明确会写派生 lock、失败不能沿用旧结果；不自行替换沙箱工具，不新增启动/停止门禁。
+
 ### app-cli 命令契约同步
 
 提示词与 `userapp-dev-guide` 采用 `app-cli <子命令> <参数>`，且平台已有运行实例时不再引导 agent 额外启动编排器。
 更新部署时须同步三个入口：沙箱中的 app-cli 二进制、已安装/复制的 skills、平台实际注入的系统提示词。
-先确认二进制支持 `gen-lock --workspace`、`build --workspace`、`serve --workspace`，再启用新版技能与提示词；本仓库文件修改不会自动更新运行中的沙箱或平台配置。
+先确认二进制支持 `validate --workspace`（或明确使用旧版兼容检查）、`gen-lock --workspace`、`build --workspace`、`serve --workspace`，并分别核对配置与运行验证结果；本仓库文件修改不会自动更新运行中的沙箱或平台配置。
 
 ### React/Vue 路由契约同步
 

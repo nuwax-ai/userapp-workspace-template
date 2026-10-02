@@ -25,7 +25,7 @@ my-app/
 ```
 
 > 平台**只扫描一级子目录**,而且**只认文件名正好叫 `project.manifest.toml` 的**。
-> 叫 `manifest.toml`、`project.toml`、`*.draft.toml` 都会被忽略(或对 draft 而言,只用于导入确认)。
+> 根目录或更深层的服务 manifest 不会被直接发现；`manifest.toml`、`project.toml`、`*.draft.toml` 都不参与编排。
 
 ## Step 2:写两个 manifest
 
@@ -161,15 +161,28 @@ my-app/
 
 ## 导入已有项目
 
-如果你已经有一个现成的项目(不是按本模板建的),用平台的**「导入项目」**功能:它会自动检测常见
-项目描述文件(`package.json`、`pom.xml`、`go.mod`、`Cargo.toml`、`requirements.txt` 等,**只读不执行
-任何脚本**),生成一个 `project.manifest.draft.toml` 草稿。
+将已有代码手动放入平台提供的 workspace 后,请 agent 按
+[已有项目接入指引](07-import-existing-project.md) 增量适配。保留原技术栈、业务、Git、根 lock 文件
+和 monorepo 共享依赖。仅参与编排的一级服务目录需要 `project.manifest.toml`；可用一级适配目录
+调用原根构建,无需拆散 `apps/`、`packages/`。`init` 仅用于真正的空目录。
 
-**关键:`.draft.toml` 不参与构建。** 你必须在界面上核对草稿里的 `build.command`、`artifact`、
-`run.command`、`health`、`proxy`、`logs`,确认无误后才把它转成正式的 `project.manifest.toml`,
-这个项目才会参与构建。
+平台已有 detect 能辅助识别项目描述文件,不执行项目脚本,但会写入 `project.manifest.draft.toml`
+草稿。不要假定 ZIP 导入会自动调用 detect 或存在确认界面。**草稿不参与编排**,agent 应根据
+实际项目核对构建、产物、运行、探测和路由,再写正式 manifest。
 
-自动检测只是辅助,最终的构建/运行/路由配置**必须由你确认**——尤其是构建命令和产物路径,检测经常猜不准。
+先执行 `app-cli validate --help` 确认安装能力，支持时做只读配置检查：
+
+```bash
+app-cli validate --workspace .
+# 有开发运行方式时另检 dev 代理规则
+app-cli validate --workspace . --dev
+```
+
+命令不生成 lock、不构建、不启动。退出码 0/1/2/3 分别表示配置通过、配置错误、参数错误、
+观察/内部失败；核对诊断与预期服务清单。未提供 validate 的旧版兼容检查见
+[导入指引](07-import-existing-project.md)，不要自行替换平台工具或以命令缺失新增启停门禁。
+编排需要的派生 `release.lock.toml` 仍由 gen-lock 生成。配置通过不等于导入完成，
+还需验证实际 dev 准备与启动、生产构建、独立产物运行和页面/API。
 
 ---
 

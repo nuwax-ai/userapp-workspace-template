@@ -29,6 +29,11 @@ template-cli list --category fullstack   # 等价写法
 
 ### `init <dir>` — 新建 workspace
 
+用于真正为空的目标目录。已有项目手动导入后,请 agent 按
+[接入指引](https://github.com/nuwax-ai/userapp-workspace-template/blob/main/skills/userapp-dev-guide/references/import-existing-project.md)
+保留原技术栈、业务和依赖布局,增量适配；不要用 `init --force` 覆盖已有项目。
+随 npm 包安装的正文可通过 `template-cli docs` 定位。
+
 ```bash
 # 后端 + 前端组合
 template-cli init my-app --backend go --frontend react
@@ -79,11 +84,11 @@ template-cli add backend-java --service-id java-admin --path /api/java-admin/
 ### `docs` — 查看开发者文档
 
 ```bash
-template-cli docs         # 打印随包分发的开发者文档目录(7 篇)
+template-cli docs         # 打印随包分发的开发者文档目录
 template-cli docs --open  # 用系统默认程序打开(macOS: open / Linux: xdg-open)
 ```
 
-文档覆盖:核心概念、快速开始、manifest 字段参考、pingap 路由、日志、部署发布与回滚。
+文档覆盖:核心概念、快速开始、manifest 字段参考、pingap 路由、日志、部署发布与回滚、已有项目接入和 worker 模式。
 
 ## 模板一览
 
@@ -153,6 +158,9 @@ cli/
 ├── docs/                     【随包分发】开发者文档(pack 时从 ../docs 同步)
 └── templates/                【构建产物】打包后的参数化模板(gitignored)
 ```
+
+已有项目接入正文仅维护在 `skills/userapp-dev-guide/references/import-existing-project.md`。
+源码仓 `docs/07-import-existing-project.md` 为导航页,pack 时将该正文导出为随包分发的同名文档。
 
 ### 开发流程
 

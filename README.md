@@ -5,14 +5,17 @@ workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个�
 整个 workspace 作为一个整体被**构建、发布、回滚**——这是 UserApp 的核心模型。
 
 仓库里现成放了一个**最复杂的组合**:8 个子项目(React / Vue / Next.js + Go / Java / Python / Rust + Python worker),
-用来演示多前端、多后端、不同日志格式和路由前缀如何共存。你可以直接删掉用不到的目录,只要保留
-**至少一个 `enabled = true` 的 web 服务**（managed 模式不支持只有 worker）。
+用来演示多前端、多后端、不同日志格式和路由前缀如何共存。仅在使用这份演示模板时,可移除未使用的
+模板服务目录,保留根 manifest 和 **至少一个 `enabled = true` 的 web 服务**（managed 模式不支持只有 worker）。
+已有项目的业务目录、Git、根 lock 文件和共享依赖应保留。
 
 ---
 
 ## 0. 快速开始:用 CLI 生成 workspace(推荐)
 
-不用手动复制和删目录。用 `@nuwax-ai/template-cli` 按需组合,一条命令生成干净的 workspace:
+`init` 用于真正为空的目标目录。用 `@nuwax-ai/template-cli` 按需组合,一条命令生成 workspace。
+已有代码手动导入后,让 agent 按 [已有项目接入指引](docs/07-import-existing-project.md) 增量适配,
+保留原技术栈和业务；不要用 `init --force` 覆盖已有项目。
 
 **运行时要求：** `template-cli` 0.1.14 的 React/Vue 模板使用 `dev_strip_prefix`，需要
 app-cli ≥ 0.3.7，以及支持该字段的 RCoder。旧运行时严格解析 manifest 时会拒绝该字段；
@@ -56,7 +59,7 @@ CLI 源码在 `cli/` 目录,可用模板一览用 `npx @nuwax-ai/template-cli li
 | # | 原则 | 对你写配置的影响 |
 |---|---|---|
 | 1 | **workspace 是发布原子** | 不能单独发布/回滚某一个服务。前后端、路由、数据库迁移必须整套一起上,所以一个 workspace 内的服务要彼此配套。 |
-| 2 | **两级 Manifest** | 仓库根一个 `workspace.manifest.toml`;每个一级子目录一个 `project.manifest.toml`。平台只认这两个文件。 |
+| 2 | **两级 Manifest** | workspace 根一个 `workspace.manifest.toml`;参与编排的一级服务目录各有一个 `project.manifest.toml`。其他源码、文档和共享依赖目录无需 manifest。 |
 | 3 | **严格校验,Fast Fail** | 写错一个字段(拼写、未知字段、非法枚举、重复路由、依赖环……)**构建直接失败并报清楚原因**,不会带着错误配置默默上线。每个 section 都是 `deny_unknown_fields`,多写一个字会报错。 |
 | 4 | **端口由平台定,不由你定** | HTTP/TCP 模板的进程服务保留 **`0.0.0.0:$PORT`** 监听与健康接口,包括 HTTP worker；static 的 prod 由平台托管。`PORT` 写进 `release.lock.toml`(确定性端口,范围 4000–7999)。代码里**硬编码端口 = 必错**。 |
 | 5 | **镜像/资源/端口由平台管** | 运行时镜像、CPU/内存、存储大小、版本保留数都是**平台策略**,不在 TOML 里。需要的环境变量(含数据库连接串、API Key 等)写在 `[env]` 里,以明文随源码和发布包保存——按应用的访问范围评估其敏感度即可。 |
@@ -78,17 +81,21 @@ my-workspace/
 │   └── project.manifest.toml        # 必有:参与构建
 │
 ├── imported-old-project/
-│   └── project.manifest.draft.toml  # ⚠️ 草稿:【不参与构建】,仅用于"已有项目导入确认"
+│   └── project.manifest.draft.toml  # ⚠️ 辅助检测草稿:【不参与构建】,需按实际项目适配
 │
 └── pingap/                          # 仅 pingap = extend/custom 时需要
 ```
 
 **发现规则**(代码里写死,记牢):
 
-- 平台**只扫描一级子目录**,不会进二级目录找 manifest;
+- 平台**只扫描一级子目录**中的服务 manifest,不发现根目录或更深层的 `project.manifest.toml`;
 - **只有文件名正好是 `project.manifest.toml` 的目录才参与构建**;`*.draft.toml`、`manifest.toml`、
   `project.toml` 等任何其他名字都**被忽略**;
 - 多个服务按 `service_id` 字母序发现,再按 `depends_on` 做拓扑排序,决定 migrate / 启动顺序。
+
+已有 monorepo 可保留根构建入口、workspace 配置、lock 和 `apps/`、`packages/` 等共享源码,
+新增一级适配目录承载服务 manifest,其构建脚本调用原根构建并归集产物。详见
+[已有项目接入指引](docs/07-import-existing-project.md)。
 
 **入口默认页 `index.html`**(可选):
 
@@ -148,7 +155,8 @@ mode = "managed"                    # 可选,默认 managed。三选一:managed 
 
 ## 4. `project.manifest.toml` 详解
 
-每个一级子目录放一个,描述**一个服务**(一个可独立构建、启动、产日志的子项目)。下面逐 section 讲。
+参与编排的每个一级服务目录放一个,描述**一个服务**(一个可独立构建、启动、产日志的单元)。
+不要求 workspace 的所有一级目录都有 manifest。下面逐 section 讲。
 
 ### 4.0 完整骨架(以 Go 后端为例)
 
@@ -407,7 +415,8 @@ DATABASE_URL = "postgres://user:pass@host/db"   # 敏感配置直接写这里
 
 ### 场景 A:我只要一个 Go 后端
 
-删掉除 `backend-go/` 外的所有一级子目录(也可保留 `workspace.manifest.toml`)。
+仅在新复制的演示模板中移除其他未使用的模板服务目录,保留根 `workspace.manifest.toml`、文档和工具目录。
+已有用户代码与共享依赖目录必须保留；也可在空目录用 `init --backend go` 按需生成。
 `workspace.manifest.toml` 里把 `name` 改成你的应用名即可。`backend-go/project.manifest.toml` 改
 `service_id`、`[build]`、`[run]`、`[proxy].path` 适配你的项目。
 

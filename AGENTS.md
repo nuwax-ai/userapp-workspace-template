@@ -33,7 +33,7 @@ userapp-workspace-template/
 ## 平台核心约束(开发时必须遵守)
 
 1. **HTTP/TCP 进程服务保留 `0.0.0.0:$PORT` 监听与健康接口** — 不能硬编码端口。`kind=worker` 仅表示不公开代理路由,不表示删除内部健康服务；不能只改 kind 就把 HTTP worker 改成无监听循环。app-cli >= 0.3.9 才支持显式 `startup_probe="process"` 的无监听 worker，见 docs/08-worker.md。`type=static` 的 prod 由平台托管,不启动业务进程
-2. **两个 manifest** — 根目录 `workspace.manifest.toml`,每个一级子目录 `project.manifest.toml`
+2. **两级 manifest** — workspace 根目录 `workspace.manifest.toml`,参与编排的一级服务目录各有 `project.manifest.toml`；其他目录无需 manifest。根目录或更深层的服务 manifest 不会直接被发现
 3. **严格校验,Fail Fast** — 未知字段/非法枚举/重复路由/依赖环 → 构建直接失败
 4. **service_id 是稳定身份** — 不是目录名,决定日志目录/路由 upstream/依赖引用
 5. **回滚不执行 down migration** — 迁移必须幂等 + expand/contract
@@ -59,7 +59,7 @@ npx skills add . --agent zcode --copy
 | Skill | 用途 |
 |---|---|
 | `userapp-scaffold` | 用 CLI 创建/追加 workspace service(工具型) |
-| `userapp-dev-guide` | manifest 配置/路由/健康检查/日志/部署/排错/app-cli 本地开发测试(知识型) |
+| `userapp-dev-guide` | 已有项目接入/manifest 配置/路由/健康检查/日志/部署/排错/app-cli 本地开发测试(知识型) |
 
 ## CLI 脚手架
 
@@ -75,6 +75,19 @@ npx @nuwax-ai/template-cli add backend-rust
 (cd cli && npm run build && npm run pack)
 node cli/dist/index.js init /tmp/test --backend java
 ```
+
+## 已有项目适配
+
+已有源码手动导入后,先读取原项目规则、构建入口和依赖文件,使用现有 `userapp-dev-guide` 的
+[已有项目接入指引](skills/userapp-dev-guide/references/import-existing-project.md) 增量适配。
+保留原技术栈、业务、Git、根 lock 文件与 monorepo 共享依赖；可用一级适配目录调用原根构建。
+`init` 仅用于真正的空目录,不得用 `--force` 覆盖已有代码。
+
+已有 detect 只是不执行项目脚本的辅助检测,但会写入草稿；不假定 ZIP 导入自动执行 detect 或存在确认界面。
+草稿不参与编排,须核对实际命令、产物和路由。先用 `app-cli validate --help` 核对安装能力,
+支持时运行 `app-cli validate --workspace .` 和 `app-cli validate --workspace . --dev` 做只读配置检查。
+`gen-lock` 负责生成派生 lock；未提供 validate 的旧版兼容检查见导入指引,不自行替换沙箱工具。
+配置通过后仍须验证实际构建和运行,不新增启动/停止门禁。
 
 ## 各模板的 Agent 约定
 

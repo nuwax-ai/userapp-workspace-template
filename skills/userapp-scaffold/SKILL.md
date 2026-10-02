@@ -3,7 +3,7 @@ name: userapp-scaffold
 description: >
   使用 template-cli 创建 UserApp workspace 或追加后端、前端、worker，支持多个同类模块。
   包含模板选择、唯一身份与路由、已有文件保护。修改 manifest、运行或排查现有应用时
-  使用 userapp-dev-guide 的对应章节。
+  使用 userapp-dev-guide 的对应章节。手动导入 ZIP/Git/已有业务代码时，转到该技能的导入适配指引，不用 init/add 覆盖原项目。
 ---
 
 # UserApp 模板脚手架
@@ -16,7 +16,9 @@ description: >
 - 用户说"加一个 Go/Java/Python/Rust 后端"
 - 用户说"加一个 React/Vue 前端"
 - 用户说"我要一个全栈项目"(考虑 Next.js)
-- 用户要在已有 workspace 里追加 service
+- 用户要在已有 workspace 里追加模板 service
+
+**已有业务导入不是脚手架新建**：先读取 `userapp-dev-guide` 的“导入已有项目”及该技能目录下的 reference，保留原代码；skill 缺失时用 `template-cli docs` 查 `07-import-existing-project.md`。当前 CLI 没有任意项目的 import/adopt 命令，不自行编造。
 
 ## 核心命令
 
@@ -31,7 +33,7 @@ npx @nuwax-ai/template-cli list frontend   # 只看前端: react / vue
 ### 查看开发者文档
 
 ```bash
-npx @nuwax-ai/template-cli docs         # 列出随 CLI 分发的 7 篇开发者文档
+npx @nuwax-ai/template-cli docs         # 列出随 CLI 分发的开发者文档
 npx @nuwax-ai/template-cli docs --open  # 用系统默认程序打开文档目录(macOS)
 ```
 
@@ -51,8 +53,8 @@ npx @nuwax-ai/template-cli init <目录名> --frontend react
 npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
-初始化前检查目录内容。`--force` 会覆盖根配置并删除重建同名模板目录,不因“目录非空”自动加此参数。
-已有业务项目增量接入;必要时先在临时目录生成模板再合入。仅确认覆盖范围内内容可丢弃时使用 `--force`。
+初始化用于空的目标目录。已有业务代码先按 dev-guide 导入适配，不使用 `--force` 覆盖。
+新 workspace 若只有 Git/平台元数据或用户说明而被非空检查拒绝，在独立空临时目录初始化后最小合入，保留原文件；这些元数据不应阻塞新建项目。
 
 init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入口首页占位页,catch-all 时跳过;
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;

@@ -211,10 +211,13 @@ npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
 \`\`\`
 
 - **userapp-scaffold**: CLI 脚手架使用(init/add/list 命令)
-- **userapp-dev-guide**: 平台开发规范(manifest 字段/路由/健康检查/日志/部署/排错)
+- **userapp-dev-guide**: 平台开发规范(导入已有项目/manifest 字段/路由/健康检查/日志/部署/排错)
 
 创建/追加模块前读取 scaffold；修改路由/manifest 或排查预览前读取 dev-guide 的对应章节，
-并阅读目标子项目的 AGENTS.md。找不到 skill 时用 \`template-cli docs\` 查同一契约。
+并阅读目标子项目的 AGENTS.md。导入现有业务前先读 dev-guide 的“导入已有项目”，
+并查阅 \`docs/07-import-existing-project.md\`（用 \`template-cli docs\` 定位随包正文）。
+保留已有业务结构、技术栈与 AGENTS.md，不要求重新生成。找不到 skill 时用
+\`template-cli docs\` 查同一契约。
 
 ## 项目结构
 
@@ -227,8 +230,8 @@ ${tableNote}
 ## 平台核心约束(manifest 契约，新增能力需核对运行时版本)
 
 1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
-2. **两个 manifest** — 根 \`workspace.manifest.toml\` + 每个一级子目录 \`project.manifest.toml\`,
-   文件名必须完全一致;平台只扫描一级子目录
+2. **两级 manifest** — 根 \`workspace.manifest.toml\` + 各一级服务目录的 \`project.manifest.toml\`,
+   文件名必须完全一致;平台只扫描一级子目录。共享库、工具、文档等非服务目录无需添加 manifest
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
 4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
 5. **回滚不执行 down migration** — \`[run].migrate\` 必须幂等,遵循 expand/contract
@@ -241,6 +244,10 @@ ${tableNote}
 - **完整开发规范**(manifest 字段/路由/健康检查/日志/部署/排错/铁律):参考
   **userapp-dev-guide** skill,或 \`npx @nuwax-ai/template-cli docs\` 查阅随 CLI 分发的
   开发者文档;\`database/\` 目录的 SQL 执行规则见该目录下的 README。
+- **导入已有项目**:按导入指引适配现有业务后，先用 \`app-cli validate --help\` 核对安装能力，
+  支持时在 workspace 根运行 \`app-cli validate --workspace .\`，dev 另加 \`--dev\` 做只读配置检查。
+  旧版兼容检查见同一指引；\`app-cli gen-lock --workspace .\` 仍负责生成派生 lock。
+  配置通过不等于构建或运行成功，不新增启动/停止门禁。
 - **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看后端模板,\`template-cli list\` 查看全部模板,
   在 workspace 根执行 \`npx @nuwax-ai/template-cli add <模板id>\`;同类模板的第二个实例
   使用唯一身份。web 实例还需唯一公共路径,如

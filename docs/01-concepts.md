@@ -11,12 +11,14 @@
 |---|---|---|
 | **`app_id`** | 平台里一个应用的稳定 ID,对应**一个 workspace** 和一套持久存储。整个应用对外就用它标识。 | `app-e2e-go` |
 | **workspace** | 你一次提交的**全部源码集合**——根目录一个 `workspace.manifest.toml`,下面若干子项目。它是**构建、发布、回滚的原子单位**(不能只发半个)。 | 整个仓库根目录 |
-| **service** | workspace 里一个**可独立构建、启动、产日志的子项目**。每个 service 在自己的子目录里有一个 `project.manifest.toml`。 | `backend-go/`、`frontend-react/` |
+| **service** | workspace 里一个**可独立构建、启动、产日志的子项目**。每个 service 在一级服务目录里有一个 `project.manifest.toml`,也可通过适配目录调用原项目构建。 | `backend-go/`、`frontend-react/` |
 
 一句话:`app_id` → 一个 `workspace` → 多个 `service`。
 
 `app_id` 与 `conversation_id` 分别标识应用与对话，不能互换。workspace 使用平台提供的当前目录，
 不根据会话 ID、用户 ID 推导路径；同一应用的后续开发应复用已有源码。
+已有项目接入时保留原技术栈、业务、Git、根 lock 文件和 monorepo 共享依赖,见
+[已有项目接入指引](07-import-existing-project.md)。
 
 ```
 app_id = my-app
@@ -51,7 +53,7 @@ app_id = my-app
 
 | # | 原则 | 对你的影响 |
 |---|---|---|
-| 1 | **两级 Manifest** | 根目录一个 `workspace.manifest.toml`,每个一级子目录一个 `project.manifest.toml`。平台只认这两个确切文件名。 |
+| 1 | **两级 Manifest** | workspace 根目录一个 `workspace.manifest.toml`,参与编排的一级服务目录各有 `project.manifest.toml`。其他目录无需 manifest；根目录和更深层的服务 manifest 不会被直接发现。 |
 | 2 | **严格校验,Fail Fast** | 写错字段(拼写、未知字段、非法枚举、重复路由、依赖环……)**构建直接失败并报清楚原因**,不会带错误配置默默上线。每个配置段都是严格模式,多写一个字段也会报错。 |
 | 3 | **端口由平台定** | HTTP/TCP 模板的进程服务保留 **`0.0.0.0:$PORT`** 监听与健康接口,HTTP worker 也一样；显式 process worker 见 [worker 模式](08-worker.md)；`type=static` 的 prod 由平台托管。`PORT` 是平台构建时确定并锁定的(范围 4000–7999)。**代码里硬编码端口 = 必错。** |
 | 4 | **镜像/资源/端口由平台管** | 运行时镜像、CPU/内存、存储大小、版本保留数都是**平台策略**,不在 TOML 里。需要的环境变量(含数据库连接串、API Key 等)写在 `[env]` 里,以明文随源码和发布包保存——按应用的访问范围评估其敏感度即可。 |
@@ -147,6 +149,7 @@ CLI 默认 `/app/code`、`/app/logs` 不等于各部署的实际路径，不在�
 RCoder 的 UserApp 运行镜像自带 PostgreSQL，跑在同一应用容器内，数据目录由 `PGDATA` 与持久卷配置确定。
 数据库迁移通过 `run.migrate` 在服务启动前执行。RCoder 通过 `APP_CLI_REQUIRE_PG=1` 声明 PG 前置等待；
 独立 app-cli 默认不做该探测，数据库由用户或客户端准备，允许远程主机与自定义端口。
+已有项目沿用实际数据库方案,不因模板默认 PostgreSQL 就改写业务数据库；连接变量与迁移行为需按实际环境核对。
 
 **连接信息**(容器环境变量,你的服务直接读):
 

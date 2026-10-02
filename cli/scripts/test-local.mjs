@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import os from 'node:os';
 import { parse as parseToml } from 'smol-toml';
+import { readImportGuide } from './pack-templates.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLI_DIR = path.resolve(__dirname, '..');
@@ -31,12 +32,24 @@ function fail(name, msg) {
 }
 
 function run(cmd, opts = {}) {
-  return execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', ...opts });
+  // 测试 CLI 行为时跳过 registry 更新检查，避免网络结果/缓存影响输出或耗时。
+  return execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', env: { ...process.env, CI: '1' }, ...opts });
 }
 
 function assert(condition, name, msg) {
   if (condition) ok(name);
   else fail(name, msg);
+}
+
+function assertLocalLinks(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8').replace(/```[\s\S]*?```/g, '');
+  for (const match of content.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
+    const target = match[1].trim().split(/\s+/)[0].replace(/^<|>$/g, '');
+    if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('#')) continue;
+    const relativePath = decodeURIComponent(target.split(/[?#]/)[0]);
+    assert(fs.existsSync(path.resolve(path.dirname(filePath), relativePath)),
+      `${path.relative(CLI_DIR, filePath)} 本地链接可达: ${target}`);
+  }
 }
 
 console.log('▶ E2E 测试\n');
@@ -61,6 +74,60 @@ try {
   ok('list 命令');
   run(`${CLI} docs`);
   ok('docs 命令');
+
+  // === 导入已有项目：唯一正文、技能入口与打包错误 ===
+  const skillsDir = path.resolve(CLI_DIR, '..', 'skills');
+  const expectedSkills = ['userapp-dev-guide', 'userapp-scaffold'];
+  const actualSkills = fs.readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(skillsDir, entry.name, 'SKILL.md')))
+    .map((entry) => entry.name).sort();
+  assert(actualSkills.join(',') === expectedSkills.join(','), '导入指引复用现有两个 skill，不新增第三个 skill');
+  for (const skillName of expectedSkills) {
+    assertLocalLinks(path.join(skillsDir, skillName, 'SKILL.md'));
+  }
+  const importGuidePath = path.join(skillsDir, 'userapp-dev-guide', 'references', 'import-existing-project.md');
+  const importGuide = readImportGuide(importGuidePath);
+  const packedImportPath = path.join(CLI_DIR, 'docs', '07-import-existing-project.md');
+  assert(fs.existsSync(packedImportPath) && fs.readFileSync(packedImportPath).equals(importGuide),
+    'cli/docs/07 是 skill reference 正文的逐字导出，不是仓库导航页');
+  const devGuide = fs.readFileSync(path.join(skillsDir, 'userapp-dev-guide', 'SKILL.md'), 'utf-8');
+  assert(devGuide.includes('references/import-existing-project.md'), 'dev-guide 提供唯一导入正文的本地入口');
+  assertLocalLinks(importGuidePath);
+  assertLocalLinks(packedImportPath);
+  const missingImportPath = path.join(WORKDIR, 'missing-import-reference.md');
+  let missingImportError;
+  try { readImportGuide(missingImportPath); }
+  catch (error) { missingImportError = error; }
+  assert(missingImportError?.message.includes('无法读取导入已有项目正文')
+    && missingImportError?.message.includes(missingImportPath)
+    && missingImportError?.cause?.code === 'ENOENT',
+    '缺导入 reference 立即抛出带路径和原因的错误');
+  const emptyImportPath = path.join(WORKDIR, 'empty-import-reference.md');
+  fs.writeFileSync(emptyImportPath, '\n  \n');
+  let emptyImportError;
+  try { readImportGuide(emptyImportPath); }
+  catch (error) { emptyImportError = error; }
+  assert(emptyImportError?.cause?.message === '导入正文不能为空',
+    '空导入 reference 不能被打成成功分发物');
+
+  // 经目录别名直接执行完整 pack：不能静默跳过入口，也不能先清输出再发现缺正文。
+  const packFixture = path.join(WORKDIR, 'pack-reference-fixture');
+  for (const dir of ['cli/scripts', 'cli/templates', 'cli/docs', 'docs']) {
+    fs.mkdirSync(path.join(packFixture, dir), { recursive: true });
+  }
+  fs.copyFileSync(path.join(CLI_DIR, 'scripts', 'pack-templates.mjs'),
+    path.join(packFixture, 'cli', 'scripts', 'pack-templates.mjs'));
+  const outputMarkers = ['cli/templates/sentinel', 'cli/docs/sentinel'];
+  for (const marker of outputMarkers) fs.writeFileSync(path.join(packFixture, marker), 'preserve output');
+  const packAlias = path.join(WORKDIR, 'pack-reference-alias');
+  fs.symlinkSync(packFixture, packAlias, 'junction');
+  let packFailure;
+  try { run(`node "${path.join(packAlias, 'cli', 'scripts', 'pack-templates.mjs')}"`, { timeout: 10000 }); }
+  catch (error) { packFailure = error; }
+  assert(packFailure?.status === 1 && String(packFailure.stderr).includes('无法读取导入已有项目正文'),
+    '目录别名启动 pack 时实际进入入口，并对缺正文失败');
+  assert(outputMarkers.every((marker) => fs.readFileSync(path.join(packFixture, marker), 'utf-8') === 'preserve output'),
+    '完整 pack 缺正文失败发生在清理原 templates/docs 之前');
 
   // === init: go + react ===
   console.log('\n=== init: go + react ===');
@@ -116,6 +183,21 @@ try {
   assert(agentsContent.includes('结构快照'), 'AGENTS.md 声明为结构快照(规范以 skills 为准)');
   assert(agentsContent.includes('0.0.0.0:$PORT'), 'AGENTS.md 含端口契约(manifest 契约保留)');
   assert(!agentsContent.includes('Go + React') && !agentsContent.includes('Python + React'), 'AGENTS.md 不含默认选型策略');
+  assert(agentsContent.includes('dev-guide 的“导入已有项目”')
+    && agentsContent.includes('docs/07-import-existing-project.md'),
+    'AGENTS.md 引导现有业务导入先读 dev-guide 入口与随包 docs07');
+  assert((agentsContent.match(/^- \*\*userapp-[^*]+\*\*:/gm) ?? []).length === 2,
+    '生成 AGENTS 仅列现有两个 skill');
+  assert(agentsContent.includes('各一级服务目录') && !agentsContent.includes('每个一级子目录'),
+    'AGENTS.md 只要求真正的服务目录有 project manifest');
+  assert(agentsContent.includes('app-cli validate --help')
+    && agentsContent.includes('app-cli validate --workspace .')
+    && agentsContent.includes('只读配置检查'),
+    '生成 AGENTS 在核对能力后引导只读 validate');
+  assert(agentsContent.includes('app-cli gen-lock --workspace .')
+    && agentsContent.includes('旧版兼容检查')
+    && agentsContent.includes('不新增启动/停止门禁'),
+    '生成 AGENTS 保留 gen-lock 生成职责与明确的旧版兼容边界');
 
   // === CLAUDE.md + 根 database/(init 根产物) ===
   const claudePath = path.join(appDir, 'CLAUDE.md');
@@ -184,6 +266,7 @@ try {
   }
   assert(![...tarballFiles].some((f) => f.endsWith('/.gitignore')), 'npm 包不含裸 .gitignore(会被 pack 排除,须以 _gitignore 承载)');
   assert(tarballFiles.has('templates/userapp-next/.env.example') && tarballFiles.has('templates/userapp-next/next-env.d.ts'), 'npm 包含曾被 .gitignore 规则连带排除的 .env.example/next-env.d.ts');
+  assert(tarballFiles.has('docs/07-import-existing-project.md'), 'npm 包分发导入已有项目正文');
 
   // === init: react 自定义 service_id + path(运行时读取 TOML,不生成第二份 base) ===
   console.log('\n=== init: react custom service_id + path ===');
