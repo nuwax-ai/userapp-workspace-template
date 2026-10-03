@@ -15,7 +15,7 @@
 
 一句话:`app_id` → 一个 `workspace` → 多个 `service`。
 
-`app_id` 与 `conversation_id` 分别标识应用与对话，不能互换。workspace 使用平台提供的当前目录，
+`app_id` 与 `conversation_id` 分别标识应用与对话，不能互换。workspace 使用平台首次提供的固定源码根（首次记录 `SOURCE_WORKSPACE=$PWD`），
 不根据会话 ID、用户 ID 推导路径；同一应用的后续开发应复用已有源码。
 已有项目接入时保留原技术栈、业务、Git、根 lock 文件和 monorepo 共享依赖,见
 [已有项目接入指引](07-import-existing-project.md)。
@@ -134,6 +134,8 @@ app_id = my-app
 > `APP_RELEASE_ID`,也不能以 `RCODER_` 开头。这些是平台的。
 
 ### 工作目录与持久目录
+
+平台 dev 初始化、根 manifest 和配置校验始终使用首次记录的 `SOURCE_WORKSPACE`。进入服务目录后不重设；预建空 `code/`、`state/`、`builds/`、`.run/` 不成为新的源码根。内层已有完整工程时保留业务，按[已有项目接入指引](07-import-existing-project.md)接入原根。独立客户端可在用户选定的新目录初始化，其源码根与平台固定根分别按各自入口确定。
 
 | 定位方式 | 内容 |
 |---|---|

@@ -1,7 +1,7 @@
 ---
 name: userapp-dev-guide
 description: >
-  开发、导入或排查 UserApp workspace 时使用：手动导入 ZIP/Git/已有代码、接入不规范项目、
+  开发、接入或排查 UserApp workspace 时使用：已有 ZIP/Git/业务代码适配、平台源码根与嵌套工程修正、
   manifest、服务路由、worker 探测、数据库迁移、日志、iframe、发布恢复及 app-cli 本地验证。
   导入适配保留原技术栈和业务，按需读取 references/import-existing-project.md；
   创建 workspace 或追加模板的 CLI 用法见 userapp-scaffold。
@@ -28,11 +28,17 @@ app_id = my-app
      └── frontend-react/ ── project.manifest.toml ┘
 ```
 
+## 源码根与运行目录
+
+平台开发会话第一次执行命令时记录 `SOURCE_WORKSPACE=$PWD`，此后初始化、根 manifest、构建和配置校验都使用这个固定源码根。进入服务目录后不重新赋值；新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 属于预留或派生目录，不是让 agent 再建 workspace 的目标。独立客户端可按用户选择 `init <dir>` 新建，进入该目录后记录自己的源码根。
+
+仅有 Git/agent 元数据、用户说明或平台预建空目录的新 workspace 可在原根初始化。旧版 CLI 非空拒绝时，在工作区外临时生成后最小合入原根，保留已有文件；不要使用 force 或把完整工程留在下一层。`code/` 内已有完整业务时按下面的适配指引接入原根，不重新脚手架化，也不拿子目录 validate 通过替代平台根检查。
+
 ## 导入已有项目
 
-用户手动导入 ZIP、Git 项目或已有代码，要求接入 UserApp 时，**先读本技能的[导入适配指引](references/import-existing-project.md)**。根 manifest 已存在但新增模块尚未接入时，同样使用该流程。
+已有 ZIP 解压内容、Git 项目或业务代码需要接入 UserApp 时，**先读本技能的[导入适配指引](references/import-existing-project.md)**。根 manifest 已存在但新增模块尚未接入时，同样使用该流程。
 
-先盘点实际服务和依赖 → 保留原结构并安排一级服务目录 → 补齐真实构建、产物、启动、探测和路由 → 核对 `app-cli validate --help` 后用 `app-cli validate --workspace .` 只读校验（旧版兼容检查见导入指引） → 实际构建和访问验证。不要在业务目录使用 `init --force`，不改写技术栈或覆盖用户 AGENTS。只有空的新项目才交给 scaffold。
+先盘点实际服务和依赖 → 保留原结构并安排一级服务目录 → 补齐真实构建、产物、启动、探测和路由 → 核对 `app-cli validate --help` 后用 `app-cli validate --workspace "$SOURCE_WORKSPACE"` 对原根只读校验（旧版兼容检查见导入指引） → 实际构建和访问验证。不要在业务目录使用 `init --force`，不改写技术栈或覆盖用户 AGENTS。没有业务代码的新项目才交给 scaffold；元数据或预建空目录不代表已有业务。
 
 找不到本地 reference 时执行 `template-cli docs`，阅读列出的 `07-import-existing-project.md`；平台草稿检测仅是辅助，不代表项目已经适配。
 
@@ -231,7 +237,7 @@ RCoder UserApp 容器自带 PG，通常为同容器 `localhost:5432`。连接参
   3. `strip_prefix` 保持 true(产物按根路径打包)
   4. 后端 `/api/*` 前缀不受影响,前端调用仍用相对路径
   5. 全 workspace 仍最多一个 `/`;Next.js 单体本就占 `/`,不可再加
-- 改完按下文校验工作流运行 `app-cli validate --workspace .`（dev 另加 `--dev`；先核对安装能力），再实际构建并检查页面、JS/CSS 资源 URL、Content-Type 与深链接；dev 还需验证 HMR。配置和构建命令成功不能替代 base/path/strip_prefix 与真实产物路由的访问验证
+- 改完按下文校验工作流运行 `app-cli validate --workspace "$SOURCE_WORKSPACE"`（dev 另加 `--dev`；先核对安装能力），再实际构建并检查页面、JS/CSS 资源 URL、Content-Type 与深链接；dev 还需验证 HMR。配置和构建命令成功不能替代 base/path/strip_prefix 与真实产物路由的访问验证
 - 判定原则:拿不准就留在默认策略;接管 `/` 属路由变更,完成后必须走路由分发验证
 
 ### 服务间互调(推荐:走容器内反代)
@@ -405,14 +411,14 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 ### 工作流 1:manifest/路由只读校验
 
-先用 `app-cli validate --help` 核对安装能力；支持时执行：
+先用 `app-cli validate --help` 核对安装能力；支持时检查已记录的源码根，平台不得改用 `code/` 或 `.run/`：
 
 ```bash
-app-cli validate --workspace <workspace根>
+app-cli validate --workspace "$SOURCE_WORKSPACE"
 # 有开发运行方式时另检 dev 代理规则
-app-cli validate --workspace <workspace根> --dev
+app-cli validate --workspace "$SOURCE_WORKSPACE" --dev
 # 需要机器读取报告时
-app-cli validate --workspace <workspace根> --json
+app-cli validate --workspace "$SOURCE_WORKSPACE" --json
 ```
 
 读取当前源码 manifest → 发现一级服务 → 校验字段、依赖、端口分配和对应 profile 的代理规则。

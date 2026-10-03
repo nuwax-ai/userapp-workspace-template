@@ -9,6 +9,10 @@
 
 ## Step 1:建目录结构
 
+**平台开发**先在首次提供的目录记录 `SOURCE_WORKSPACE=$PWD`，把它作为固定源码根。需要模板时执行 `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend go`；仅有元数据、用户说明或平台预建空目录不改到下一层。安装版因非空拒绝时可在工作区外临时生成，再最小合入原根，保留既有文件。`code/` 内已有完整业务则走[已有项目适配](07-import-existing-project.md)。
+
+**独立客户端**可以按用户选择执行 `init my-app --backend go`，进入生成目录后记录自己的源码根。下方 `my-app/` 是 workspace 结构示意，平台不用另建该目录。
+
 一个 workspace 至少要有:根目录一个 `workspace.manifest.toml` + 一个子项目目录(里面一个
 `project.manifest.toml`)。
 
@@ -102,6 +106,8 @@ unzip -l artifact.zip
 
 ## Step 5:触发构建与发布
 
+先核对 `app-cli validate --help`，安装版提供该命令时对原始源码根执行 `app-cli validate --workspace "$SOURCE_WORKSPACE"`；有 dev 运行方式时追加 `--dev`，检查退出码和预期服务清单。刚在 `api/` 等子目录构建后也使用同一个根，不能用内层工程或 `.run/` 的校验替代平台源码检查。配置通过只证明配置有效。
+
 代码和配置就绪后,在**平台界面上**操作你的应用:
 
 - **「发布」按钮**(有时叫「构建并发布」/「部署」)——一键完成:构建 → 准备 → 激活 → 就绪确认。
@@ -161,10 +167,10 @@ my-app/
 
 ## 导入已有项目
 
-将已有代码手动放入平台提供的 workspace 后,请 agent 按
+已有业务需要接入平台，或完整工程已位于平台子目录时，请 agent 按
 [已有项目接入指引](07-import-existing-project.md) 增量适配。保留原技术栈、业务、Git、根 lock 文件
 和 monorepo 共享依赖。仅参与编排的一级服务目录需要 `project.manifest.toml`；可用一级适配目录
-调用原根构建,无需拆散 `apps/`、`packages/`。`init` 仅用于真正的空目录。
+调用原根构建,无需拆散 `apps/`、`packages/`。`init` 用于没有业务的新 workspace；元数据或预建空目录按第 1 步处理，已有工程按接入指引保留并适配。
 
 平台已有 detect 能辅助识别项目描述文件,不执行项目脚本,但会写入 `project.manifest.draft.toml`
 草稿。不要假定 ZIP 导入会自动调用 detect 或存在确认界面。**草稿不参与编排**,agent 应根据
@@ -173,9 +179,9 @@ my-app/
 先执行 `app-cli validate --help` 确认安装能力，支持时做只读配置检查：
 
 ```bash
-app-cli validate --workspace .
+app-cli validate --workspace "$SOURCE_WORKSPACE"
 # 有开发运行方式时另检 dev 代理规则
-app-cli validate --workspace . --dev
+app-cli validate --workspace "$SOURCE_WORKSPACE" --dev
 ```
 
 命令不生成 lock、不构建、不启动。退出码 0/1/2/3 分别表示配置通过、配置错误、参数错误、

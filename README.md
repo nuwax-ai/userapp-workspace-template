@@ -13,9 +13,19 @@ workspace 可以包含**多个不同语言的服务**(前端 + 后端、多个�
 
 ## 0. 快速开始:用 CLI 生成 workspace(推荐)
 
-`init` 用于真正为空的目标目录。用 `@nuwax-ai/template-cli` 按需组合,一条命令生成 workspace。
+`init` 用于空目录，或仅有 Git、平台/agent 元数据及用户说明的目录。默认初始化保留已有
+`AGENTS.md`、`CLAUDE.md` 和 README，并集合并 `.gitignore`；生成路径冲突时会在写入前拒绝。
 已有代码手动导入后,让 agent 按 [已有项目接入指引](docs/07-import-existing-project.md) 增量适配,
 保留原技术栈和业务；不要用 `init --force` 覆盖已有项目。
+
+**平台沙箱：**平台提供的 workspace 路径就是唯一应用根。在该根执行
+`npx @nuwax-ai/template-cli init . --backend python --frontend react`，manifest 和各服务直接生成在根。
+Git、skills、配置、状态等元数据不需要清理，也不需要 `--force`；已有空 `code/` 可以保留，
+不能因为根目录非空就改到 `code/` 或应用名子目录内初始化。`code/` 内已有源码或 workspace 时，
+按已有项目接入指引适配，不另建嵌套 workspace。
+
+**独立本地开发：**可以用 `init my-app` 创建新目录，或在选定的空目录运行 `init .`。
+`--force` 保留用于已明确可丢弃的目标目录；它会覆盖生成文件和所选模板目录。
 
 **运行时要求：** `template-cli` 0.1.14 的 React/Vue 模板使用 `dev_strip_prefix`，需要
 app-cli ≥ 0.3.7，以及支持该字段的 RCoder。旧运行时严格解析 manifest 时会拒绝该字段；

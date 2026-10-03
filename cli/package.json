@@ -1,6 +1,6 @@
 {
   "name": "@nuwax-ai/template-cli",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "UserApp workspace 模板脚手架 CLI — 按需组合多语言前后端模板",
   "type": "module",
   "bin": {
@@ -12,7 +12,8 @@
     "pack": "node scripts/pack-templates.mjs",
     "prepublishOnly": "npm run build && npm run pack",
     "dev": "tsc --watch",
-    "test": "node scripts/test-local.mjs",
+    "test": "node --test scripts/test-init.mjs && node scripts/test-local.mjs",
+    "test:init": "node --test scripts/test-init.mjs",
     "release:beta": "node scripts/release.mjs beta",
     "release": "node scripts/release.mjs release"
   },

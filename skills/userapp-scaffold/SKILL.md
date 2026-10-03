@@ -2,7 +2,7 @@
 name: userapp-scaffold
 description: >
   使用 template-cli 创建 UserApp workspace 或追加后端、前端、worker，支持多个同类模块。
-  包含模板选择、唯一身份与路由、已有文件保护。修改 manifest、运行或排查现有应用时
+  包含模板选择、唯一身份与路由、平台固定源码根及已有文件保护。修改 manifest、运行或排查现有应用时
   使用 userapp-dev-guide 的对应章节。手动导入 ZIP/Git/已有业务代码时，转到该技能的导入适配指引，不用 init/add 覆盖原项目。
 ---
 
@@ -39,6 +39,23 @@ npx @nuwax-ai/template-cli docs --open  # 用系统默认程序打开文档目�
 
 ### 新建 workspace
 
+先区分平台开发会话与独立客户端：
+
+- **平台开发会话**：第一次执行命令时记录平台提供的源码根 `SOURCE_WORKSPACE=$PWD`。初始化、根 manifest 和完成后的校验始终指向此值；进服务目录后不重新赋值，新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不作为源码根，原根非空也不改到下一层。
+- **独立客户端**：用户指定 `init <目录名>` 创建新 workspace，进入生成目录后再记录源码根。下方 `<目录名>` 示例属于此流程；平台用 `"$SOURCE_WORKSPACE"` 替代。
+
+平台首次新建的示例：
+
+```bash
+SOURCE_WORKSPACE=$PWD
+npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend python --frontend react
+app-cli validate --help
+# 安装版提供 validate 时检查原根；有 dev 运行方式时再加 --dev
+app-cli validate --workspace "$SOURCE_WORKSPACE"
+```
+
+独立客户端按用户选定目录创建；用户明确允许丢弃并重建该独立目标时，`--force` 保留既有覆盖语义。平台元数据保留及已有应用的增量接入使用普通初始化或适配流程：
+
 ```bash
 # 后端 + 前端
 npx @nuwax-ai/template-cli init <目录名> --backend <lang> --frontend <lang>
@@ -53,8 +70,8 @@ npx @nuwax-ai/template-cli init <目录名> --frontend react
 npx @nuwax-ai/template-cli init <目录名> --next
 ```
 
-初始化用于空的目标目录。已有业务代码先按 dev-guide 导入适配，不使用 `--force` 覆盖。
-新 workspace 若只有 Git/平台元数据或用户说明而被非空检查拒绝，在独立空临时目录初始化后最小合入，保留原文件；这些元数据不应阻塞新建项目。
+普通初始化用于没有业务代码的新 workspace；用户明确要求重建可丢弃的独立目标时适用上面的 force 例外。平台原根仅有 Git/agent 元数据、用户说明或平台预建空目录时正常执行 init，保留已有内容；安装版 CLI 若仍因非空拒绝，在工作区外的空临时目录生成，将缺失的根文件和服务目录最小合入原根，合并既有 AGENTS/CLAUDE/.gitignore，不把整个临时工程放入下一层，也不使用 `--force`。完成后对原根执行 validate，核对实际服务清单。
+`code/` 等子目录里已有完整业务工程时，按 dev-guide 导入适配保留代码并接入平台原根；不能将它当空模板覆盖，也不能仅在该子目录校验后宣称平台构建已可用。
 
 init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入口首页占位页,catch-all 时跳过;
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;
@@ -67,7 +84,8 @@ init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入�
 ### 往已有 workspace 追加 service
 
 ```bash
-cd <workspace根目录>
+# 平台使用首次记录的 SOURCE_WORKSPACE；独立客户端使用其选定的根
+cd "$SOURCE_WORKSPACE"
 npx @nuwax-ai/template-cli add <模板id>
 # 例: npx @nuwax-ai/template-cli add backend-rust
 ```

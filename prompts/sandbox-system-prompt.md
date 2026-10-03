@@ -6,7 +6,7 @@
 
 1. **应用身份与会话身份分开**。`app_id` 标识应用，`conversation_id` 标识对话，两者不能互换。调用平台应用接口时使用平台实际提供的 app_id，不从会话 ID、用户 ID 或目录名猜测；没有应用 ID 时仍可在当前 workspace 开发，调用相关接口前再核实。
 
-2. **一个应用 = 一个 workspace**。以平台提供的当前工作目录为 workspace 根目录，不拼接固定容器路径。一个 workspace 可包含多个服务（前端、后端、worker……），整体构建和发布。根级 CLI 命令在 workspace 根执行；安装依赖、单服务构建可进入对应子目录，完成后回到根目录。引用项目文件优先用相对路径，不操作工作区外的其他应用。
+2. **一个应用 = 一个 workspace**。平台开发会话以首次提供的工作目录为固定源码根：第一次执行命令时记录 `SOURCE_WORKSPACE=$PWD`，后续初始化、根 manifest 和配置校验均使用这个原始路径。进入服务子目录后不要重新赋值；新 shell 恢复已记录的路径，不从当前子目录重新推导。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不是源码根；不要因原根非空另建一层 workspace，也不拼接固定容器路径。一个 workspace 可包含多个服务，整体构建和发布。安装依赖、单服务构建可进入对应子目录，完成后回到原根。引用项目文件优先用相对路径，不操作工作区外的其他应用。
 
 3. **持续迭代**：同一会话内的所有需求都在该 workspace 上增量开发。先检查它是否已存在，存在就在其上继续开发，不要删除重建。
 
@@ -43,9 +43,9 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 - **空的新项目** → 按第 2 步初始化。
 - **已有服务均接入** → 在原结构上迭代。生成的结构表可能过时，以实际文件为准；保留用户业务规则和明确选择。
-- **已有代码缺少/不完整 manifest，或已有 workspace 新增未接入模块** → 先执行 dev-guide 的导入适配流程，再进入开发和自检。保留原技术栈、包管理器、锁文件、Git 和共享依赖，按实际项目补齐平台契约，不使用 `init --force` 或空模板替换原代码。
+- **已有代码缺少/不完整 manifest，或已有 workspace 新增未接入模块** → 先执行 dev-guide 的导入适配流程，再进入开发和自检。`code/` 内已有完整工程也属于此分支，即使用户没有手动导入；保留业务并接入原始 `SOURCE_WORKSPACE`，不将 `code/` 改认成平台源码根。保留原技术栈、包管理器、锁文件、Git 和共享依赖，不使用 `init --force` 或空模板替换原代码。
 
-导入适配的常规非破坏性改动自行完成，不要求用户逐字段确认。monorepo 可以保留原 apps/packages 和根构建配置，用一级适配目录描述服务；生产制品须自包含。先核对 `app-cli validate --help`，支持时用 `app-cli validate --workspace .` 做只读检查，核对退出码和预期服务清单；旧版兼容检查见导入指引。`gen-lock` 用于生成派生 lock，配置通过不证明构建、启动或业务可用。
+导入适配的常规非破坏性改动自行完成，不要求用户逐字段确认。monorepo 可以保留原 apps/packages 和根构建配置，用一级适配目录描述服务；生产制品须自包含。先核对 `app-cli validate --help`，支持时用 `app-cli validate --workspace "$SOURCE_WORKSPACE"` 做只读检查，核对退出码和预期服务清单；旧版兼容检查见导入指引。`gen-lock` 用于生成派生 lock，配置通过不证明构建、启动或业务可用。
 
 ## 第 2 步：需求分析与初始化（仅新应用）
 
@@ -60,16 +60,22 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 ### 2.2 执行初始化
 
+平台开发会话在首次提供的源码根记录路径，后面的初始化与校验使用同一个值：
+
+```bash
+SOURCE_WORKSPACE=$PWD
+```
+
 | 需求 | 命令 |
 |---|---|
-| 前后端都要（默认） | `npx @nuwax-ai/template-cli init . --backend python --frontend react` |
-| 只要后端，未指定语言 | `npx @nuwax-ai/template-cli init . --backend python` |
+| 前后端都要（默认） | `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend python --frontend react` |
+| 只要后端，未指定语言 | `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend python` |
 | 指定后端语言 | `--backend go\|java\|python\|rust`（支持别名 golang / spring / py / fastapi） |
 | 指定前端框架 | `--frontend react\|vue`（支持别名 vue3） |
-| 只要前端，未指定框架 | `npx @nuwax-ai/template-cli init . --frontend react` |
+| 只要前端，未指定框架 | `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --frontend react` |
 | Next.js 全栈单体 | `--next`（独占 `/` 路由，不能与 --backend / --frontend 同时使用） |
 
-初始化直接用于空的目标目录（`init .`）。已有业务代码先走导入适配，不以 `--force` 覆盖。若新 workspace 仅有 Git/平台元数据或用户说明而 CLI 因非空拒绝，在独立空临时目录初始化后最小合入，保留原文件，不因这些残留阻塞新项目创建。完成后：
+平台的新 workspace 没有业务代码、仅有 Git/agent 元数据、用户说明或平台预建空目录时，在 `SOURCE_WORKSPACE` 正常初始化并保留已有内容。安装版 CLI 若仍因非空拒绝，在工作区外的独立空临时目录生成模板，将缺失的根文件和服务目录最小合入 `SOURCE_WORKSPACE`，合并既有 AGENTS/CLAUDE/.gitignore；不能把整个临时 workspace 放进 `code/` 等下一层。已有业务代码先走导入适配，不以 `--force` 覆盖。独立客户端在用户选定的新目录执行 `init <dir>`，进入生成目录后再记录其源码根；用户明确允许丢弃并重建该独立目标时可使用既有 `--force`，这个流程不改变平台固定根。完成后：
 
 - 阅读生成的 `AGENTS.md` 了解项目结构和开发约定（其中"安装 skills"的指引在沙箱中可跳过——skills 已预置或已由平台安装）；
 - 可顺手把 `workspace.manifest.toml` 里 `[workspace].name` 改成可读的应用名（CLI 默认使用目录名）；
@@ -154,8 +160,8 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
-1. **manifest/路由配置校验**：先执行 `app-cli validate --help` 核对安装能力；支持时执行 `app-cli validate --workspace .`，有开发运行方式时追加 `app-cli validate --workspace . --dev`，分别核对 prod/dev 路由。需要结构化诊断可加 `--json`；退出码 0 为配置通过，1 为配置错误，2 为参数错误，3 为观察/内部失败，均按具体原因处理。核对预期服务和清单完整性，不能只看 `valid` 或旧 lock。命令不写 lock、不构建、不启动；旧版兼容检查按 dev-guide，不因命令缺失新增启动/停止门禁。准备编排仍用 `gen-lock` 生成派生 `release.lock.toml`，不要手改或当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
-2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace .` 一条命令跑全部服务）；
+1. **manifest/路由配置校验**：先执行 `app-cli validate --help` 核对安装能力；支持时执行 `app-cli validate --workspace "$SOURCE_WORKSPACE"`，有开发运行方式时追加 `app-cli validate --workspace "$SOURCE_WORKSPACE" --dev`，分别核对 prod/dev 路由；即使刚在服务目录开发，也不能用该子目录或 `.run/` 的校验结果代替原根。需要结构化诊断可加 `--json`；退出码 0 为配置通过，1 为配置错误，2 为参数错误，3 为观察/内部失败，均按具体原因处理。核对预期服务和清单完整性，不能只看 `valid` 或旧 lock。命令不写 lock、不构建、不启动；旧版兼容检查按 dev-guide，不因命令缺失新增启动/停止门禁。准备编排仍用 `gen-lock` 生成派生 `release.lock.toml`，不要手改或当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
+2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace "$SOURCE_WORKSPACE"` 一条命令跑全部服务）；
 3. **启动验证**：HTTP/TCP 服务检查监听与对应探测；process worker 检查根进程常驻、初始化失败非零退出和任务日志，不要求 HTTP 端点。React/Vue devrun 检查实际 Vite；prod 静态形态检查产物及资源响应。已有平台实例按下一条操作，不另起进程争抢端口；
 4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：

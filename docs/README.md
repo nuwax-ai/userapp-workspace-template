@@ -11,6 +11,10 @@ UserApp 的核心模型是:**一个 `app_id` 对应一个 workspace;一个 works
 
 你需要提供代码、一个 workspace manifest 和各编排服务的 manifest。镜像、资源、端口、反向代理这些平台都替你管了。
 
+平台开发使用首次提供的固定源码根：首次记录 `SOURCE_WORKSPACE=$PWD`，模板 init 与完成后的 validate 始终指向此根。预建空 `code/`、状态与运行产物目录不改变源码根；已有内层完整工程保留业务，按接入指引适配。独立客户端可按用户选定的新目录创建 workspace。
+
+维护平台 agent 指引时，需分别同步实际注入的[系统提示词](../prompts/README.md)、agent-store 中安装的 scaffold/dev-guide 及完整 references、CLI 生成的 AGENTS。npm 发布不会更新已安装技能或现场提示词；仓库文案与正在运行的会话是否生效分别核验。
+
 ## 阅读路径
 
 **第一次接触?** 按顺序读前两篇,就能把一个服务跑起来:
@@ -27,7 +31,7 @@ UserApp 的核心模型是:**一个 `app_id` 对应一个 workspace;一个 works
 
 5. [日志](05-logs.md) — 怎么声明日志源、怎么查询/订阅日志、怎么发现 service_id。
 6. [部署、发布与回滚](06-deploy-release.md) — 构建产物长什么样、发布状态机、回滚、版本保留、数据库迁移约定、健康检查、常见错误排查。
-7. [接入已有项目](07-import-existing-project.md) — 手动导入后由 agent 适配,保留原技术栈和 monorepo 布局,核对配置、构建与运行证据。
+7. [接入已有项目](07-import-existing-project.md) — 已有项目由 agent 增量适配，保留原技术栈和 monorepo 布局,核对配置、构建与运行证据。
 8. [Worker 模式](08-worker.md) — HTTP worker 与显式 process worker 的探测、编排和版本要求。
 
 ## 一句话速记

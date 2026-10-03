@@ -29,7 +29,12 @@ template-cli list --category fullstack   # 等价写法
 
 ### `init <dir>` — 新建 workspace
 
-用于真正为空的目标目录。已有项目手动导入后,请 agent 按
+用于空目录，或仅有 Git、平台/agent 元数据和用户说明的目录。默认保留已有
+`AGENTS.md`、`CLAUDE.md`、README，并集合并 `.gitignore`；生成路径冲突在写入前拒绝。
+平台沙箱在平台提供的 workspace 根执行 `init .`，manifest 与服务直接生成在该根，
+不要因元数据非空另建 `code/` 或应用名目录；独立客户端仍可用 `init my-app` 创建新目录。
+`--force` 用于明确可丢弃的目标，保留覆盖生成文件及所选模板目录的用途。
+已有项目手动导入后,请 agent 按
 [接入指引](https://github.com/nuwax-ai/userapp-workspace-template/blob/main/skills/userapp-dev-guide/references/import-existing-project.md)
 保留原技术栈、业务和依赖布局,增量适配；不要用 `init --force` 覆盖已有项目。
 随 npm 包安装的正文可通过 `template-cli docs` 定位。

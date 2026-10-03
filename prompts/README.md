@@ -24,12 +24,17 @@
 1. 直接修改 `sandbox-system-prompt.md` 并 commit（本仓库即唯一正源）。
 2. 修改后需**同步到平台注入链路**（rcoder 侧的 agent system prompt 配置 / 请求级
    `system_prompt_override`），沙箱不会拉取本仓库。
-3. 铁律/规则类变更请同步检查 `skills/`、根 `README.md` 与 `cli/src/manifest.ts`
+3. 同步平台 agent-store 中实际安装的两份 skills 及完整 references，并核对会话是否加载了新内容；npm 发布不会刷新 agent-store，CLI 新生成的 AGENTS 也不会替换存量技能。
+4. 铁律/规则类变更请同步检查 `skills/`、根 `README.md` 与 `cli/src/manifest.ts`
    （generateAgentsMd）中的对应表述，避免多处漂移。
 
 > 本目录不进入 npm 包（`cli/package.json` files 白名单不含它），也不会被
 > `template-cli init/add` 复制进生成的项目（CLI 只释放 `cli/templates/<id>/` 与显式生成的
 > workspace 根文件）。
+
+### 平台源码根约定
+
+平台开发会话在首次提供的 cwd 记录 `SOURCE_WORKSPACE=$PWD`，初始化与完成后的 validate 都使用同一源码根。平台预建空 `code/`、状态和产物目录不改变根；独立客户端按用户选择的新目录初始化。已有内层完整工程走导入适配，保留业务并接入原根。该约定须同时进入实际注入的系统提示词、agent-store 的 scaffold/dev-guide 与 CLI 生成的 AGENTS；修改仓库文件或发布 npm 包只完成其中对应的制品更新，不证明现场会话已生效。
 
 ### 导入已有项目的指引同步
 

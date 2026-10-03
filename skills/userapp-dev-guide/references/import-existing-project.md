@@ -1,15 +1,18 @@
 # 导入已有项目
 
-本指引用于用户手动放入 ZIP 解压内容、Git 项目或已有业务目录后，由 agent 将它接入 UserApp workspace。也适用于已有 workspace 新增一个尚未接入的模块。
+本指引用于将已有 ZIP 解压内容、Git 项目或业务目录接入 UserApp workspace，也适用于新增未接入模块，以及完整工程误放在平台 `code/` 等子目录的情况；不要求用户曾手动导入。
 
 目标是保留原业务和技术栈，补齐平台构建、运行及路由契约。**不要求项目来自模板，不要求改成模板的分层结构，也不把用户项目替换成新脚手架。**
 
 ## 1. 先判断当前状态
 
+平台首次提供的工作目录是固定源码根。第一次执行命令时记录 `SOURCE_WORKSPACE=$PWD`；已经进入子目录时恢复首次记录，不以当前 pwd 重设。后续根 manifest、初始化和 validate 均指向此根。独立客户端的新建目录由用户选择，进入生成目录后记录对应源码根。
+
 | 状态 | 处理 |
 |---|---|
 | 空的新目录 | 使用 userapp-scaffold 创建所需模板 |
-| 新 workspace 仅有 Git/平台元数据或用户说明 | 在独立空临时目录生成再最小合入，保留原文件，不强制覆盖或阻塞创建 |
+| 新 workspace 仅有 Git/agent 元数据、用户说明或平台预建空目录 | 在原根正常 init；旧版非空拒绝时工作区外临时生成后最小合入原根，保留已有内容，不 force、不再套一层 |
+| 平台 `code/` 等子目录内已有完整工程 | 保留业务与依赖，按第 3 节接入原根；不把子目录认作平台源码根 |
 | 已有代码，没有根 manifest 或配置不完整 | 按本指引接入 |
 | 已有有效 workspace，新增未接入业务模块 | 保留旧服务，增量接入新模块 |
 | 已有服务均接入，只需修改功能 | 沿用现有结构增量开发 |
@@ -42,6 +45,14 @@
 ### 简单项目
 
 可以将原项目的运行与构建文件整理到 `web/`、`api/` 等一级目录，再在根写 workspace manifest。移动前核对相对引用、脚本 cwd、资源路径和 gitignore；不要使用 `mv *` 搬走 `.git`、用户说明或平台状态目录。也可以使用下面的适配目录方式保留原布局。
+
+### 平台子目录内已有完整 workspace
+
+先比较原根与 `code/` 内的业务、manifest、Git、lock 和共享依赖，查明实际服务。`state/`、`builds/`、`.run/` 及其他平台状态或运行产物保留原位，不能当源码搬走或删除。
+
+保持平台根不变，选择最小接入方式：可在核对相对路径、Git 和既有文件冲突后，将内层 workspace 的源码根文件与服务目录逐项合入原根；也可保留内层业务布局，在原根建立下面的一级编排适配目录，调用已有构建并归集自包含产物。保留业务、锁文件与共享依赖，不复制成两套工程、不覆盖根 AGENTS/CLAUDE，不执行 `init --force` 或通配符整体搬迁。常规可逆适配直接完成；只有实际覆盖冲突或破坏性调整需要澄清。
+
+完成后 `workspace.manifest.toml` 位于 `SOURCE_WORKSPACE`，预期服务能从该根的一级目录发现。对原根执行 validate，并按实际源码路径检查构建、dev 启动与产物布局；内层单独通过不能证明平台接口可构建。
 
 ### monorepo 或根目录有共享构建配置
 
@@ -105,21 +116,21 @@ workspace/
 
 先执行 `app-cli validate --help` 确认安装的二进制提供只读校验命令，不能仅凭版本号假定已发布或沙箱已升级。不自行 npm install 或替换平台工具。
 
-支持时在 workspace 根执行，显式传入目录，分别检查生产与开发代理规则：
+支持时对已记录的源码根执行，分别检查生产与开发代理规则；平台不得改用内层 `code/` 或运行目录：
 
 ```bash
-app-cli validate --workspace .
+app-cli validate --workspace "$SOURCE_WORKSPACE"
 # 有开发运行方式时另外检查开发代理规则；不放宽生产 manifest 必填项
-app-cli validate --workspace . --dev
+app-cli validate --workspace "$SOURCE_WORKSPACE" --dev
 # 需要结构化诊断时使用；stdout 是单一 JSON 报告
-app-cli validate --workspace . --json
+app-cli validate --workspace "$SOURCE_WORKSPACE" --json
 ```
 
 逐条检查退出码：`0` 配置通过；`1` 配置语法/语义错误；`2` 命令参数错误；`3` 文件观察、DNS/超时、输出或内部失败。报告 `valid` 只代表配置检查；`services_complete=false` 时服务清单不完整，不能声称全部模块通过。核对发现的服务是否覆盖预期模块，未放一级 manifest 的目录不会自动报错。检查失败按具体原因处理，不转用旧 lock 或另一命令掩盖失败。
 
 `validate` 不生成或修改 `release.lock.toml`，不修改配置、状态或日志，不执行构建/迁移/服务命令、不连接数据库。它不读取旧 lock 作为权威，也不检查 dist/zip、依赖安装、端口占用或业务就绪。某些 custom 代理配置的静态 hostname 会触发 DNS，不能称为完全离线检查。
 
-**旧版兼容检查**：仅在安装版本未提供 validate 时，明确记录该能力缺失；核对 `app-cli gen-lock --help` 后可使用既有 `app-cli gen-lock --workspace .`，开发规则另用 `app-cli gen-lock --workspace . --dev`。这会生成或覆盖派生 lock，不能标成只读 validate 已通过。缺少新命令不新增启动/停止门禁，不要求用户删除文件；若既有命令也不可用，报告具体工具缺口。
+**旧版兼容检查**：仅在安装版本未提供 validate 时，明确记录该能力缺失；核对 `app-cli gen-lock --help` 后可使用既有 `app-cli gen-lock --workspace "$SOURCE_WORKSPACE"`，开发规则另用 `app-cli gen-lock --workspace "$SOURCE_WORKSPACE" --dev`。这会生成或覆盖派生 lock，不能标成只读 validate 已通过。缺少新命令不新增启动/停止门禁，不要求用户删除文件；若既有命令也不可用，报告具体工具缺口。
 
 准备本地编排时仍由 `gen-lock` 生成派生 lock，失败时旧文件可能保留，不沿用旧结果。不要手改该文件，也不要把它当作源码依赖锁：原 pnpm/package-lock、Cargo.lock 等仍须保留。
 

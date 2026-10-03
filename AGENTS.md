@@ -81,7 +81,9 @@ node cli/dist/index.js init /tmp/test --backend java
 已有源码手动导入后,先读取原项目规则、构建入口和依赖文件,使用现有 `userapp-dev-guide` 的
 [已有项目接入指引](skills/userapp-dev-guide/references/import-existing-project.md) 增量适配。
 保留原技术栈、业务、Git、根 lock 文件与 monorepo 共享依赖；可用一级适配目录调用原根构建。
-`init` 仅用于真正的空目录,不得用 `--force` 覆盖已有代码。
+`init` 用于空目录或仅有 Git、平台/agent 元数据及用户说明的目录，默认保留已有说明和配置。
+平台提供的 workspace 就是唯一应用根，在该根执行 `init .`；不能因元数据非空而改到 `code/` 或应用名子目录。
+已有业务或嵌套 workspace 按接入指引适配，不得用 `--force` 覆盖已有代码。
 
 已有 detect 只是不执行项目脚本的辅助检测,但会写入草稿；不假定 ZIP 导入自动执行 detect 或存在确认界面。
 草稿不参与编排,须核对实际命令、产物和路由。先用 `app-cli validate --help` 核对安装能力,

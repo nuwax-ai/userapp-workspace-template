@@ -232,6 +232,8 @@ ${tableNote}
 1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
 2. **两级 manifest** — 根 \`workspace.manifest.toml\` + 各一级服务目录的 \`project.manifest.toml\`,
    文件名必须完全一致;平台只扫描一级子目录。共享库、工具、文档等非服务目录无需添加 manifest
+   平台提供的 workspace 路径就是唯一应用根，manifest 和服务直接放在该根；不要另建 \`code/\` 或应用名目录。
+   仅有 Git/agent 元数据和用户说明时，在此根执行 \`template-cli init .\`；已有业务或嵌套 workspace 按导入指引适配
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
 4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
 5. **回滚不执行 down migration** — \`[run].migrate\` 必须幂等,遵循 expand/contract

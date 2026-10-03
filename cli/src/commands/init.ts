@@ -20,7 +20,8 @@ import * as k from 'kolorist';
 
 import { TEMPLATES, getTemplate, resolveByAlias, type TemplateMeta } from '../templates.js';
 import { generateProjectManifest, generateWorkspaceManifest, generateAgentsMd, generateIndexHtml, generateDatabaseReadme, CLAUDE_MD_CONTENT, generateRootGitignore, mergeRootGitignore } from '../manifest.js';
-import { checkConflicts } from '../validate.js';
+import { checkConflicts, validateServiceId } from '../validate.js';
+import { hasRootInstructions, validateInitTarget } from '../init-target.js';
 import { releaseTemplate } from './release.js';
 
 export interface InitOptions {
@@ -75,13 +76,15 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
 
   const absTarget = path.resolve(targetDir);
 
-  // 目录存在性检查
-  if (fs.existsSync(absTarget)) {
-    if (!opts.force && fs.readdirSync(absTarget).length > 0) {
-      console.error(k.red(`✗ 目录已存在且非空: ${absTarget}`));
-      console.error(k.gray('  用 --force 覆盖。'));
-      process.exit(1);
-    }
+  const hasCatchall = plan.some((p) => p.proxyPath === '/');
+  validateInitTarget(absTarget, {
+    serviceDirectories: plan.map((item) => item.dirName),
+    hasIndexHtml: !hasCatchall,
+    force: opts.force,
+  });
+  // 参数与模板语义同样在写入前校验。
+  for (const item of plan) {
+    generateProjectManifest({ template: item.template, serviceId: item.serviceId, proxyPath: item.proxyPath });
   }
 
   console.log(k.cyan('▶ 创建 workspace: ') + k.bold(absTarget));
@@ -96,7 +99,6 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
   // 生成 index.html(访问入口默认导航页)
   // catch-all 模板(userapp-next 独占 /)不生成——应用自身就是根路径首页,
   // index.html 兜底路由不会生效,生成了反而误导。
-  const hasCatchall = plan.some((p) => p.proxyPath === '/');
   if (hasCatchall) {
     console.log(k.gray('  - index.html 跳过(catch-all 服务独占 / 路由,应用即首页)'));
   } else {
@@ -126,12 +128,20 @@ async function runInit(targetDir: string, opts: InitOptions): Promise<void> {
     proxyPath: p.template.kind === 'worker' ? undefined : p.proxyPath,
   }));
   const agentsContent = generateAgentsMd(wsName, servicesInfo, !hasCatchall);
-  fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
-  console.log(k.green('  ✓ ') + 'AGENTS.md');
+  if (!opts.force && hasRootInstructions(absTarget, 'AGENTS.md')) {
+    console.log(k.gray('  - AGENTS.md 已存在(保留原说明)'));
+  } else {
+    fse.writeFileSync(path.join(absTarget, 'AGENTS.md'), agentsContent);
+    console.log(k.green('  ✓ ') + 'AGENTS.md');
+  }
 
   // CLAUDE.md:Claude Code 经 @import 指令展开读取 AGENTS.md(其他 agent 直读 AGENTS.md)
-  fse.writeFileSync(path.join(absTarget, 'CLAUDE.md'), CLAUDE_MD_CONTENT);
-  console.log(k.green('  ✓ ') + 'CLAUDE.md(@AGENTS.md 导入)');
+  if (!opts.force && hasRootInstructions(absTarget, 'CLAUDE.md')) {
+    console.log(k.gray('  - CLAUDE.md 已存在(保留原说明)'));
+  } else {
+    fse.writeFileSync(path.join(absTarget, 'CLAUDE.md'), CLAUDE_MD_CONTENT);
+    console.log(k.green('  ✓ ') + 'CLAUDE.md(@AGENTS.md 导入)');
+  }
 
   // 根 .gitignore:忽略 app-cli/平台在根目录产生的派生产物。
   // 已存在(git init 过/手工维护过)时并集合并——与其他根文件 force 覆盖不同,
@@ -231,6 +241,10 @@ function buildPlan(templates: TemplateMeta[], opts: InitOptions): PlanItem[] {
 
 function checkAllConflicts(plan: PlanItem[]): { ok: boolean; errors: string[] } {
   const errors: string[] = [];
+  for (const item of plan) {
+    const error = validateServiceId(item.serviceId);
+    if (error) errors.push(error);
+  }
   // 收集所有 service
   const all = plan.map((p) => ({
     serviceId: p.serviceId,
