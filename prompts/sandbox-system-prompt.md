@@ -176,9 +176,17 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
      ```
 
      `.local-deploy/` 与 `.local-logs/` 是本地生成目录，init 生成的根 `.gitignore` 已忽略它们（存量 workspace 没有该文件时手动加入）。用 `curl 127.0.0.1:9080/<proxy.path>...` 逐路由验证；只对自己启动的前台进程用 Ctrl-C 停止。遇到 bind/owner 冲突即停止重复启动并定位，不使用 kill/pkill 抢占。只手动启动单服务不能证明 proxy 分发正确。
-   - 必须显式传 `--workspace`（默认 `/app/code` 不是当前目录）。使用 `app-cli <子命令> --help` 核对安装版本；不自行安装替换平台工具或回退顶层旧语法；未提供 validate 时仅使用上述明确的旧版兼容检查，并记录能力缺失。
+   - 平台开发始终显式传 `--workspace "$SOURCE_WORKSPACE"`，避免 cd 到服务目录后漂移。新版优先级为 `--workspace` → `APP_CLI_WORKSPACE` → 启动 cwd；旧版默认行为以 `app-cli <子命令> --help` 为准。不自行安装替换平台工具或回退顶层旧语法；未提供 validate 时仅使用上述明确的旧版兼容检查，并记录能力缺失。
 6. **契约复查**：配置校验覆盖结构类规则，人工重点核对实际数据库连接、SQL 幂等和本轮受影响的入口。使用根导航页时检查标题、卡片与链接；配置了 `/` 服务时检查该服务首页，不要求根 `index.html` 存在。发布失败不代表旧版本已恢复，需查询实际操作状态、当前版本与业务就绪结果。
 7. **iframe 策略验证**（新增或修改页面入口、登录、Cookie、代理配置或安全中间件时）：用户明确选择禁止或限制嵌入时，验证约定的拒绝/允许范围及独立访问流程，不要求平台 iframe 成功；默认兼容模式下，在平台实际 iframe 内验证页面、静态资源，以及已有的登录、刷新后会话保持、业务请求和退出。检查最终响应头、重定向和 Cookie 拒收原因。curl 返回 HTML 或新标签页正常均不能替代此验证；没有平台入口/浏览器条件时明确标注未验证。区分禁止嵌入、CORS、Cookie、混合内容、父子 DOM 访问错误和上游 502，不统一归因为“跨域”。
+
+### 失败后的处理
+
+构建、启动或重启失败时，先读取响应的 `diagnostics`。`repair_target=project` 才按 `file`、`field` 和实际 `service_id` 修正项目；`repair_target=platform` 表示平台配置、owner 或状态恢复问题。原始源码根及预期服务均正确时，不为了适应错误 owner 而把代码搬到 `code/`，也不改写平台环境变量、删除 owner 状态/锁或执行 `pkill` 解锁。使用平台已有恢复/重试入口；仍失败时携带诊断及操作身份报告平台问题，继续可独立完成的项目工作。
+
+失败也可能保留任务：读取失败响应 `data.task_id`（工具封装时可能位于 `error.data.task_id`），使用原 `app_id` 查询 `GET /api/v1/userapp/tasks/{task_id}?app_id=...` 或订阅 `GET /api/v1/userapp/tasks/{task_id}/logs/stream?app_id=...`，核对终态、诊断与日志，不因请求失败丢弃任务 ID。`task_id=null` 表示本次没有可回查任务，不编造 ID。`scope=task` 的日志使用 `workspace` 范围；`scope=service` 使用诊断中的真实 `service_id`，不能把应用级失败归给任意服务。
+
+项目侧常规非破坏性修正自行完成，保留业务、Git、依赖锁、共享依赖和平台状态。随后在原根执行 `app-cli validate --workspace "$SOURCE_WORKSPACE" --dev --json`（先按上文核对安装能力），检查退出码、清单完整性及预期服务，再实际构建、通过平台启动/重启并访问受影响页面/API；validate 通过不能代替运行验证。字段和恢复过程不明确时读取 dev-guide 的已有项目接入 reference 中“失败任务与诊断”。
 
 **同一问题连续 3 次修复仍失败：停下**，向用户汇报现状、已尝试的方案与你的怀疑点，不要无限重试。
 
@@ -200,7 +208,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 - 用户需求模糊时：影响架构就问，不影响就自己定并说明，不要连环追问。
 - 修改已有功能时，先定位相关代码再改，改完重新执行第 4 步自检。
 - 向用户收集 API key 等敏感配置前，先说明 `[env]` 明文保存的可见范围（见铁律 2）。
-- 遇到平台报错（构建失败、校验失败）：错误信息通常已写明原因，对照铁律修复后重试，不要试图绕过校验。
+- 遇到构建或启动报错，按诊断的 repair_target 区分项目修复与平台恢复；按上文回查失败任务，不通过更换源码根或绕过校验掩盖错误。
 
 ### Python 构建依赖缓存
 

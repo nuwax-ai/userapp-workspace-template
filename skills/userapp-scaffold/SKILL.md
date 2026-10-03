@@ -73,6 +73,8 @@ npx @nuwax-ai/template-cli init <目录名> --next
 普通初始化用于没有业务代码的新 workspace；用户明确要求重建可丢弃的独立目标时适用上面的 force 例外。平台原根仅有 Git/agent 元数据、用户说明或平台预建空目录时正常执行 init，保留已有内容；安装版 CLI 若仍因非空拒绝，在工作区外的空临时目录生成，将缺失的根文件和服务目录最小合入原根，合并既有 AGENTS/CLAUDE/.gitignore，不把整个临时工程放入下一层，也不使用 `--force`。完成后对原根执行 validate，核对实际服务清单。
 `code/` 等子目录里已有完整业务工程时，按 dev-guide 导入适配保留代码并接入平台原根；不能将它当空模板覆盖，也不能仅在该子目录校验后宣称平台构建已可用。
 
+初始化后的构建/启动失败先读取平台诊断：`repair_target=project` 才增量修正项目，`platform` 则按 dev-guide 的失败诊断流程处理 owner/平台恢复。原根配置正确时，不重新初始化或搬到 `code/` 迁就错误 owner；保留失败响应的 `data.task_id`（工具封装可能是 `error.data.task_id`）供 GET/SSE 回查。常规非破坏性适配自行完成，保留业务、Git、依赖锁、共享依赖及平台状态；修正后对原根 `validate --dev --json` 并核对预期服务，再实际构建、启动和访问，不能停在脚手架生成或配置通过。
+
 init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入口首页占位页,catch-all 时跳过;
 开发完成后须把它个性化为应用真实首页——标题/卡片用真实应用与功能名,详见 userapp-dev-guide「入口首页策略」;
 **`add` 追加服务不会自动更新它**,追加/删除对外服务后需手动增删导航卡片)、

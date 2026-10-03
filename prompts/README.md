@@ -44,11 +44,19 @@ CLI pack 将这份正文导出为随 npm 分发的 `docs/07-import-existing-proj
 
 配置检查优先使用只读 `validate`，通过 `app-cli validate --help` 核对实际二进制能力，不能仅凭版本号认定已发布。旧版未提供该命令时可按导入正文使用已有 gen-lock，并明确会写派生 lock、失败不能沿用旧结果；不自行替换沙箱工具，不新增启动/停止门禁。
 
+### 失败诊断契约同步
+
+系统提示词与两份现有 skills 按 `diagnostics[].repair_target` 区分项目适配和平台 owner/配置恢复，详细步骤维护在 [导入指引的失败任务与诊断](../skills/userapp-dev-guide/references/import-existing-project.md#失败任务与诊断)。平台返回失败时仍读取 `data.task_id`（工具封装下可能为 `error.data.task_id`），使用原 app_id 回查 GET/SSE；`scope=task` 对应 `workspace` 日志，服务诊断使用真实 service_id。
+
+同步时同时核验后端实际响应、已安装 skill/reference 与注入提示词；文档更新不代表目标平台已支持这些字段。原根配置正确而 owner 根错误属于平台修复，不能引导 agent 搬代码或清理状态绕过。项目修正后在原根运行 `validate --dev --json` 并核对预期服务，再完成真实构建、启动及访问验证；保留现有工具能力检查。
+
 ### app-cli 命令契约同步
 
 提示词与 `userapp-dev-guide` 采用 `app-cli <子命令> <参数>`，且平台已有运行实例时不再引导 agent 额外启动编排器。
 更新部署时须同步三个入口：沙箱中的 app-cli 二进制、已安装/复制的 skills、平台实际注入的系统提示词。
 先确认二进制支持 `validate --workspace`（或明确使用旧版兼容检查）、`gen-lock --workspace`、`build --workspace`、`serve --workspace`，并分别核对配置与运行验证结果；本仓库文件修改不会自动更新运行中的沙箱或平台配置。
+
+新版 workspace 优先级为 `--workspace` → `APP_CLI_WORKSPACE` → 启动 cwd；旧版以安装二进制 help 为准。平台提示词仍固定显式传 `SOURCE_WORKSPACE`，不能因默认值改为 cwd 就让服务子目录覆盖应用根；生产入口继续显式传运行目录。
 
 ### React/Vue 路由契约同步
 

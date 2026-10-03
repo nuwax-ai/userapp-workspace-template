@@ -156,7 +156,7 @@ LOG_LEVEL = "debug"
 | `$APP_LOG_DIR` | 当前 service 的文件日志目录 |
 
 RCoder UserApp 容器当前以 `/home/user` 为挂载根，独立 app-cli 的 workspace/log-dir 由调用方指定。
-不要把 CLI 默认 `/app/code`、`/app/logs` 当成所有部署的实际目录，也不根据 user_id/conversation_id 拼路径。
+运行目录由实际 `--workspace`、`APP_CLI_WORKSPACE` 或启动 cwd 确定，日志目录使用实际配置；不要把旧版 `/app/code`、日志默认 `/app/logs` 当成所有部署的固定布局，也不根据 user_id/conversation_id 拼路径。
 
 ### 数据库(PostgreSQL)
 
@@ -286,6 +286,12 @@ workspace 级桥接(可选):`[health].bridge_service = "api"` 让 app-cli `/read
 
 ---
 
+## 构建与启动失败
+
+平台返回结构化诊断时，先按 `repair_target` 决定修复归属：`project` 按文件/字段增量修正；`platform` 使用平台恢复入口并保留原操作身份。原根与服务配置正确、owner 错指子目录时，不搬源码或改平台环境变量，不删除 owner 状态/锁、不用 pkill 解锁。常规非破坏性项目修正自行完成，保留用户代码、Git、依赖锁、共享依赖及平台状态。
+
+即使受理失败，也读取 `data.task_id`（工具封装可能为 `error.data.task_id`）回查任务 GET/SSE；`scope=task` 对应任务的 `workspace` 日志，`scope=service` 用实际 `service_id`。修正后回原根 `validate --dev --json`、核对预期服务，再实际构建、启动并验证访问。接口、空 task_id 和字段说明见 [失败任务与诊断](references/import-existing-project.md#失败任务与诊断)。
+
 ## 日志
 
 ### 两条来源
@@ -386,7 +392,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 ### 命令行参数与环境变量
 
-统一使用 `app-cli <子命令> <参数>`。用 `app-cli --help` 查看命令、`app-cli serve --help` / `app-cli build --help` 查看各自参数。必须显式传 workspace，默认 `/app/code` 不是当前目录。
+统一使用 `app-cli <子命令> <参数>`。用 `app-cli --help` 查看命令、`app-cli serve --help` / `app-cli build --help` 查看各自参数。新版 workspace 优先级为显式 `--workspace` → `APP_CLI_WORKSPACE` → 启动时当前目录 `.`；旧版本可能仍默认 `/app/code`，以安装版 help 为准。平台开发始终显式传 `--workspace "$SOURCE_WORKSPACE"`，避免进入服务子目录后 cwd 漂移；生产入口按平台提供的运行目录显式启动。
 
 - `validate --workspace DIR [--dev] [--json]`：只读检查源码配置，不生成 lock、不构建、不启动服务；先用 `app-cli validate --help` 核对安装能力。
 - `gen-lock --workspace DIR`：校验并生成派生 lock，不启动服务。
@@ -401,7 +407,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 
 | 参数 | env | 默认 | 说明 |
 |---|---|---|---|
-| `--workspace <DIR>` | `APP_CLI_WORKSPACE` | `/app/code` | workspace 根(含 workspace.manifest.toml + 各子项目) |
+| `--workspace <DIR>` | `APP_CLI_WORKSPACE` | `.`（启动 cwd；旧版以 help 为准） | workspace 根(含 workspace.manifest.toml + 各子项目) |
 | `--log-dir <DIR>` | `APP_CLI_LOG_DIR` | `/app/logs` | 日志根目录(app-cli 自身 + 各服务 runtime.{out,err}.log) |
 | `--admin-addr <ADDR>` | `APP_CLI_ADMIN_ADDR` | `0.0.0.0:3010` | 管理 API 监听地址 |
 | `--pingap-bin <PATH>` | `APP_CLI_PINGAP_BIN` | `/usr/local/bin/pingap` | pingap 二进制路径(沙箱默认路径已装,一般不用设) |

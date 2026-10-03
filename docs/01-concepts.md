@@ -144,7 +144,7 @@ app_id = my-app
 | `$APP_LOG_DIR` | 当前服务的日志目录 |
 
 RCoder UserApp 容器目前以 `/home/user` 为挂载根；独立 app-cli 由调用方指定目录。
-CLI 默认 `/app/code`、`/app/logs` 不等于各部署的实际路径，不在业务代码中写死。
+新版 CLI 的 workspace 优先级为显式 `--workspace` → `APP_CLI_WORKSPACE` → 启动 cwd（`.`）；旧版本可能默认 `/app/code`，先核对安装版 help。平台开发仍显式传 `--workspace "$SOURCE_WORKSPACE"`，避免 cd 到服务子目录后改变应用根；生产入口按平台提供的运行目录显式启动。日志默认 `/app/logs` 不等于各部署的实际路径，不在业务代码中写死。
 
 ### 数据库(PostgreSQL)
 

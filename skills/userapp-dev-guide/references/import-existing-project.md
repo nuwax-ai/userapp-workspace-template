@@ -143,6 +143,28 @@ app-cli validate --workspace "$SOURCE_WORKSPACE" --json
 
 独立本地环境可按 dev-guide 的本地运行章节使用 `build --dev` 与源码态 serve，或 `build --deploy-dir .local-deploy` 与产物态 serve；两种方式分别验证，不同时启动。平台有 owner 时优先使用平台控制，不通过 kill/pkill、删除记录/锁文件或换管理端口绕过所有权保护。
 
+### 失败任务与诊断
+
+平台构建、启动或重启的失败响应仍可能含可回查任务，不能只看 HTTP 状态或顶层 message。保留原 `code`、`message`、`data.diagnostics` 和 `data.task_id`；工具封装响应时相应数据可能位于 `error.data`。使用平台提供的 app_id：
+
+```text
+GET /api/v1/userapp/tasks/{task_id}?app_id=...
+GET /api/v1/userapp/tasks/{task_id}/logs/stream?app_id=...
+```
+
+任务快照与 SSE 用于核对本次终态和日志；已经 failed/cancelled 的任务不因重试变成成功。`task_id=null` 表示未保留可查询任务，按现有容量等诊断处理，不虚构 ID。错误中已有 operation/recovery 身份时保留，并使用平台支持的同操作恢复入口；未知迁移或清理结果不能靠新建任务掩盖。
+
+| 诊断 | 下一步 |
+|---|---|
+| `repair_target=project` | 对照 `file`、`field`、`service_id`、message/hint 和真实项目入口做最小修正；缺少的位置字段不自行猜造 |
+| `repair_target=platform` | 核对原根和服务清单，使用平台提供的恢复/重试操作；仍失败时报告诊断及操作身份，不改项目去迁就平台错误 |
+| `scope=task` | 查看任务的 `workspace` 范围日志；service_id 可以为空，它不是某个业务服务的失败 |
+| `scope=service` | 查看诊断中真实 service_id 的日志；service_id 不等于目录名 |
+
+`workspace_root` 是平台配置的源码根，`detected_workspace_root` 是观察到的工程位置，二者都不是自动移动文件的指令。原根 manifest 和一级服务已正确时，owner 仍指向旧 `code/` 是平台恢复问题；不能反向把源码搬到旧根，也不能修改平台环境、删除 owner journal/状态/锁或 pkill 解锁。只有项目确实未接入原根时才按第 3 节适配，保留业务、Git、依赖锁、共享依赖、平台状态及数据。
+
+项目侧常规非破坏性修正直接完成。支持 validate 的安装版在原根执行 `app-cli validate --workspace "$SOURCE_WORKSPACE" --dev --json`，核对退出码、`services_complete` 和预期服务；生产规则另外检查。然后按本节完成真实构建、平台启动/重启、页面/API/worker 业务验证，分别记录结果。平台故障受阻时明确未完成的运行验证，继续不依赖故障环境的项目工作，不把 validate 通过称为部署成功。
+
 ## 7. 三个适配案例与完成记录
 
 | 案例 | 必须确认 |

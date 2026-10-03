@@ -87,6 +87,14 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"   # 以日期开头的行 = �
 
 ## 4. 查看日志
 
+### 构建或启动失败的任务日志
+
+失败响应仍可能带 `data.task_id`（工具封装时可能位于 `error.data.task_id`）。用原 app_id 查询 `GET /api/v1/userapp/tasks/{task_id}?app_id=...` 或订阅 `GET /api/v1/userapp/tasks/{task_id}/logs/stream?app_id=...`，读取诊断及终态；task_id 为空时没有可回查任务，按返回的诊断处理。
+
+诊断 `scope=task` 使用任务的 `workspace` 日志范围；`scope=service` 使用真实 service_id。`repair_target=project` 指向项目文件/字段修正，`platform` 指向平台配置或运行态恢复。源码根和服务正确时，不搬代码、删 owner 状态/锁或 pkill 解锁；按 [已有项目接入指引](07-import-existing-project.md) 保留操作身份并完成修复后的配置、构建和访问验证。
+
+### 应用运行日志
+
 应用跑起来后,在**平台的日志面板**查看日志。面板支持这些过滤维度:
 
 | 维度 | 说明 |
