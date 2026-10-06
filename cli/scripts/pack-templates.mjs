@@ -38,19 +38,28 @@ const TEMPLATE_SOURCES = {
 /* ── 要过滤掉的产物/无关目录和文件 ──────────────────────── */
 const SKIP_DIRS = new Set([
   'node_modules', 'target', 'dist', '.next', 'deps', '__pycache__',
-  'logs', '.git', 'out', 'build', 'coverage', '.turbo', '.pip-cache',
+  'logs', '.logs', '.git', '.hg', '.svn', 'out', 'build', 'coverage', '.turbo', '.pip-cache',
+  '.cache', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.venv', 'venv',
+  '.agents', '.claude', '.codex', '.opencode', '.ssh', '.aws', '.secrets', 'secrets', 'credentials',
+  '.run', '.previous', '.staging', '.local-deploy', '.local-logs', 'builds', '.tmp', 'tmp', 'migration-receipts',
 ]);
 const SKIP_FILES = new Set([
   'artifact.zip', 'server', 'app.jar', '.DS_Store',
-  'userapp-next-standalone.zip',
+  'userapp-next-standalone.zip', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519',
 ]);
+// These names identify generated files, but may also be real source directories
+// (Go's cmd/server/). Private/cache rules continue to apply to either kind.
+const BUILD_OUTPUT_FILES = new Set(['artifact.zip', 'server', 'app.jar', 'userapp-next-standalone.zip']);
 const SKIP_FILE_PATTERNS = [
   /\.pyc$/,
   /\.class$/,
   /\.log$/,
   /\.tsbuildinfo$/,
   /^\.deps-(stamp|build\.lock)/,
+  /^\.deploy-/,
   /^\.artifact-.*\.zip$/,
+  /\.(key|p12|pfx|tmp|log\.[0-9]+)$/i,
+  /^\.env(?!\.(example|sample)$)/i,
 ];
 
 /* ── 占位符注入规则 ────────────────────────────────────────
@@ -230,42 +239,62 @@ function applyPlaceholders(templateId, relPath, content) {
   return result;
 }
 
-function walkAndPack(srcDir, destDir, templateId, baseDir) {
-  fs.mkdirSync(destDir, { recursive: true });
-  const entries = fs.readdirSync(srcDir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      if (shouldSkipDir(entry.name)) continue;
-      walkAndPack(
-        path.join(srcDir, entry.name),
-        path.join(destDir, entry.name),
-        templateId,
-        baseDir,
-      );
-    } else if (entry.isFile()) {
-      if (shouldSkipFile(entry.name)) continue;
-
-      const srcPath = path.join(srcDir, entry.name);
-      // .gitignore → _gitignore:npm pack(npm-packlist)会把包内各目录的 .gitignore
-      // 当作打包排除规则读取——不仅 .gitignore 自身进不了 tarball,里面的规则
-      // (如 userapp-next 的 .env*、next-env.d.ts)还会连带排除同目录的其他文件
-      // (历史事故:npm 包里的模板从来没有 .gitignore)。改名绕开,释放时还原。
-      const destName = entry.name === '.gitignore' ? '_gitignore' : entry.name;
-      const destPath = path.join(destDir, destName);
-      const relPath = path.relative(baseDir, srcPath);
-
-      // project.manifest.toml 不打包(运行时由 manifest 生成器产出)
-      if (entry.name === 'project.manifest.toml') continue;
-
-      if (isTextFile(entry.name)) {
-        let content = fs.readFileSync(srcPath, 'utf-8');
-        content = applyPlaceholders(templateId, relPath, content);
-        fs.writeFileSync(destPath, content);
-      } else {
-        fs.copyFileSync(srcPath, destPath);
-      }
+/** Source collection is read-only and validates links before clearing old output. */
+export function collectTemplateFiles(srcDir, baseDir = srcDir, ancestors = new Set()) {
+  const boundary = fs.realpathSync(baseDir);
+  const real = fs.realpathSync(srcDir);
+  const relative = path.relative(boundary, real);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Template symlink escapes source root: ${srcDir}`);
+  }
+  if (ancestors.has(real)) throw new Error(`Template symlink directory cycle: ${srcDir}`);
+  const next = new Set([...ancestors, real]);
+  const result = [];
+  for (const entry of fs.readdirSync(real, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const skipDirectory = name => shouldSkipDir(name) || (shouldSkipFile(name) && !BUILD_OUTPUT_FILES.has(name));
+    if (skipDirectory(entry.name)) continue;
+    const source = path.join(srcDir, entry.name);
+    const resolved = fs.realpathSync(source);
+    const stat = fs.statSync(resolved);
+    if (stat.isFile() && shouldSkipFile(entry.name)) continue;
+    const canonical = path.relative(boundary, resolved);
+    if (canonical.startsWith('..') || path.isAbsolute(canonical)) {
+      throw new Error(`Template symlink escapes source root: ${source}`);
     }
+    const parts = canonical.split(path.sep);
+    if (entry.isSymbolicLink() && parts.some((name, index) => index === parts.length - 1 && stat.isFile()
+      ? shouldSkipDir(name) || shouldSkipFile(name) : skipDirectory(name))) {
+      throw new Error(`Template symlink targets excluded input: ${source}`);
+    }
+    if (stat.isDirectory()) {
+      result.push(...collectTemplateFiles(source, baseDir, next));
+    } else if (stat.isFile()) {
+      if (entry.name === 'project.manifest.toml') continue;
+      result.push({ source: resolved, relative: path.relative(baseDir, source), mode: stat.mode & 0o777 });
+    } else {
+      throw new Error(`Template input is not a regular file or directory: ${source}`);
+    }
+  }
+  return result;
+}
+
+export function walkAndPack(srcDir, destDir, templateId, baseDir = srcDir) {
+  const files = collectTemplateFiles(srcDir, baseDir);
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const file of files) {
+    // npm uses .gitignore as package filtering; release the renamed copy later.
+    const name = path.basename(file.relative);
+    const relative = name === '.gitignore'
+      ? path.join(path.dirname(file.relative), '_gitignore') : file.relative;
+    const destination = path.join(destDir, relative);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    if (isTextFile(name)) {
+      const content = applyPlaceholders(templateId, file.relative, fs.readFileSync(file.source, 'utf-8'));
+      fs.writeFileSync(destination, content);
+    } else {
+      fs.copyFileSync(file.source, destination);
+    }
+    fs.chmodSync(destination, file.mode);
   }
 }
 
@@ -293,6 +322,11 @@ function packAll() {
   const importGuide = readImportGuide(path.join(
     REPO_ROOT, 'skills', 'userapp-dev-guide', 'references', 'import-existing-project.md',
   ));
+  const runtimeHelper = path.join(REPO_ROOT, 'backend-python', 'scripts', 'artifact_pack.py');
+  if (!fs.statSync(runtimeHelper).isFile()) throw new Error('Canonical runtime artifact helper is missing');
+  for (const sourceDirName of Object.keys(TEMPLATE_SOURCES)) {
+    collectTemplateFiles(path.join(REPO_ROOT, sourceDirName));
+  }
   console.log('▶ 打包模板到 cli/templates/\n');
 
   // 清空输出目录
@@ -306,13 +340,10 @@ function packAll() {
     const srcDir = path.join(REPO_ROOT, sourceDirName);
     const destDir = path.join(TEMPLATES_OUT, templateId);
 
-    if (!fs.existsSync(srcDir)) {
-      console.warn(`  ⚠ 跳过(源目录不存在): ${sourceDirName}`);
-      continue;
-    }
-
     const beforeCount = countFiles(destDir);
     walkAndPack(srcDir, destDir, templateId, srcDir);
+    fs.mkdirSync(path.join(destDir, 'scripts'), { recursive: true });
+    fs.copyFileSync(runtimeHelper, path.join(destDir, 'scripts', 'artifact_pack.py'));
     const afterCount = countFiles(destDir);
 
     console.log(`  ✓ ${templateId.padEnd(24)} (${sourceDirName}/ → templates/${templateId}/, ${afterCount} 文件)`);

@@ -212,3 +212,5 @@ beta 使用明确的新版本号，例如 `npm version 0.1.19-beta.1 --no-git-ta
 已有 tag/npm 版本不可覆盖；发布后核验 CI、npm dist-tag 与实际 CLI 版本。
 
 Tag 规则:`v0.1.3-beta.1` → npm dist-tag `beta`;`v0.1.3` → dist-tag `latest`。
+
+生产打包默认资源收集与边界、Python 3.11+ helper、`.artifactignore` 及产物态自检见 [生产制品与运行资源](../docs/06-deploy-release.md#生产制品与运行资源)。CLI pack 会复制唯一 helper 源到各模板，私有环境/凭据、缓存及临时目录不会作为模板源码分发。

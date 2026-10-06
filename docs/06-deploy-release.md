@@ -24,6 +24,31 @@ workspace-package-<release_id>.zip
 和依赖,能在隔离于原源码的目录中运行。构建脚本可调用原根构建,再把产物收集到一级服务目录；
 详见 [已有项目接入指引](07-import-existing-project.md)。
 
+## 生产制品与运行资源
+
+本节适用于全部 **8 个模板**，与应用业务语言无关。开发在源码目录运行，prod 只使用 `[build].artifact` 解压后的服务根。新增 `scripts/`、模块、配置、模板、静态/数据资源时，必须让生产制品包含实际入口及依赖，不能只验证 dev 或 ZIP 文件存在。
+
+| 模板 | 生产运行边界与新增资源 |
+|---|---|
+| Python 后端 | 默认收集未排除的源码、模块、`scripts/`、运行资源及已安装的 `deps/`；依赖安装仍由现有构建脚本负责。 |
+| Python worker | 默认收集未排除的源码、模块、`scripts/` 和运行资源；第三方运行依赖仍需显式准备。 |
+| Go、Rust | 保留编译出的 `server`，默认加入未排除的 `scripts/` 和新增运行资源；排除已知 `src/`、`cmd/`、`internal/` 源码树及源码文件。 |
+| Java | 保留编译出的 `app.jar`，默认加入未排除的 `scripts/` 和新增运行资源；Java 源码与构建缓存不进入制品。 |
+| Next.js | 保留 traced standalone 依赖和 `.next/static`，追加未排除的服务根运行资源与 `scripts/`；不会带入源码根完整 `node_modules/`。 |
+| React Vite、Vue Vite | prod 只使用 `dist/`；新增静态资源应经构建进入该目录，服务根源码和脚本不自动成为静态产物。 |
+
+共享 `scripts/artifact_pack.py` 使用 **Python 3.11+ 标准库**；Python 只是构建工具的实现语言，不限制业务语言。不安装第三方打包依赖；使用任何模板构建前核对构建环境的 Python 能力。
+
+默认排除实际 `.env*`（保留 example/sample）、私钥/凭据与 agent/VCS 状态、缓存、日志、临时目录和旧制品；源码侧 `node_modules/`、`target/` 等工具链/依赖缓存不进入制品，Python `deps/` 与 Next traced 依赖按上述运行边界保留。服务根 `.artifactignore` 可增加**相对路径 glob 排除**（空行/`#` 注释允许，目录可写 `my-dev-data/`）；不支持 `!` 包含规则，不能覆盖私有文件排除或导致已声明入口缺失。该文件是模板构建脚本的约定，不是新增 manifest 字段。
+
+打包前仅核对 `run.command`、`run.migrate` 中结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar` 的 JAR；缺失、被排除、链接逃逸或目录循环立即构建失败。不把任意 argv 数据参数当作路径，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令。ZIP 独立生成后原子替换，失败保留旧有效 ZIP，重新构建不遗留已删除条目。自定义 shell 字符串、动态导入及外部依赖仍需实际运行验证：将**真实新制品**解压到隔离于源码/开发依赖的目录，用其生产入口和安全测试数据库执行必要迁移，再核对业务访问；迁移告警继续启动不代表制品可以漏脚本。
+
+验证报告须分别记录真实 ZIP/目录包装与隔离执行、语言/框架编译、平台启动/访问的结果；包装 fixture 通过不能代替完整框架构建或平台验收。
+
+Next 生产构建尊重显式 `packageManager`（已安装的 npm/pnpm 精确版本）或唯一现有锁文件：npm 使用 `npm ci`，pnpm 使用 `pnpm install --frozen-lockfile`。双锁未声明选择时明确报歧义；声明的管理器缺少对应锁而存在其他锁时，不忽略有效锁或静默切换。两种锁均缺失时，保留模板原有首次安装初始化流程，明确记录本轮无锁输入、生成的锁及摘要，后续构建复用该锁。React/Vue 保留既有 pnpm 安装/首次初始化契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与构建入口；CLI pack 随 Next 模板复制安装器，不自动升级管理器或改锁版本。
+
+共享 helper 的维护源是 `backend-python/scripts/artifact_pack.py`；改动后同步各模板副本，CLI pack 会把这份源文件复制进每个生成模板的 `scripts/`。存量应用需一起更新构建入口与 helper，CLI/模板升级不自动改写旧项目。
+
 ### `release.lock.toml` —— 发布的运行时权威
 
 平台构建时生成,锁定这次发布的**全部运行时事实**:
@@ -122,8 +147,7 @@ v2 校验/激活 → 服务编排 → 确认当前版本与业务就绪
 
 ## 6. 数据库迁移约定(重要)
 
-`run.migrate` 在服务启动**前**、按依赖拓扑顺序执行。**任何**一个 service 的 migration 失败,整个
-workspace 启动失败。
+`run.migrate` 在服务启动**前**、按依赖拓扑顺序执行。app-cli >= 0.3.16 对应用迁移失败记录完整输出并继续启动服务；历史回执仅诊断，不拒绝新请求。工作区执行锁仍串行化迁移；父 Stop 取消整个启动或实际进程清理未知时保持独立保护。
 
 你的迁移脚本必须遵守:
 
@@ -138,7 +162,7 @@ workspace 根 `database/` 与各子项目 `{目录}/database/` 下的 `.sql` 文
 由平台按序自动执行(容器内 psql):根 `database/` 先执行,子项目按目录名字典序,目录内按文件名字典序。
 
 与 `run.migrate` 的分工:**建库/扩展/平台侧初始化**类 SQL 放 `database/` 目录(平台执行,
-单文件失败仅日志、不阻断发布);**应用自身的 schema 迁移**走 `run.migrate`(失败阻断启动)。
+单文件失败仅日志、不阻断发布);**应用自身的 schema 迁移**走 `run.migrate`（记录日志并继续启动；应用作者负责幂等与实际数据库结果核验）。
 
 关键约束(完整规则见各 workspace 的 `database/README.md`):
 

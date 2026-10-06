@@ -64,6 +64,7 @@ class CacheTests(unittest.TestCase):
             project = root / "project"
             (project / "scripts").mkdir(parents=True)
             shutil.copyfile(SCRIPT, project / "scripts/build-standalone.py")
+            shutil.copyfile(SCRIPT.with_name("artifact_pack.py"), project / "scripts/artifact_pack.py")
             (project / "app").mkdir()
             (project / "app/old.py").write_text("old = True\n")
             (project / "main.py").write_text("pass\n")

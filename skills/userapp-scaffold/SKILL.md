@@ -233,3 +233,11 @@ fetch('/api/python/items')  // 浏览器经反代路由到 backend-python
 
 > manifest 字段、路由规则、健康检查、日志、部署回滚等平台规范,
 > 参考 **userapp-dev-guide** skill。
+
+### 新增生产运行资源
+
+全部 8 个模板适用；Python 是共享打包工具的实现语言，与业务语言无关。文件静态校验仅识别结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar`；不猜测任意 argv 数据参数，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令，其他依赖通过真实制品隔离执行验证。
+
+生成模板后新增模块、`scripts/`、运行数据时，同时检查真实制品。模板默认收集未排除资源，共享 `scripts/artifact_pack.py` 使用 Python 3.11+ 标准库；保留编译型/standalone/static 的运行边界，第三方依赖不因目录新增就自动进入产物。存量项目须一起更新 helper 与构建入口，私有环境/凭据、VCS/agent 状态、缓存、日志、临时和旧制品默认排除；`.artifactignore` 只增加相对 glob 排除，不支持 `!` 包含回退，不能排除已声明入口。实际解压后验证入口，不能仅看 dev 或 ZIP 存在。
+
+Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。

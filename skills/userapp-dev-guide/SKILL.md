@@ -332,7 +332,7 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 | 业务就绪 `data.ready` | 只读查询当前 web 服务与入口，不唤醒应用 |
 | 操作与恢复状态 | 按 operation ID 核对结果；副作用未知时继续原操作的恢复流程 |
 
-`failed` 不表示旧版本已恢复运行。已确认激活后的启动失败可能仍保留新版本；迁移/清理结果未知时
+`failed` 不表示旧版本已恢复运行。已确认激活后的启动失败可能仍保留新版本；真实清理或平台数据库写入结果未知时
 需要恢复，不能删 journal、清锁或换新身份重复执行。保留具体错误与操作 ID，使用平台支持的恢复入口。
 
 ### 回滚
@@ -345,7 +345,7 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 
 ### 数据库迁移约定
 
-`run.migrate` 启动前按拓扑序执行,任一失败整个 workspace 启动失败。必须:
+`run.migrate` 启动前按拓扑序执行；app-cli >= 0.3.16 对应用迁移失败记录完整输出后继续启动服务，历史回执仅诊断。执行锁仍保持互斥；父 Stop/实际清理未知和平台 DBAdmin 未知写入保持各自保护。必须:
 1. **幂等** — 可重复执行不报错
 2. **新旧代码短期兼容同一 schema** — 回滚时 schema 不退
 3. **先 expand 再发代码最后 contract** — 加列先加,删列等旧代码下线
@@ -368,7 +368,7 @@ activate 后自动按序执行(容器内 `psql -f`)。规则:
   未就绪本轮整体跳过
 
 与 `run.migrate` 的边界:database/ 是**平台**执行、失败仅日志;run.migrate 是 **app-cli**
-在服务启动前执行应用自管迁移、失败阻断启动。建库/扩展/平台侧初始化放 database/,
+在服务启动前执行应用自管迁移、失败记录日志并继续启动。建库/扩展/平台侧初始化放 database/,
 应用 schema 演进走 run.migrate。
 
 > ⚠️ **开发阶段不会自动执行**:本地 devrun / 沙箱调试时 database/ 里的 SQL 不会被跑——
@@ -467,7 +467,7 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 
 启动判定(app-cli builtin 引擎,dev/start·restart 的 SSE 逐服务事件):
 - `service_start_ok` = 本次启动检查通过；策略由 `startup_probe` 决定，省略保持旧行为。process 仅证明根进程连续存活，不证明业务初始化成功；服务仍须自行在初始化失败时非零退出。
-- 单服务失败(migrate/spawn/探测超时)会记录具体服务和原因；`serve` owner 的启动操作失败时收束已启动的业务进程，不能将部分 `service_start_ok` 当作任务完成。
+- 应用 migrate 失败仅告警并继续该服务启动；spawn/探测超时等业务启动失败会记录具体服务和原因；`serve` owner 的启动操作失败时收束已启动的业务进程，不能将部分 `service_start_ok` 当作任务完成。
 - 事件经 owner 事件接口或 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)，以对应操作的终态为准。
 - `type = "static"` 服务(prod 无业务进程):`[run]` 禁止、`[build].artifact`=静态内容目录
   (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
@@ -585,3 +585,13 @@ java maven 发行版(aliyun)。新增依赖若构建期需访问 GitHub/Google �
 ### Python 构建依赖缓存
 
 Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python 构建脚本）。修改依赖时同步 `requirements.lock`；不要在每次构建前删除 `deps/` 或 `.pip-cache/`。构建脚本按锁文件与 Python ABI/平台判断是否重装，缓存保留在子项目工作区。不要将 `.pip-cache/`、`.deps-stamp` 打进制品，也不要把 `PIP_NO_CACHE_DIR=0` 当作开启缓存。生成发布 ZIP 必须重建，避免已删除文件残留。
+
+### 生产运行资源与打包
+
+全部 8 个模板适用；Python 是共享打包工具的实现语言，与业务语言无关。文件静态校验仅识别结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar`；不猜测任意 argv 数据参数，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令，其他依赖通过真实制品隔离执行验证。
+
+新增模块、`scripts/`、运行资源时核对实际生产 ZIP/目录，不能仅在源码态运行成功。模板 Python/worker 默认收集未排除资源；编译型与 Next 保留其编译/standalone 运行边界并收集资源，static 只使用 dist。共享 helper 依赖 Python 3.11+，存量应用须一起更新 helper 和构建入口。`.artifactignore` 仅增加相对 glob 排除，私有文件不允许包含回退；构建失败保留旧有效 ZIP。默认排除私有环境/凭据、VCS/agent 状态、缓存、日志、临时和旧制品；已知编译源码树不作为运行资源，新增资源应进入真实输出边界。
+
+构建后在隔离解压目录验证生产 run/migrate 入口及其依赖，使用安全测试数据库，核对真实页面/API/worker 行为；不要因 run.migrate 为告警策略而接受缺失脚本的发布包。
+
+Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。

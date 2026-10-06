@@ -118,7 +118,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 7. **数据库**：RCoder 的 UserApp 容器自带 PG，通常位于同容器 `localhost:5432`；独立运行 app-cli 时由用户或客户端准备数据库，可以是远程地址或其他端口。连接参数读取实际环境配置（如 `DATABASE_URL`、`PGHOST`、`PGPORT`、`POSTGRES_USER/DB/PASSWORD`，以所选模板解析逻辑为准），不硬编码。`dev/dev/dev` 只是新容器的初始默认值，不能据此覆盖用户已修改的凭据。PG 前置等待由运行环境声明 `APP_CLI_REQUIRE_PG=1`，不写进模板 manifest；独立 app-cli 默认不强制探测。
 
-8. **迁移**：`[run].migrate` 必须幂等（可重复执行不报错），遵循 expand/contract——平台回滚时不执行 down migration。
+8. **迁移**：`[run].migrate` 必须幂等（可重复执行不报错），遵循 expand/contract——平台回滚时不执行 down migration。app-cli >= 0.3.16 记录应用迁移失败的完整输出后继续启动服务，旧回执只用于诊断；不能据此接受产物漏脚本，也不能解除父 Stop、实际清理未知或平台 DBAdmin 未知写入的保护。
 
 9. **日志**：文件日志写入实际注入的 `$APP_LOG_DIR`，不写死容器路径；独立调试时显式指定可写目录。推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
 
@@ -128,7 +128,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 12. **至少一个 enabled = true 的服务**：删除服务时删掉整个子目录、或把 `enabled` 置 false 均可，但全部 disabled 的 workspace 构建直接失败。
 
-13. **database/ 目录 = 发布时平台自动执行的 SQL**：workspace 根 `database/`（建库、扩展、平台侧初始化类）与各服务目录 `{服务}/database/`（该服务的初始化 SQL）下的 `.sql` 文件，会在**发布（activate）后由平台按序自动执行**——根先、服务按目录名字典序、目录内按文件名字典序（建议 `001_`、`002_` 前缀）。约束：**SQL 必须幂等**（每次发布都会重跑全部文件，用 `CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`）；**文件名只能用字母/数字/`.`/`_`/`-`**（中文或含空格的文件名会被平台静默跳过，如 `建表.sql` 不会执行）；只扫 `database/` 直接子层，子目录不递归；单文件失败仅记日志、**不阻断发布**。**开发阶段这些 SQL 不会自动执行**——写完必须先手动执行一遍（连接方式见铁律 7）再启动服务验证，否则表不存在服务起不来。应用随版本迭代的 schema 演进走 `[run].migrate`（失败会阻断启动）；`database/` 适合一次性的建库/扩展/初始化。
+13. **database/ 目录 = 发布时平台自动执行的 SQL**：workspace 根 `database/`（建库、扩展、平台侧初始化类）与各服务目录 `{服务}/database/`（该服务的初始化 SQL）下的 `.sql` 文件，会在**发布（activate）后由平台按序自动执行**——根先、服务按目录名字典序、目录内按文件名字典序（建议 `001_`、`002_` 前缀）。约束：**SQL 必须幂等**（每次发布都会重跑全部文件，用 `CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`）；**文件名只能用字母/数字/`.`/`_`/`-`**（中文或含空格的文件名会被平台静默跳过，如 `建表.sql` 不会执行）；只扫 `database/` 直接子层，子目录不递归；单文件失败仅记日志、**不阻断发布**。**开发阶段这些 SQL 不会自动执行**——写完必须先手动执行一遍（连接方式见铁律 7）再启动服务验证，否则表不存在服务起不来。应用随版本迭代的 schema 演进走 `[run].migrate`（失败记录日志并继续启动）；`database/` 适合一次性的建库/扩展/初始化。
 
 14. **static 服务约束**：`type = "static"` 在 **prod 产物态**不启动业务进程：省略 `[run]`，`[build].artifact` 为静态内容目录，由平台内置静态托管。**dev 源码态**可以有 `[devrun]`，React/Vue 模板通过它启动 Vite，必须保留 `$PORT`、`/health`、HMR 和 base 读取逻辑；不要因为 static 就删除 devrun 或跳过预览验证。生产确实需要业务进程时，再选择 `node` 等进程类型。
 
@@ -161,7 +161,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
 1. **manifest/路由配置校验**：先执行 `app-cli validate --help` 核对安装能力；支持时执行 `app-cli validate --workspace "$SOURCE_WORKSPACE"`，有开发运行方式时追加 `app-cli validate --workspace "$SOURCE_WORKSPACE" --dev`，分别核对 prod/dev 路由；即使刚在服务目录开发，也不能用该子目录或 `.run/` 的校验结果代替原根。需要结构化诊断可加 `--json`；退出码 0 为配置通过，1 为配置错误，2 为参数错误，3 为观察/内部失败，均按具体原因处理。核对预期服务和清单完整性，不能只看 `valid` 或旧 lock。命令不写 lock、不构建、不启动；旧版兼容检查按 dev-guide，不因命令缺失新增启动/停止门禁。准备编排仍用 `gen-lock` 生成派生 `release.lock.toml`，不要手改或当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
-2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace "$SOURCE_WORKSPACE"` 一条命令跑全部服务）；
+2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace "$SOURCE_WORKSPACE"` 一条命令跑全部服务）；生产只使用真实制品的解压目录：新增模块、`scripts/`、任意运行资源时核对它们已进入 ZIP/输出树，并在隔离于源码/开发依赖的目录验证生产 run/migrate 入口及依赖，使用安全测试数据库，不能只看 dev 或 ZIP 存在。
 3. **启动验证**：HTTP/TCP 服务检查监听与对应探测；process worker 检查根进程常驻、初始化失败非零退出和任务日志，不要求 HTTP 端点。React/Vue devrun 检查实际 Vite；prod 静态形态检查产物及资源响应。已有平台实例按下一条操作，不另起进程争抢端口；
 4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
@@ -213,3 +213,9 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 ### Python 构建依赖缓存
 
 Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python 构建脚本）。修改依赖时同步 `requirements.lock`；不要在每次构建前删除 `deps/` 或 `.pip-cache/`。构建脚本按锁文件与 Python ABI/平台判断是否重装，缓存保留在子项目工作区。不要将 `.pip-cache/`、`.deps-stamp` 打进制品，也不要把 `PIP_NO_CACHE_DIR=0` 当作开启缓存。生成发布 ZIP 必须重建，避免已删除文件残留。
+
+### 生产资源默认收集与排除
+
+全部 8 个模板均遵守生产资源边界；共享 `scripts/artifact_pack.py` 使用 Python 3.11+ 标准库，Python 只是构建工具语言，与业务语言无关。Python/worker 默认收集未排除的源码与运行资源；编译型保留 server/app.jar，排除已知源码/工具链树并收集未排除的新增资源目录；Next 保留 traced standalone 并追加服务根资源，static 仍以 dist 为界。不要恢复“只列 main.py/app/deps”式固定名单，也不把全量 node_modules/target/缓存加入产物。`.artifactignore` 仅增加相对 glob 排除，不支持包含回退；私有 `.env`/凭据、VCS/agent 状态、缓存、日志、临时和旧制品始终排除。新增运行资源落在已排除源码树时，调整构建输出布局而不是吞掉缺失入口。文件静态校验仅识别结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar`；不猜测任意 argv 数据参数，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令，其他依赖通过真实制品隔离执行验证。ZIP 独立生成并原子替换，失败保留旧有效制品，存量项目一起更新构建入口和 helper；完整规则见 dev-guide 的生产制品章节。
+
+Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。

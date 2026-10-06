@@ -240,6 +240,7 @@ ${tableNote}
 6. **\`type = "static"\` 的 prod 不启动业务进程** — 禁止 \`[run]\` 段,\`[build].artifact\` 为静态内容目录;
    dev 配了 \`[devrun]\` 时仍要启动、检查 Vite 等实际进程
 7. **database/ 目录的 SQL 执行规则** — 详见 workspace 根 \`database/README.md\`(init 已生成)
+8. **生产制品必须包含实际入口与资源** — 新增模块、\`scripts/\`、运行资源时核对真实 ZIP/输出树；模板 helper 使用 Python 3.11+，明确排除源码工具链/缓存/私有文件，存量应用同步更新 helper 和构建入口。隔离于源码验证 prod run/migrate，不能只验证 dev。
 
 ## 规范与工具入口
 
@@ -354,8 +355,10 @@ export function generateDatabaseReadme(): string {
 | | \`database/\` 目录（本约定） | \`run.migrate\`（project.manifest） |
 |---|---|---|
 | 执行者 | 平台（发布 activate 后，rcoder exec psql） | app-cli（服务启动前，应用自管迁移命令） |
-| 失败 | 仅日志，忽略 | 阻断启动 |
+| 失败 | 记录日志并跳过当前文件 | 记录日志并继续启动，应用作者负责迁移幂等性 |
 | 适用 | 建库/扩展/平台侧初始化 | 应用自身的 schema 迁移（如 drizzle） |
+
+迁移输出保留在服务日志和原任务日志中。历史 \`run.migrate\` 回执仅用于诊断，不是启动准入门禁；工作区执行锁仍保持互斥。Stop 取消整个启动时不会继续拉起业务。
 
 ## 示例
 

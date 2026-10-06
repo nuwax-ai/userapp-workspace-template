@@ -12,10 +12,11 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
-import zipfile
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+from artifact_pack import package_runtime
 
 
 def reusable_lock(text: str) -> bool:
@@ -113,27 +114,14 @@ def install_dependencies(root: Path) -> None:
 
 
 def package(root: Path) -> None:
-    # Always write a fresh ZIP. Updating an existing ZIP retains deleted files.
-    with tempfile.NamedTemporaryFile(prefix=".artifact-", suffix=".zip", dir=root, delete=False) as f:
-        temporary = Path(f.name)
-    try:
-        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
-            for entry in (root / "main.py", root / "app", root / "deps"):
-                if not entry.exists():
-                    raise FileNotFoundError(f"Missing artifact input: {entry.name}")
-                for path in ([entry] if entry.is_file() else sorted(entry.rglob("*"))):
-                    if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc":
-                        archive.write(path, path.relative_to(root))
-        temporary.replace(root / "artifact.zip")
-    finally:
-        temporary.unlink(missing_ok=True)
+    package_runtime(root, required=("main.py", "app", "deps"))
 
 
 def main() -> None:
     with build_lock(ROOT):
         install_dependencies(ROOT)
         package(ROOT)
-    print("artifact.zip generated (main.py + app/ + deps/)")
+    print("artifact.zip generated with scripts, modules, runtime resources and deps/")
 
 
 if __name__ == "__main__":

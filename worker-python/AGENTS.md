@@ -6,3 +6,5 @@
 - process 仅证明同一根进程启动时连续存活 5 秒，不证明业务、数据库或队列健康。保留失败日志。
 - 用有界任务或取消机制响应 SIGTERM/SIGINT。新增依赖时同步 build 产物和 run/devrun，不假设 prod 会安装依赖。
 - 不声明 `[proxy]`、HTTP 健康路径或 workspace bridge；至少搭配一个 web 服务组成 managed workspace。
+
+- 新增模块、`scripts/`、运行资源必须随 prod 制品进入运行根；默认收集未排除的内容，第三方依赖仍需显式准备。构建使用 Python 3.11+ 标准库；在隔离解压目录验证真实入口，不能仅看 dev 成功。
