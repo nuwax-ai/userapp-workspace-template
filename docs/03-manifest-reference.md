@@ -170,11 +170,11 @@ LOG_LEVEL = "debug"                 # 不能用保留键(PORT/HOST/HOSTNAME/APP_
 | `command` | 字符串数组(argv) | ✅ | — | 启动命令。HTTP/TCP 进程监听 `0.0.0.0:$PORT`；显式 process worker 无需监听。 |
 | `migrate` | 字符串数组(argv) | ❌ | `[]` | 数据迁移命令。**启动前**按拓扑顺序执行。必须幂等。 |
 | `depends_on` | 字符串数组(service_id) | ❌ | `[]` | 依赖的其他服务。驱动 migrate/启动顺序:被依赖者先。不能自依赖、不能引用不存在/disabled 的服务、不能成环。 |
-| `shutdown_timeout_seconds` | 整数 | ❌ | `30` | 收到停止信号后给多久优雅退出(SIGTERM → 等本值 → SIGKILL)。必须 `> 0`。 |
+| `shutdown_timeout_seconds` | 整数 | ❌ | `30` | 优雅退出声明值，必须 `> 0`；app-cli >= 0.3.16 的交互 Stop/Restart/取消退出宽限上限为 3 秒，不能靠调大本值延长。 |
 
 ### 字段表:`[devrun]`
 
-整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 显式配置则执行,未配则**本服务跳过编译**——本段即声明 dev 态自足)后 app-cli 直接编排源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、健康检查与产物态一致;pingap 可通过 `proxy.dev_strip_prefix` 为 devrun 覆盖前缀策略;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。改 manifest 后 restart 会按 mtime 自动重新生成 `release.lock.toml`。
+整段可选。**dev 阶段热加载启动命令,缺省回落 `[run].command`**(vite/nodemon/spring-boot:run/air 等改码即生效的命令)。**任一 enabled 服务配置本段,即把该 app 的 dev 链路切为源码态**:dev/start·restart 编译(`[devbuild]` 显式配置则执行,未配则**本服务跳过编译**——本段即声明 dev 态自足)后 app-cli >= 0.3.16 经唯一持久 `serve` owner 编排当前源码 workspace 并用本段启动——不再部署 `.run` 产物。端口注入(`0.0.0.0:$PORT`)、健康检查与产物态一致;pingap 可通过 `proxy.dev_strip_prefix` 为 devrun 覆盖前缀策略;生产部署不读本段。源码态约定:未配本段的服务用 `[run].command` 在**源码目录**启动,依赖 build 产物落在源码目录(模板形态:`app.jar`/`dist` 在项目根)。Source Start/Restart 重新读取当前 manifest、构建输入和运行配置；缺失、损坏或派生输入改变的 `release.lock.toml` 按规则重建，有效且内容一致的锁保留，不用旧 ZIP、`.run` 或历史 release ID 阻断新的源码请求。
 
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|:---:|---|

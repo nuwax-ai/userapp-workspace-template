@@ -34,7 +34,7 @@
 
 ### 平台源码根约定
 
-平台开发会话在首次提供的 cwd 记录 `SOURCE_WORKSPACE=$PWD`，初始化与完成后的 validate 都使用同一源码根。平台预建空 `code/`、状态和产物目录不改变根；独立客户端按用户选择的新目录初始化。已有内层完整工程走导入适配，保留业务并接入原根。该约定须同时进入实际注入的系统提示词、agent-store 的 scaffold/dev-guide 与 CLI 生成的 AGENTS；修改仓库文件或发布 npm 包只完成其中对应的制品更新，不证明现场会话已生效。
+平台工作区契约（文件/chat 接口实际返回的 `workspace_root`）决定唯一源码根；先核对当前 cwd 与该根一致，再记录 `SOURCE_WORKSPACE=$PWD`。初始化与完成后的 validate 都使用同一源码根。平台预建空 `code/`、状态和产物目录不改变根；独立客户端按用户选择的新目录初始化。已有内层完整工程走导入适配，保留业务并接入原根。该约定须同时进入实际注入的系统提示词、agent-store 的 scaffold/dev-guide 与 CLI 生成的 AGENTS；修改仓库文件或发布 npm 包只完成其中对应的制品更新，不证明现场会话已生效。
 
 ### 导入已有项目的指引同步
 
@@ -57,6 +57,14 @@ CLI pack 将这份正文导出为随 npm 分发的 `docs/07-import-existing-proj
 先确认二进制支持 `validate --workspace`（或明确使用旧版兼容检查）、`gen-lock --workspace`、`build --workspace`、`serve --workspace`，并分别核对配置与运行验证结果；本仓库文件修改不会自动更新运行中的沙箱或平台配置。
 
 新版 workspace 优先级为 `--workspace` → `APP_CLI_WORKSPACE` → 启动 cwd；旧版以安装二进制 help 为准。平台提示词仍固定显式传 `SOURCE_WORKSPACE`，不能因默认值改为 cwd 就让服务子目录覆盖应用根；生产入口继续显式传运行目录。
+
+### app-cli >= 0.3.16 的 owner、停止与迁移边界
+
+`serve` 是持久运行控制 owner，`run` 通过统一控制链提交原操作，不直接前台编排。已有核验为同应用的 owner 时复用，没有 owner 时取得稳定内核锁并完成必要恢复；不能按锁文件存在、裸 PID 或管理端口拒连判断归属或清理完成。
+
+业务 Stop 取消启动意图并确认受管业务停止后保留管理面；没有业务执行时重复 Stop 幂等成功，旧构建与迟到回调不能再启动业务。交互优雅退出宽限上限为 3 秒，`shutdown_timeout_seconds` 的 schema 默认 30 保留；构建、RPC、恢复各阶段仍共享父请求 deadline。
+
+应用 `run.migrate` 失败仅在进程/后代退出与清理已确认后告警并继续启动，原任务/操作身份与日志保留；父取消、清理未确认及迁移或平台 DBAdmin 的未知不可逆写入仍保持对应保护，不能自动重放未知写入。升级需分别核对实际沙箱 app-cli 版本、已安装 skills/reference、平台注入提示词及新生成的说明；仅发布 npm 模板不会更新其他分发面。
 
 ### React/Vue 路由契约同步
 

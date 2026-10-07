@@ -9,7 +9,7 @@
 
 ## Step 1:建目录结构
 
-**平台开发**先在首次提供的目录记录 `SOURCE_WORKSPACE=$PWD`，把它作为固定源码根。需要模板时执行 `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend go`；仅有元数据、用户说明或平台预建空目录不改到下一层。安装版因非空拒绝时可在工作区外临时生成，再最小合入原根，保留既有文件。`code/` 内已有完整业务则走[已有项目适配](07-import-existing-project.md)。
+**平台开发**以平台工作区契约返回的 `workspace_root` 为固定源码根；先核对 cwd 与其一致，再记录 `SOURCE_WORKSPACE=$PWD`，不能把服务子目录的 cwd 当成应用根。需要模板时执行 `npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend go`；仅有元数据、用户说明或平台预建空目录不改到下一层。安装版因非空拒绝时可在工作区外临时生成，再最小合入原根，保留既有文件。`code/` 内已有完整业务则走[已有项目适配](07-import-existing-project.md)。
 
 **独立客户端**可以按用户选择执行 `init my-app --backend go`，进入生成目录后记录自己的源码根。下方 `my-app/` 是 workspace 结构示意，平台不用另建该目录。
 

@@ -113,6 +113,9 @@ function walkAndRelease(
       } else {
         fse.copyFileSync(srcPath, destPath);
       }
+      // Text rendering creates a new file; retain the template permissions just
+      // as binary copying does, so declared shell/Python entries remain runnable.
+      fs.chmodSync(destPath, fs.statSync(srcPath).mode & 0o777);
     }
   }
 }

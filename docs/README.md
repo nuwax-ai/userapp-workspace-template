@@ -11,7 +11,7 @@ UserApp 的核心模型是:**一个 `app_id` 对应一个 workspace;一个 works
 
 你需要提供代码、一个 workspace manifest 和各编排服务的 manifest。镜像、资源、端口、反向代理这些平台都替你管了。
 
-平台开发使用首次提供的固定源码根：首次记录 `SOURCE_WORKSPACE=$PWD`，模板 init 与完成后的 validate 始终指向此根。预建空 `code/`、状态与运行产物目录不改变源码根；已有内层完整工程保留业务，按接入指引适配。独立客户端可按用户选定的新目录创建 workspace。
+平台工作区契约（文件/chat 接口实际返回的 `workspace_root`）决定唯一源码根；先核对当前 cwd 与该根一致，再记录 `SOURCE_WORKSPACE=$PWD`。模板 init 与完成后的 validate 始终指向此根。预建空 `code/`、状态与运行产物目录不改变源码根；已有内层完整工程保留业务，按接入指引适配。独立客户端可按用户选定的新目录创建 workspace。
 
 维护平台 agent 指引时，需分别同步实际注入的[系统提示词](../prompts/README.md)、agent-store 中安装的 scaffold/dev-guide 及完整 references、CLI 生成的 AGENTS。npm 发布不会更新已安装技能或现场提示词；仓库文案与正在运行的会话是否生效分别核验。
 

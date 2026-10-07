@@ -1,6 +1,6 @@
 # 接入已有项目
 
-已有代码需要接入 workspace，或完整工程误放在平台 `code/` 等子目录时，由 agent 使用现有 `userapp-dev-guide` 增量适配。平台首次记录的 `SOURCE_WORKSPACE=$PWD` 始终作为源码根，初始化与 validate 都指向该根；独立客户端按用户选定的新目录初始化。
+已有代码需要接入 workspace，或完整工程误放在平台 `code/` 等子目录时，由 agent 使用现有 `userapp-dev-guide` 增量适配。平台工作区契约返回的 `workspace_root` 是源码权威，核对 cwd 一致后才记录 `SOURCE_WORKSPACE=$PWD`；初始化与 validate 都指向该已核验根，独立客户端按用户选定的新目录初始化。
 完整操作流程、布局示例与验收要求维护在
 [已有项目接入指引](../skills/userapp-dev-guide/references/import-existing-project.md)。
 

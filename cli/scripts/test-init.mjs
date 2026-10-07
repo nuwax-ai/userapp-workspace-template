@@ -180,3 +180,68 @@ test('将要写入的目标 symlink 不能越界写入，非法 service-id 写�
     assert.deepEqual(snapshot(outside), beforeOutside);
   });
 });
+
+// Copy the real built CLI and packed templates so executable fixtures never
+// mutate cli/templates/ or depend on test order in the ordinary package tests.
+function withReleasePackage(work) {
+  withDirectory('release-mode', (root) => {
+    const packageDir = path.join(root, 'package');
+    fs.mkdirSync(packageDir);
+    fs.cpSync(path.join(cliDir, 'dist'), path.join(packageDir, 'dist'), { recursive: true });
+    fs.cpSync(path.join(cliDir, 'templates'), path.join(packageDir, 'templates'), { recursive: true });
+    fs.writeFileSync(path.join(packageDir, 'package.json'), '{"type":"module"}\n');
+    fs.symlinkSync(path.join(cliDir, 'node_modules'), path.join(packageDir, 'node_modules'), 'dir');
+    for (const id of ['backend-python', 'worker-python']) {
+      const template = path.join(packageDir, 'templates', id);
+      const script = path.join(template, 'scripts', 'mode-entry.sh');
+      fs.mkdirSync(path.dirname(script), { recursive: true });
+      fs.writeFileSync(script, '#!/bin/sh\nprintf "%s" "__SERVICE_ID__|__UNRECOGNIZED__"\n');
+      fs.chmodSync(script, 0o751);
+      const binary = path.join(template, 'scripts', 'runtime.bin');
+      fs.writeFileSync(binary, Buffer.from([0, 127, 128, 255]));
+      fs.chmodSync(binary, 0o740);
+      // This must be ignored in favor of the generated manifest.
+      fs.writeFileSync(path.join(template, 'project.manifest.toml'), 'DO NOT COPY THE SOURCE MANIFEST\n');
+    }
+    work(root, path.join(packageDir, 'dist', 'index.js'));
+  });
+}
+
+function releaseCli(cliPath, cwd, args) {
+  const result = spawnSync(process.execPath, [cliPath, ...args],
+    { cwd, encoding: 'utf8', env: { ...process.env, CI: '1' }, timeout: 10000 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+}
+
+function assertReleasedModes(directory, serviceId) {
+  const script = path.join(directory, 'scripts', 'mode-entry.sh');
+  const run = spawnSync(script, [], { cwd: directory, encoding: 'utf8', timeout: 10000 });
+  assert.ifError(run.error);
+  assert.equal(run.status, 0, `${run.stdout}\n${run.stderr}`);
+  assert.equal(run.stdout, `${serviceId}|__UNRECOGNIZED__`, 'text rendering must still replace known placeholders');
+  assert.equal(fs.statSync(script).mode & 0o777, 0o751, 'rendering must retain exact executable permission bits');
+  const binary = path.join(directory, 'scripts', 'runtime.bin');
+  assert.deepEqual(fs.readFileSync(binary), Buffer.from([0, 127, 128, 255]));
+  assert.equal(fs.statSync(binary).mode & 0o777, 0o740, 'binary copy must retain its permission bits');
+  const manifest = fs.readFileSync(path.join(directory, 'project.manifest.toml'), 'utf8');
+  assert.match(manifest, new RegExp(`service_id = "${serviceId}"`));
+  assert.ok(!manifest.includes('DO NOT COPY'), 'manifest must still be generated from validated CLI inputs');
+}
+
+test('真实 init 保留文本脚本执行权限和二进制权限，并继续渲染占位符', () => {
+  withReleasePackage((root, cliPath) => {
+    const workspace = path.join(root, 'initialized');
+    releaseCli(cliPath, root, ['init', workspace, '--backend', 'python', '--service-id', 'mode-api']);
+    assertReleasedModes(path.join(workspace, 'mode-api'), 'mode-api');
+  });
+});
+
+test('真实 add 保留文本脚本执行权限和二进制权限，并重新生成 manifest', () => {
+  withReleasePackage((root, cliPath) => {
+    const workspace = path.join(root, 'workspace');
+    releaseCli(cliPath, root, ['init', workspace, '--backend', 'python']);
+    releaseCli(cliPath, workspace, ['add', 'worker-python', '--service-id', 'mode-worker']);
+    assertReleasedModes(path.join(workspace, 'mode-worker'), 'mode-worker');
+  });
+});

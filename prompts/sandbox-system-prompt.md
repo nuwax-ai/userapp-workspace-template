@@ -6,7 +6,7 @@
 
 1. **应用身份与会话身份分开**。`app_id` 标识应用，`conversation_id` 标识对话，两者不能互换。调用平台应用接口时使用平台实际提供的 app_id，不从会话 ID、用户 ID 或目录名猜测；没有应用 ID 时仍可在当前 workspace 开发，调用相关接口前再核实。
 
-2. **一个应用 = 一个 workspace**。平台开发会话以首次提供的工作目录为固定源码根：第一次执行命令时记录 `SOURCE_WORKSPACE=$PWD`，后续初始化、根 manifest 和配置校验均使用这个原始路径。进入服务子目录后不要重新赋值；新 shell 恢复已记录的路径，不从当前子目录重新推导。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不是源码根；不要因原根非空另建一层 workspace，也不拼接固定容器路径。一个 workspace 可包含多个服务，整体构建和发布。安装依赖、单服务构建可进入对应子目录，完成后回到原根。引用项目文件优先用相对路径，不操作工作区外的其他应用。
+2. **一个应用 = 一个 workspace**。平台工作区契约（文件/chat 接口实际返回的 `workspace_root`）决定唯一源码根；先核对当前 cwd 与该根一致，再记录 `SOURCE_WORKSPACE=$PWD`。后续初始化、根 manifest 和配置校验均使用这个已核验路径。进入服务子目录后不要重新赋值；新 shell 恢复已记录的路径，不从当前子目录重新推导。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不是源码根；不要因原根非空另建一层 workspace，也不拼接固定容器路径。一个 workspace 可包含多个服务，整体构建和发布。安装依赖、单服务构建可进入对应子目录，完成后回到原根。引用项目文件优先用相对路径，不操作工作区外的其他应用。
 
 3. **持续迭代**：同一会话内的所有需求都在该 workspace 上增量开发。先检查它是否已存在，存在就在其上继续开发，不要删除重建。
 
@@ -60,7 +60,7 @@ manifest 字段拿不准时，用 `npx @nuwax-ai/template-cli docs` 查阅随 CL
 
 ### 2.2 执行初始化
 
-平台开发会话在首次提供的源码根记录路径，后面的初始化与校验使用同一个值：
+平台开发会话先核对当前 cwd 与平台实际返回的 `workspace_root` 一致，再记录路径；已经进入子目录时恢复已核验的根，不能执行下面的赋值覆盖它。后面的初始化与校验使用同一个值：
 
 ```bash
 SOURCE_WORKSPACE=$PWD
@@ -118,7 +118,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 7. **数据库**：RCoder 的 UserApp 容器自带 PG，通常位于同容器 `localhost:5432`；独立运行 app-cli 时由用户或客户端准备数据库，可以是远程地址或其他端口。连接参数读取实际环境配置（如 `DATABASE_URL`、`PGHOST`、`PGPORT`、`POSTGRES_USER/DB/PASSWORD`，以所选模板解析逻辑为准），不硬编码。`dev/dev/dev` 只是新容器的初始默认值，不能据此覆盖用户已修改的凭据。PG 前置等待由运行环境声明 `APP_CLI_REQUIRE_PG=1`，不写进模板 manifest；独立 app-cli 默认不强制探测。
 
-8. **迁移**：`[run].migrate` 必须幂等（可重复执行不报错），遵循 expand/contract——平台回滚时不执行 down migration。app-cli >= 0.3.16 记录应用迁移失败的完整输出后继续启动服务，旧回执只用于诊断；不能据此接受产物漏脚本，也不能解除父 Stop、实际清理未知或平台 DBAdmin 未知写入的保护。
+8. **迁移**：`[run].migrate` 必须幂等（可重复执行不报错），遵循 expand/contract——平台回滚时不执行 down migration。app-cli >= 0.3.16 仅在迁移进程/后代退出与清理已确认后，对应用迁移失败记录具体阶段、错误和输出并继续启动，旧回执只用于诊断；不能据此接受产物漏脚本，也不能解除父 Stop/取消、清理未确认或迁移/平台 DBAdmin 未知不可逆写入的保护，不能自动重放结果未知的写入。
 
 9. **日志**：文件日志写入实际注入的 `$APP_LOG_DIR`，不写死容器路径；独立调试时显式指定可写目录。推荐 JSONL 格式；text 格式须配 `multiline_start_pattern`（如 Java 堆栈）。
 
@@ -128,7 +128,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 12. **至少一个 enabled = true 的服务**：删除服务时删掉整个子目录、或把 `enabled` 置 false 均可，但全部 disabled 的 workspace 构建直接失败。
 
-13. **database/ 目录 = 发布时平台自动执行的 SQL**：workspace 根 `database/`（建库、扩展、平台侧初始化类）与各服务目录 `{服务}/database/`（该服务的初始化 SQL）下的 `.sql` 文件，会在**发布（activate）后由平台按序自动执行**——根先、服务按目录名字典序、目录内按文件名字典序（建议 `001_`、`002_` 前缀）。约束：**SQL 必须幂等**（每次发布都会重跑全部文件，用 `CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`）；**文件名只能用字母/数字/`.`/`_`/`-`**（中文或含空格的文件名会被平台静默跳过，如 `建表.sql` 不会执行）；只扫 `database/` 直接子层，子目录不递归；单文件失败仅记日志、**不阻断发布**。**开发阶段这些 SQL 不会自动执行**——写完必须先手动执行一遍（连接方式见铁律 7）再启动服务验证，否则表不存在服务起不来。应用随版本迭代的 schema 演进走 `[run].migrate`（失败记录日志并继续启动）；`database/` 适合一次性的建库/扩展/初始化。
+13. **database/ 目录 = 发布时平台自动执行的 SQL**：workspace 根 `database/`（建库、扩展、平台侧初始化类）与各服务目录 `{服务}/database/`（该服务的初始化 SQL）下的 `.sql` 文件，会在**发布（activate）后由平台按序自动执行**——根先、服务按目录名字典序、目录内按文件名字典序（建议 `001_`、`002_` 前缀）。约束：**SQL 必须幂等**（每次发布都会重跑全部文件，用 `CREATE TABLE IF NOT EXISTS`、`ON CONFLICT DO NOTHING`）；**文件名只能用字母/数字/`.`/`_`/`-`**（中文或含空格的文件名会被平台静默跳过，如 `建表.sql` 不会执行）；只扫 `database/` 直接子层，子目录不递归；单文件失败仅记日志、**不阻断发布**。**开发阶段这些 SQL 不会自动执行**——写完必须先手动执行一遍（连接方式见铁律 7）再启动服务验证，否则表不存在服务起不来。应用随版本迭代的 schema 演进走 `[run].migrate`（app-cli >= 0.3.16 仅在退出与清理已确认后将普通迁移失败作为告警继续启动）；`database/` 适合一次性的建库/扩展/初始化。
 
 14. **static 服务约束**：`type = "static"` 在 **prod 产物态**不启动业务进程：省略 `[run]`，`[build].artifact` 为静态内容目录，由平台内置静态托管。**dev 源码态**可以有 `[devrun]`，React/Vue 模板通过它启动 Vite，必须保留 `$PORT`、`/health`、HMR 和 base 读取逻辑；不要因为 static 就删除 devrun 或跳过预览验证。生产确实需要业务进程时，再选择 `node` 等进程类型。
 
@@ -166,7 +166,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
    - 每个前端分别检查入口、真实 JS 响应（不能是 HTML fallback）、HMR；prod 检查构建后的 JS URL。多个同类前端用不同页面内容确认没有串到另一个模块。`completed` 和首页 200 均不能替代这些检查。
-   - **平台沙箱**：优先使用平台提供的启动/重启操作及返回的预览入口，逐路由验证实际响应。已有平台管理的实例时，重复的 `app-cli run/serve` 会被自动转交给唯一 owner（不会形成第二套编排），但请仍优先走平台操作；不终止已有所有者、不删除锁文件，也不通过换管理端口绕过所有权保护。即使误用 `kill/pkill` 结束了编排器，平台的恢复机制也能在下一次启动/停止请求中自动收束并重建管理面——但这不是推荐的停止方式。只有端口可达不能证明它属于当前应用；实例身份或控制方式不明确时，报告验证受阻及诊断信息。
+   - **平台沙箱**：优先使用平台提供的启动/重启操作及返回的预览入口，逐路由验证实际响应。实际 app-cli >= 0.3.16 已有核验为同应用的 owner 时，重复的 `app-cli run/serve` 经统一控制链转交给该 owner，但请仍优先走平台操作；不终止已有所有者、不删除锁文件，也不通过换管理端口绕过所有权保护。若误用 `kill/pkill` 结束了编排器，下一次启动/停止请求通过统一 owner 入口重新核验系统锁、应用/实例身份和原执行；普通残留可自动收束并重建管理面。持锁活 owner 不响应、越界身份、后代未确认退出或未知不可逆写入仍须返回具体诊断，并保留管理与状态查询能力，不能仅凭拒连认定清理成功。只有端口可达不能证明它属于当前应用；实例身份或控制方式不明确时，报告验证受阻及诊断信息。
    - **独立本地环境**（确认没有平台管理实例，且管理 API、Pingap 及各服务端口均无冲突）：先生成 lock、构建并组装产物，再启动唯一的常驻所有者：
 
      ```bash
@@ -219,3 +219,9 @@ Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python �
 全部 8 个模板均遵守生产资源边界；共享 `scripts/artifact_pack.py` 使用 Python 3.11+ 标准库，Python 只是构建工具语言，与业务语言无关。Python/worker 默认收集未排除的源码与运行资源；编译型保留 server/app.jar，排除已知源码/工具链树并收集未排除的新增资源目录；Next 保留 traced standalone 并追加服务根资源，static 仍以 dist 为界。不要恢复“只列 main.py/app/deps”式固定名单，也不把全量 node_modules/target/缓存加入产物。`.artifactignore` 仅增加相对 glob 排除，不支持包含回退；私有 `.env`/凭据、VCS/agent 状态、缓存、日志、临时和旧制品始终排除。新增运行资源落在已排除源码树时，调整构建输出布局而不是吞掉缺失入口。文件静态校验仅识别结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar`；不猜测任意 argv 数据参数，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令，其他依赖通过真实制品隔离执行验证。ZIP 独立生成并原子替换，失败保留旧有效制品，存量项目一起更新构建入口和 helper；完整规则见 dev-guide 的生产制品章节。
 
 Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。
+
+### 静态产物准备和入口文件
+
+静态 React/Vue 构建完成后使用 `python3 scripts/artifact_pack.py --prepare-dir dist --required index.html` 准备**实际将被平台包装的目录**：排除私有/缓存/`.artifactignore` 条目，物化目录内安全链接，越界或循环失败。随后 `--check-dir dist` 仅作严格只读检查；含被排除条目、未物化链接或目录冒充 `index.html` 时失败。准备期间输入文件或目录变化则失败并保留当前原输出；准备过程使用独立 staging 并在发布失败时恢复原 `dist`；恢复本身失败时保留唯一 `.artifact-backup-*` 及具体诊断，不能把唯一有效备份删掉。只处理派生输出，不搬迁业务源码。
+
+结构明确的本地可执行入口、解释器直接文件入口和 `java -jar` 的 JAR 必须为普通文件；本地可执行入口还须有执行位。资源目录的 required 规则仍允许目录，不能用该规则替代命令文件检查。CLI 生成项目保留文本脚本的原权限，新增脚本后仍需验证真实新制品的直接运行。

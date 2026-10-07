@@ -103,6 +103,11 @@ jobs:
             exit 1
           fi
 
+      - name: Setup Python for artifact packaging tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
       - name: Install dependencies
         working-directory: cli
         run: npm ci
@@ -126,6 +131,11 @@ jobs:
       - name: Test generated workspaces
         working-directory: cli
         run: npm test
+
+      - name: Test runtime artifact packaging and isolated entrypoints
+        run: |
+          export TEMPLATE_NODE_BIN="$(node -p 'process.execPath')"
+          python3 -m unittest discover -s backend-python/tests -p test_artifact_pack.py -v
 
       # ── 发布到 npm ─────────────────────────────────────────
       - name: Publish to npm

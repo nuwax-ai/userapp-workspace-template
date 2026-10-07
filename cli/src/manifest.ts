@@ -232,7 +232,7 @@ ${tableNote}
 1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
 2. **两级 manifest** — 根 \`workspace.manifest.toml\` + 各一级服务目录的 \`project.manifest.toml\`,
    文件名必须完全一致;平台只扫描一级子目录。共享库、工具、文档等非服务目录无需添加 manifest
-   平台提供的 workspace 路径就是唯一应用根，manifest 和服务直接放在该根；不要另建 \`code/\` 或应用名目录。
+   平台工作区契约实际返回的 \`workspace_root\` 是唯一源码权威，先核对 cwd 与其一致再记录 \`SOURCE_WORKSPACE=$PWD\`；不能因进入服务子目录改变根。manifest 和服务直接放在该根，不要另建 \`code/\` 或应用名目录。
    仅有 Git/agent 元数据和用户说明时，在此根执行 \`template-cli init .\`；已有业务或嵌套 workspace 按导入指引适配
 3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
 4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
@@ -241,9 +241,11 @@ ${tableNote}
    dev 配了 \`[devrun]\` 时仍要启动、检查 Vite 等实际进程
 7. **database/ 目录的 SQL 执行规则** — 详见 workspace 根 \`database/README.md\`(init 已生成)
 8. **生产制品必须包含实际入口与资源** — 新增模块、\`scripts/\`、运行资源时核对真实 ZIP/输出树；模板 helper 使用 Python 3.11+，明确排除源码工具链/缓存/私有文件，存量应用同步更新 helper 和构建入口。隔离于源码验证 prod run/migrate，不能只验证 dev。
+9. **静态输出与入口校验** — React/Vue 构建用 \`--prepare-dir dist\` 排除私有/忽略项并物化安全内链，再用只读 \`--check-dir dist\` 检查实际包装目录。运行入口/JAR/解释器脚本必须是普通文件，本地可执行入口须有执行位；生成脚本保留原权限。准备期间输入变化则失败并保留当前原输出；发布失败保留必要备份，不搬迁业务源码。
 
 ## 规范与工具入口
 
+- **app-cli >= 0.3.16 的运行控制**：\`serve\` 是持久 owner，\`run\` 通过统一 owner 控制链提交操作，不能另起一套编排。业务 Stop 确认退出后保留管理面；父取消及旧回调不能重启业务，清理或不可逆写入结果未知仍受保护。交互退出宽限上限为 3 秒，不是整个构建/RPC/恢复预算。迁移告警语义见根 \`database/README.md\`，旧运行时能力须单独核验。
 - **完整开发规范**(manifest 字段/路由/健康检查/日志/部署/排错/铁律):参考
   **userapp-dev-guide** skill,或 \`npx @nuwax-ai/template-cli docs\` 查阅随 CLI 分发的
   开发者文档;\`database/\` 目录的 SQL 执行规则见该目录下的 README。
@@ -355,10 +357,12 @@ export function generateDatabaseReadme(): string {
 | | \`database/\` 目录（本约定） | \`run.migrate\`（project.manifest） |
 |---|---|---|
 | 执行者 | 平台（发布 activate 后，rcoder exec psql） | app-cli（服务启动前，应用自管迁移命令） |
-| 失败 | 记录日志并跳过当前文件 | 记录日志并继续启动，应用作者负责迁移幂等性 |
+| 失败 | 已确认单文件执行失败时记录日志并跳过 | app-cli >= 0.3.16 在迁移进程/后代退出与清理已确认后记录告警并继续启动；应用作者负责迁移幂等性 |
 | 适用 | 建库/扩展/平台侧初始化 | 应用自身的 schema 迁移（如 drizzle） |
 
-迁移输出保留在服务日志和原任务日志中。历史 \`run.migrate\` 回执仅用于诊断，不是启动准入门禁；工作区执行锁仍保持互斥。Stop 取消整个启动时不会继续拉起业务。
+迁移输出保留在服务日志和原任务日志中。上述应用迁移告警策略需要实际 app-cli >= 0.3.16；旧版不能仅靠更新模板说明获得此行为。历史 \`run.migrate\` 回执仅用于诊断，不是启动准入门禁，工作区执行锁仍保持互斥。
+
+父 Stop/取消、旧进程或后代清理未确认时不能继续拉起业务；数据迁移或平台 DBAdmin 的不可逆写入结果未知时，保留对应执行保护，先查询原操作与实际结果，不自动重放未知写入。应用迁移告警不改变这些安全边界，也不代表数据库已经迁移成功。
 
 ## 示例
 

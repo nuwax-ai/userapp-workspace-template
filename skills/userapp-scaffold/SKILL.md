@@ -41,12 +41,13 @@ npx @nuwax-ai/template-cli docs --open  # 用系统默认程序打开文档目�
 
 先区分平台开发会话与独立客户端：
 
-- **平台开发会话**：第一次执行命令时记录平台提供的源码根 `SOURCE_WORKSPACE=$PWD`。初始化、根 manifest 和完成后的校验始终指向此值；进服务目录后不重新赋值，新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不作为源码根，原根非空也不改到下一层。
+- **平台开发会话**：平台工作区契约（文件/chat 接口实际返回的 `workspace_root`）决定唯一源码根；先核对当前 cwd 与该根一致，再记录 `SOURCE_WORKSPACE=$PWD`。初始化、根 manifest 和完成后的校验始终指向此值；进服务目录后不重新赋值，新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 不作为源码根，原根非空也不改到下一层。
 - **独立客户端**：用户指定 `init <目录名>` 创建新 workspace，进入生成目录后再记录源码根。下方 `<目录名>` 示例属于此流程；平台用 `"$SOURCE_WORKSPACE"` 替代。
 
 平台首次新建的示例：
 
 ```bash
+# 已核对当前 cwd 与平台返回的 workspace_root 一致后，再记录；不从服务子目录推导
 SOURCE_WORKSPACE=$PWD
 npx @nuwax-ai/template-cli init "$SOURCE_WORKSPACE" --backend python --frontend react
 app-cli validate --help
@@ -241,3 +242,9 @@ fetch('/api/python/items')  // 浏览器经反代路由到 backend-python
 生成模板后新增模块、`scripts/`、运行数据时，同时检查真实制品。模板默认收集未排除资源，共享 `scripts/artifact_pack.py` 使用 Python 3.11+ 标准库；保留编译型/standalone/static 的运行边界，第三方依赖不因目录新增就自动进入产物。存量项目须一起更新 helper 与构建入口，私有环境/凭据、VCS/agent 状态、缓存、日志、临时和旧制品默认排除；`.artifactignore` 只增加相对 glob 排除，不支持 `!` 包含回退，不能排除已声明入口。实际解压后验证入口，不能仅看 dev 或 ZIP 存在。
 
 Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。
+
+### 静态产物准备和入口文件
+
+静态 React/Vue 构建完成后使用 `python3 scripts/artifact_pack.py --prepare-dir dist --required index.html` 准备**实际将被平台包装的目录**：排除私有/缓存/`.artifactignore` 条目，物化目录内安全链接，越界或循环失败。随后 `--check-dir dist` 仅作严格只读检查；含被排除条目、未物化链接或目录冒充 `index.html` 时失败。准备期间输入文件或目录变化则失败并保留当前原输出；准备过程使用独立 staging 并在发布失败时恢复原 `dist`；恢复本身失败时保留唯一 `.artifact-backup-*` 及具体诊断，不能把唯一有效备份删掉。只处理派生输出，不搬迁业务源码。
+
+结构明确的本地可执行入口、解释器直接文件入口和 `java -jar` 的 JAR 必须为普通文件；本地可执行入口还须有执行位。资源目录的 required 规则仍允许目录，不能用该规则替代命令文件检查。CLI 生成项目保留文本脚本的原权限，新增脚本后仍需验证真实新制品的直接运行。

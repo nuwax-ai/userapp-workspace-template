@@ -1,6 +1,6 @@
 # Python 常驻 worker
 
-需要 app-cli >= 0.3.9。当前新增模板尚待配套运行时发布，不随 template-cli 0.1.16 提供。
+需要实际 app-cli >= 0.3.9，且 owner 声明 `startup-probe-v1`。先用已安装的 `template-cli list` 确认包含 `worker-python`，再核对运行时版本与能力；CLI 包含模板不代表运行时已升级。无法确认能力时保留 HTTP worker，不能靠去掉健康检查绕过错误。
 
 在包含 web 服务的 workspace 中执行 `template-cli add worker-python --service-id queue-worker`。
 无需 HTTP listener 或第三方库。`main.py` 的任务循环中实现实际工作，初始化错误直接传播。

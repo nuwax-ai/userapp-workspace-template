@@ -61,6 +61,11 @@ userapp-workspace-template/
 
 默认排除实际 `.env*`（保留 example/sample）、私钥/凭据与 agent/VCS 状态、缓存、日志、临时目录和旧制品；源码侧 `node_modules/`、`target/` 等工具链/依赖缓存不进入制品，Python `deps/` 与 Next traced 依赖按上述运行边界保留。服务根 `.artifactignore` 可增加**相对路径 glob 排除**（空行/`#` 注释允许，目录可写 `my-dev-data/`）；不支持 `!` 包含规则，不能覆盖私有文件排除或导致已声明入口缺失。该文件是模板构建脚本的约定，不是新增 manifest 字段。
 
+静态 React/Vue 构建完成后使用 `python3 scripts/artifact_pack.py --prepare-dir dist --required index.html` 准备**实际将被平台包装的目录**：排除私有/缓存/`.artifactignore` 条目，物化目录内安全链接，越界或循环失败。随后 `--check-dir dist` 仅作严格只读检查；含被排除条目、未物化链接或目录冒充 `index.html` 时失败。准备期间输入文件或目录变化则失败并保留当前原输出；准备过程使用独立 staging 并在发布失败时恢复原 `dist`；恢复本身失败时保留唯一 `.artifact-backup-*` 及具体诊断，不能把唯一有效备份删掉。只处理派生输出，不搬迁业务源码。
+
+结构明确的本地可执行入口、解释器直接文件入口和 `java -jar` 的 JAR 必须为普通文件；本地可执行入口还须有执行位。资源目录的 required 规则仍允许目录，不能用该规则替代命令文件检查。CLI 生成项目保留文本脚本的原权限，新增脚本后仍需验证真实新制品的直接运行。
+
+
 打包前仅核对 `run.command`、`run.migrate` 中结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar` 的 JAR；缺失、被排除、链接逃逸或目录循环立即构建失败。不把任意 argv 数据参数当作路径，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令。ZIP 独立生成后原子替换，失败保留旧有效 ZIP，重新构建不遗留已删除条目。自定义 shell 字符串、动态导入及外部依赖仍需实际运行验证：将**真实新制品**解压到隔离于源码/开发依赖的目录，用其生产入口和安全测试数据库执行必要迁移，再核对业务访问；迁移告警继续启动不代表制品可以漏脚本。
 
 验证报告须分别记录真实 ZIP/目录包装与隔离执行、语言/框架编译、平台启动/访问的结果；包装 fixture 通过不能代替完整框架构建或平台验收。
@@ -68,6 +73,12 @@ userapp-workspace-template/
 Next 生产构建尊重显式 `packageManager`（已安装的 npm/pnpm 精确版本）或唯一现有锁文件：npm 使用 `npm ci`，pnpm 使用 `pnpm install --frozen-lockfile`。双锁未声明选择时明确报歧义；声明的管理器缺少对应锁而存在其他锁时，不忽略有效锁或静默切换。两种锁均缺失时，保留模板原有首次安装初始化流程，明确记录本轮无锁输入、生成的锁及摘要，后续构建复用该锁。React/Vue 保留既有 pnpm 安装/首次初始化契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与构建入口；CLI pack 随 Next 模板复制安装器，不自动升级管理器或改锁版本。
 
 共享 helper 的维护源是 `backend-python/scripts/artifact_pack.py`；改动后同步各模板副本，CLI pack 会把这份源文件复制进每个生成模板的 `scripts/`。存量应用需一起更新构建入口与 helper，CLI/模板升级不自动改写旧项目。
+
+## app-cli 运行控制边界
+
+实际 app-cli >= 0.3.16 使用统一持久 `serve` owner；`run` 经同一控制链提交操作，不直接另起编排。Stop 取消启动意图并确认业务退出后保留管理面，旧构建与迟到回调不能重新启动业务。交互优雅退出宽限上限为 3 秒，manifest 的 `shutdown_timeout_seconds` 默认 30 保留；3 秒不是整个构建、RPC 或恢复的预算。
+
+应用 `run.migrate` 失败仅在进程/后代退出与清理已确认后告警并继续启动。父 Stop/取消、清理未确认或不可逆写入结果未知保持对应保护，不自动重放未知写入；具体边界见 [database/README.md](database/README.md)。文档和 CLI 模板更新不证明沙箱二进制、已安装技能及注入提示词已同步。
 
 ## Skills 安装
 
@@ -107,7 +118,7 @@ node cli/dist/index.js init /tmp/test --backend java
 [已有项目接入指引](skills/userapp-dev-guide/references/import-existing-project.md) 增量适配。
 保留原技术栈、业务、Git、根 lock 文件与 monorepo 共享依赖；可用一级适配目录调用原根构建。
 `init` 用于空目录或仅有 Git、平台/agent 元数据及用户说明的目录，默认保留已有说明和配置。
-平台提供的 workspace 就是唯一应用根，在该根执行 `init .`；不能因元数据非空而改到 `code/` 或应用名子目录。
+平台工作区契约实际返回的 `workspace_root` 是唯一源码权威；先核对 cwd 与其一致再记录 `SOURCE_WORKSPACE=$PWD`，进入服务目录后不重新赋值。在该根执行 `init .`；不能因元数据非空而改到 `code/` 或应用名子目录。
 已有业务或嵌套 workspace 按接入指引适配，不得用 `--force` 覆盖已有代码。
 
 已有 detect 只是不执行项目脚本的辅助检测,但会写入草稿；不假定 ZIP 导入自动执行 detect 或存在确认界面。

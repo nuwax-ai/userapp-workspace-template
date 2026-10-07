@@ -120,7 +120,17 @@ make docker-shell                         # 进容器（PG 已起：psql -h 127.
 
 容器脚本统一为 `gen-lock --workspace`、`build --workspace`、`serve --workspace`。
 之前固定的 app-cli 0.2.2 已移除，构建前必须选择包含此次 CLI 调整的已发布版本。
-更新 app-cli 时还需核对匹配的 Pingap 分发版本；本文件夹原有 `PINGAP_VERSION=0.13.9`
+更新 app-cli 时还需核对匹配的 Pingap 分发版本；本文件夹默认 `PINGAP_VERSION=0.14.3`
 未作为本轮配对兼容性验证结论。新版本镜像需通过配置校验和完整 docker-verify 才能验收。
 
 本轮只完成命令、文档、构建参数检查：未发布 npm、未构建镜像、未运行七服务集成验证。
+
+## 本地环境与平台版本边界
+
+本地 Docker 使用 Debian trixie / Python 3.13、Node 22、pnpm 10 和 Rust stable，
+默认 Pingap 0.14.3。Python 原生依赖的构建与运行仍须核对实际 Python minor、系统库和 CPU 架构；
+版本相同不代表镜像 digest 或平台部署已经验收。不得用宿主机的其他 Python/Node 版本结果代替。
+
+`run.migrate` 告警后继续启动、`run` 转交独立常驻 owner 的本轮契约需要 app-cli >=0.3.16。
+构建前核验 `APP_CLI_VERSION` 的实际 npm 发布状态，并核验该版本与 Pingap 的配置配对。
+只修改 RCoder 源码或只发布模板 CLI 不会让旧 npm app-cli 获得这些修复；包未发布时应记录前置受阻。

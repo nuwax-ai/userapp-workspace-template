@@ -272,9 +272,11 @@ SOME_KEY = "some-value"             # 不能用保留键(见 §6)
 | `command` | ✅ | — | 启动命令,argv 数组,规则同 build.command。HTTP/TCP 进程监听 `0.0.0.0:$PORT`；显式 process worker 不要求监听。进程态必填;`type = "static"` 服务省略整段。 |
 | `migrate` | ❌ | `[]` | 数据迁移命令 argv。**在服务启动前**按拓扑顺序执行。空数组 = 不迁移。 |
 | `depends_on` | ❌ | `[]` | 依赖的其他服务的 **`service_id` 列表**(不是目录名)。驱动 migrate/启动的**拓扑顺序**:被依赖的服务先迁移、先启动。不能自依赖、不能依赖不存在或 disabled 的服务、不能成环。 |
-| `shutdown_timeout_seconds` | ❌ | `30` | 收到停止信号后,给服务多久优雅退出(SIGTERM → 等待本值 → SIGKILL)。必须 `> 0`。 |
+| `shutdown_timeout_seconds` | ❌ | `30` | 优雅退出声明值，必须 `> 0`；app-cli >= 0.3.16 的交互 Stop/Restart/取消退出宽限上限为 3 秒，不能靠调大本值延长。 |
 
 > ⚠️ `migrate` **必须幂等**(可重复执行不报错),且遵守 expand/contract——因为代码回滚时**平台不会自动执行 down migration**。
+>
+> app-cli >= 0.3.16 仅在迁移进程/后代退出与清理已确认时，将应用迁移失败记录为告警并继续启动；父 Stop/取消、清理未确认或不可逆写入结果未知仍保持保护，不自动重放未知写入。旧版行为以实际二进制为准。字段默认 `shutdown_timeout_seconds = 30` 保留；3 秒是业务优雅退出宽限上限，不是构建、RPC 或恢复的总预算，各阶段仍共享父请求 deadline。
 
 ### 4.4 `[health]` — 健康检查路径
 
@@ -534,6 +536,11 @@ React/Vue 新模板的 Vite dev/build base 自动读取子项目 `[proxy].path`�
 共享 `scripts/artifact_pack.py` 使用 **Python 3.11+ 标准库**；Python 只是构建工具的实现语言，不限制业务语言。不安装第三方打包依赖；使用任何模板构建前核对构建环境的 Python 能力。
 
 默认排除实际 `.env*`（保留 example/sample）、私钥/凭据与 agent/VCS 状态、缓存、日志、临时目录和旧制品；源码侧 `node_modules/`、`target/` 等工具链/依赖缓存不进入制品，Python `deps/` 与 Next traced 依赖按上述运行边界保留。服务根 `.artifactignore` 可增加**相对路径 glob 排除**（空行/`#` 注释允许，目录可写 `my-dev-data/`）；不支持 `!` 包含规则，不能覆盖私有文件排除或导致已声明入口缺失。该文件是模板构建脚本的约定，不是新增 manifest 字段。
+
+静态 React/Vue 构建完成后使用 `python3 scripts/artifact_pack.py --prepare-dir dist --required index.html` 准备**实际将被平台包装的目录**：排除私有/缓存/`.artifactignore` 条目，物化目录内安全链接，越界或循环失败。随后 `--check-dir dist` 仅作严格只读检查；含被排除条目、未物化链接或目录冒充 `index.html` 时失败。准备期间输入文件或目录变化则失败并保留当前原输出；准备过程使用独立 staging 并在发布失败时恢复原 `dist`；恢复本身失败时保留唯一 `.artifact-backup-*` 及具体诊断，不能把唯一有效备份删掉。只处理派生输出，不搬迁业务源码。
+
+结构明确的本地可执行入口、解释器直接文件入口和 `java -jar` 的 JAR 必须为普通文件；本地可执行入口还须有执行位。资源目录的 required 规则仍允许目录，不能用该规则替代命令文件检查。CLI 生成项目保留文本脚本的原权限，新增脚本后仍需验证真实新制品的直接运行。
+
 
 打包前仅核对 `run.command`、`run.migrate` 中结构明确的相对本地可执行文件、已识别解释器的直接文件入口及 `java -jar` 的 JAR；缺失、被排除、链接逃逸或目录循环立即构建失败。不把任意 argv 数据参数当作路径，不解析 shell `-c`、解释器 `-c`/`-m` 或带选项的复杂命令。ZIP 独立生成后原子替换，失败保留旧有效 ZIP，重新构建不遗留已删除条目。自定义 shell 字符串、动态导入及外部依赖仍需实际运行验证：将**真实新制品**解压到隔离于源码/开发依赖的目录，用其生产入口和安全测试数据库执行必要迁移，再核对业务访问；迁移告警继续启动不代表制品可以漏脚本。
 

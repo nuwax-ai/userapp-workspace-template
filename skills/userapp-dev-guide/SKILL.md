@@ -30,7 +30,7 @@ app_id = my-app
 
 ## 源码根与运行目录
 
-平台开发会话第一次执行命令时记录 `SOURCE_WORKSPACE=$PWD`，此后初始化、根 manifest、构建和配置校验都使用这个固定源码根。进入服务目录后不重新赋值；新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 属于预留或派生目录，不是让 agent 再建 workspace 的目标。独立客户端可按用户选择 `init <dir>` 新建，进入该目录后记录自己的源码根。
+平台工作区契约（文件/chat 接口实际返回的 `workspace_root`）决定唯一源码根；先核对当前 cwd 与该根一致，再记录 `SOURCE_WORKSPACE=$PWD`。此后初始化、根 manifest、构建和配置校验都使用这个固定源码根。进入服务目录后不重新赋值；新 shell 恢复已记录的路径。平台预建的空 `code/`、`state/`、`builds/`、`.run/` 属于预留或派生目录，不是让 agent 再建 workspace 的目标。独立客户端可按用户选择 `init <dir>` 新建，进入该目录后记录自己的源码根。
 
 仅有 Git/agent 元数据、用户说明或平台预建空目录的新 workspace 可在原根初始化。旧版 CLI 非空拒绝时，在工作区外临时生成后最小合入原根，保留已有文件；不要使用 force 或把完整工程留在下一层。`code/` 内已有完整业务时按下面的适配指引接入原根，不重新脚手架化，也不拿子目录 validate 通过替代平台根检查。
 
@@ -101,7 +101,7 @@ shutdown_timeout_seconds = 30       # 可选,默认30
 [devrun]                            # 可选,dev阶段热加载启动;缺省回落[run].command
 command = ["pnpm", "exec", "vite"]  # 配置即切源码态且声明dev态自足(未配[devbuild]则跳过编译):
                                     # dev/start·restart编译([devbuild]显式配置则执行)后
-                                    # app-cli直接编排源码workspace(改码即生效),不部署.run;
+                                    # app-cli >= 0.3.16 经唯一 serve owner 编排源码 workspace,不部署.run;
                                     # 须监听0.0.0.0:$PORT(注入同[run]);生产不读本段
 
 [health]                            # 整段可选,默认 /health
@@ -345,7 +345,7 @@ multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"  # 仅text(Java堆栈等)
 
 ### 数据库迁移约定
 
-`run.migrate` 启动前按拓扑序执行；app-cli >= 0.3.16 对应用迁移失败记录完整输出后继续启动服务，历史回执仅诊断。执行锁仍保持互斥；父 Stop/实际清理未知和平台 DBAdmin 未知写入保持各自保护。必须:
+`run.migrate` 启动前按拓扑序执行；app-cli >= 0.3.16 仅在迁移进程/后代退出与清理已确认后，对应用迁移失败记录具体阶段、错误和输出并继续启动，历史回执仅诊断。执行锁仍保持互斥；父 Stop/取消、清理未确认及迁移或平台 DBAdmin 的不可逆写入结果未知保持对应保护，不自动重放未知写入。必须:
 1. **幂等** — 可重复执行不报错
 2. **新旧代码短期兼容同一 schema** — 回滚时 schema 不退
 3. **先 expand 再发代码最后 contract** — 加列先加,删列等旧代码下线
@@ -368,7 +368,7 @@ activate 后自动按序执行(容器内 `psql -f`)。规则:
   未就绪本轮整体跳过
 
 与 `run.migrate` 的边界:database/ 是**平台**执行、失败仅日志;run.migrate 是 **app-cli**
-在服务启动前执行应用自管迁移、失败记录日志并继续启动。建库/扩展/平台侧初始化放 database/,
+在服务启动前执行应用自管迁移；app-cli >= 0.3.16 仅在退出与清理已确认后将普通迁移失败作为告警继续启动，父取消或结果未知保持保护。建库/扩展/平台侧初始化放 database/,
 应用 schema 演进走 run.migrate。
 
 > ⚠️ **开发阶段不会自动执行**:本地 devrun / 沙箱调试时 database/ 里的 SQL 不会被跑——
@@ -377,7 +377,9 @@ activate 后自动按序执行(容器内 `psql -f`)。规则:
 
 ### 优雅关闭
 
-SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到 SIGTERM 应停止接新请求、排空在途、关连接。
+app-cli >= 0.3.16 的交互 Stop/Restart/取消：SIGTERM → 有效优雅退出宽限不超过 3 秒 → 必要时强制清理并核验退出。`shutdown_timeout_seconds` 的 schema 默认 30、必须 > 0 保留，但调大字段不能延长交互停止的上限。服务立即停止接新请求、尽快排空在途并关闭连接；长任务使用持久检查点与幂等续执行。
+
+Stop 取消启动意图、确认业务停止后保留 `serve` 管理面，旧构建及迟到回调不能重新拉起业务。没有业务执行时重复 Stop 幂等成功；用户已停止的业务不因状态/readiness/恢复管理面而启动。3 秒不是整个构建、RPC 或恢复的预算，各阶段共享父请求 deadline；取消受理不代表清理已完成。
 
 ---
 
@@ -398,7 +400,7 @@ SIGTERM → 等 `shutdown_timeout_seconds`(默认30s) → SIGKILL。服务收到
 - `gen-lock --workspace DIR`：校验并生成派生 lock，不启动服务。
 - `build --workspace DIR [--dev] [--deploy-dir DIR] [--only IDS]`：构建与产物组装。
 - `serve --workspace DIR`：常驻所有者与管理 API，独立本地运行首选。
-- `run --workspace DIR`：直接前台编排入口，供平台开发链路使用；不是绕过所有者的备用启动方式。
+- `run --workspace DIR`：app-cli >= 0.3.16 通过统一 owner 控制链向独立持久 `serve` 提交源码启动操作；已有核验为同应用的 owner 时复用，没有 owner 时取得稳定内核锁后启动管理服务并恢复。不是另一套前台编排，也不能绕过持锁 owner。
 - `run-service`：运行时内部入口，普通应用开发不直接调用。
 
 不再支持顶层 `--workspace`、顶层 `--gen-lock`、无子命令启动或 `APP_CLI_GEN_LOCK` 选择动作，也没有 `server` 别名。安装版本不支持时报告版本不匹配，不回退旧语法。
@@ -467,7 +469,7 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
 
 启动判定(app-cli builtin 引擎,dev/start·restart 的 SSE 逐服务事件):
 - `service_start_ok` = 本次启动检查通过；策略由 `startup_probe` 决定，省略保持旧行为。process 仅证明根进程连续存活，不证明业务初始化成功；服务仍须自行在初始化失败时非零退出。
-- 应用 migrate 失败仅告警并继续该服务启动；spawn/探测超时等业务启动失败会记录具体服务和原因；`serve` owner 的启动操作失败时收束已启动的业务进程，不能将部分 `service_start_ok` 当作任务完成。
+- app-cli >= 0.3.16 的应用 migrate 失败仅在进程/后代退出与清理已确认后告警并继续；父取消、清理未确认及未知不可逆写入仍受保护。业务入口 spawn/探测超时等启动失败会记录具体服务和原因；`serve` owner 的启动操作失败时收束已启动的业务进程，不能将部分 `service_start_ok` 当作任务完成。
 - 事件经 owner 事件接口或 stdout `APP-CLI-EVT` 行协议回传任务 SSE(`/tasks/{id}/logs/stream`)，以对应操作的终态为准。
 - `type = "static"` 服务(prod 无业务进程):`[run]` 禁止、`[build].artifact`=静态内容目录
   (如 dist)——内置静态托管 serve(lock 端口,SPA fallback index.html,/health 恒 200),
@@ -483,7 +485,7 @@ APP_CLI_RUN_PROFILE=dev app-cli serve --workspace . --log-dir .local-logs
   服务自身仍需正确处理所需数据库。启用探测时使用实际连接目标与凭据，等待失败使本次启动操作失败，
   不等于常驻 `serve` owner 退出。无 DB 的独立应用不需要设置跳过开关；
   `APP_CLI_SKIP_PG_WAIT` 仅用于明确的本地诊断，不代替正确的环境策略与连接配置。
-- `serve` 是常驻控制进程，业务启动失败/停止不等于控制进程退出。通过状态与日志判断业务就绪，不能只看 PID。独立本地验证完成后，只对自己启动的前台所有者发 Ctrl-C；`run` 的直接编排退出行为不能套用到 `serve`。
+- `serve` 是常驻控制 owner，业务启动失败/停止不等于管理进程退出。`run` 客户端提交与查询原操作，客户端退出不能当作业务或 owner 已退出的证据。通过原 operation ID、状态和实际日志判断业务就绪；独立本地验证完成后，业务 Stop 保留管理面，只有明确结束自建前台 owner 时才对该实例发 Ctrl-C。
 - 访问入口 = `http://127.0.0.1:9080/<proxy.path>...`(与生产同构,经反代)
 - 入口默认页:workspace 根有 `index.html` 且无服务占 `/` 时,根路径/未匹配路径
   兜底展示它(app-cli 内置静态服务 :9081,每次请求实时读文件,改完刷新即生效);
@@ -595,3 +597,9 @@ Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python �
 构建后在隔离解压目录验证生产 run/migrate 入口及其依赖，使用安全测试数据库，核对真实页面/API/worker 行为；不要因 run.migrate 为告警策略而接受缺失脚本的发布包。
 
 Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。
+
+### 静态产物准备和入口文件
+
+静态 React/Vue 构建完成后使用 `python3 scripts/artifact_pack.py --prepare-dir dist --required index.html` 准备**实际将被平台包装的目录**：排除私有/缓存/`.artifactignore` 条目，物化目录内安全链接，越界或循环失败。随后 `--check-dir dist` 仅作严格只读检查；含被排除条目、未物化链接或目录冒充 `index.html` 时失败。准备期间输入文件或目录变化则失败并保留当前原输出；准备过程使用独立 staging 并在发布失败时恢复原 `dist`；恢复本身失败时保留唯一 `.artifact-backup-*` 及具体诊断，不能把唯一有效备份删掉。只处理派生输出，不搬迁业务源码。
+
+结构明确的本地可执行入口、解释器直接文件入口和 `java -jar` 的 JAR 必须为普通文件；本地可执行入口还须有执行位。资源目录的 required 规则仍允许目录，不能用该规则替代命令文件检查。CLI 生成项目保留文本脚本的原权限，新增脚本后仍需验证真实新制品的直接运行。

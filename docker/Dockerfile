@@ -4,9 +4,9 @@
 # 单容器复刻平台运行时：多语言工具链 + app-cli（npm 平台包）+ pingap + PG16。
 # 配合 entrypoint.sh 跑通「manifest 校验 → 7 服务全量编译 → 产物态运行 → 9080 冒烟」。
 #
-# 基础选 rust:bookworm：① 自带 Rust 工具链（模板含 backend-rust）；② Debian
-# bookworm 的 glibc 2.36 基线 ≥ app-cli npm 包二进制的 glibc 2.17 基线（兼容）；
-# ③ 与平台 app-runtime 镜像同源。
+# 基础采用与当前平台相同的 Debian trixie 系列，提供 Python 3.13。
+# Rust 使用该系列的 stable 更新版本，不固定 Rust 数值版本。
+# 本地镜像独立构建，版本/ABI 对齐不能代替真实平台运行验收。
 #
 # 分层从稳定到易变（最大化构建缓存）：apt 基础 → PG → Node → JDK → Go → Python
 # → cargo 源 → pingap → app-cli（最常变,最后）。
@@ -28,9 +28,10 @@ ARG CARGO_CN=true
 # GitHub 下载代理前缀（如 https://ghfast.top/）;空 = 直连
 ARG GITHUB_PROXY=
 ARG NODE_MAJOR=22
-ARG PINGAP_VERSION=0.13.9
+ARG PINGAP_VERSION=0.14.3
+ARG RUST_BASE_TAG=trixie
 
-FROM ${DOCKER_MIRROR}rust:bookworm
+FROM ${DOCKER_MIRROR}rust:${RUST_BASE_TAG}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG APT_MIRROR
@@ -65,7 +66,8 @@ RUN install -d /usr/share/postgresql-keyring && \
     curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         | gpg --dearmor -o /usr/share/postgresql-keyring/pgdg.gpg && \
     chmod 644 /usr/share/postgresql-keyring/pgdg.gpg && \
-    echo "deb [signed-by=/usr/share/postgresql-keyring/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+    PG_CODENAME="$(. /etc/os-release; printf '%s' "$VERSION_CODENAME")" && \
+    echo "deb [signed-by=/usr/share/postgresql-keyring/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt ${PG_CODENAME}-pgdg main" \
         > /etc/apt/sources.list.d/pgdg.list && \
     apt-get update && apt-get install -y --no-install-recommends postgresql-16 && \
     rm -rf /var/lib/apt/lists/* && \
@@ -118,9 +120,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
 ENV GOPROXY=${GOPROXY_URL}
 ENV PATH=/usr/local/go/bin:/root/go/bin:${PATH}
 
-# ── 6. Python 3（bookworm 原生 3.11）───────────────────────────────────────
+# ── 6. Python 3（trixie 原生 3.13，与当前平台的 Python ABI 对齐）───────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv && \
+    python3 -c 'import sys; assert sys.version_info[:2] == (3, 13), sys.version' && \
     rm -rf /var/lib/apt/lists/* && \
     ln -sf /usr/bin/python3 /usr/bin/python
 ENV PIP_INDEX_URL=${PIP_INDEX_URL}

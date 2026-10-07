@@ -21,6 +21,7 @@ on:
       - 'frontend-vue3-vite/**'
       - 'userapp-next-template/**'
       - '.github/workflows/ci-cli.yml'
+      - '.github/workflows/release-cli.yml'
   pull_request:
     paths:
       - 'cli/**'
@@ -38,6 +39,8 @@ on:
       - 'frontend-react-vite/**'
       - 'frontend-vue3-vite/**'
       - 'userapp-next-template/**'
+      - '.github/workflows/ci-cli.yml'
+      - '.github/workflows/release-cli.yml'
 
 permissions:
   contents: read
@@ -52,6 +55,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Setup Python for artifact packaging tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
       - name: Install dependencies
         working-directory: cli
@@ -68,6 +76,11 @@ jobs:
       - name: Test generated workspaces
         working-directory: cli
         run: npm test
+
+      - name: Test runtime artifact packaging and isolated entrypoints
+        run: |
+          export TEMPLATE_NODE_BIN="$(node -p 'process.execPath')"
+          python3 -m unittest discover -s backend-python/tests -p test_artifact_pack.py -v
 
       - name: Test Python dependency cache with local wheels
         run: python3 -m unittest discover -s backend-python/tests -p test_build_cache.py -v
