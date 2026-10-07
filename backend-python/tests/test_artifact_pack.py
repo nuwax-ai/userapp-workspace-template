@@ -384,8 +384,13 @@ class ArtifactTests(unittest.TestCase):
         old = self.prior()
         original_copy = pack.copy_checked
         def replace_before_copy(path, observed, destination):
-            path.unlink()
-            path.write_text('replacement bytes')
+            # unlink/write can legitimately recycle the old inode on Linux.
+            # Keep both files alive until replacement, making identity distinct.
+            replacement = path.with_name(path.name + '.replacement-fixture')
+            replacement.write_text('replacement bytes')
+            actual = replacement.stat()
+            self.assertNotEqual((actual.st_dev, actual.st_ino), (observed.st_dev, observed.st_ino))
+            os.replace(replacement, path)
             return original_copy(path, observed, destination)
         with patch.object(pack, 'copy_checked', side_effect=replace_before_copy):
             with self.assertRaisesRegex(ValueError, 'identity changed'):
@@ -593,6 +598,44 @@ class ArtifactTests(unittest.TestCase):
         self.assertEqual((self.root / 'dist/late.js').read_text(), 'new-output')
         self.assertEqual(list(self.root.glob('.artifact-dir-*')), [])
         self.assertEqual(list(self.root.glob('.artifact-backup-*')), [])
+
+    def test_zip_same_inode_same_size_rewrite_before_copy_is_rejected_when_mtime_restored(self):
+        entry = self.write('main.py', 'original bytes')
+        observed = entry.stat()
+        old = self.prior()
+        original_copy = pack.copy_checked
+        def mutate_before_copy(path, metadata, destination):
+            entry.write_text('modified bytes')
+            os.utime(entry, ns=(observed.st_atime_ns, observed.st_mtime_ns))
+            actual = entry.stat()
+            self.assertEqual((actual.st_dev, actual.st_ino, actual.st_size, actual.st_mtime_ns),
+                             (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns))
+            self.assertNotEqual(actual.st_ctime_ns, observed.st_ctime_ns)
+            return original_copy(path, metadata, destination)
+        with patch.object(pack, 'copy_checked', side_effect=mutate_before_copy):
+            with self.assertRaisesRegex(ValueError, 'changed before copying'):
+                pack.package_runtime(self.root)
+        self.assertEqual((self.root / 'artifact.zip').read_bytes(), old)
+        self.assertEqual(list(self.root.glob('.artifact-*.zip')), [])
+
+    def test_zip_same_inode_same_size_rewrite_during_copy_is_rejected_when_mtime_restored(self):
+        entry = self.write('main.py', 'original bytes')
+        observed = entry.stat()
+        old = self.prior()
+        original_copy = pack.shutil.copyfileobj
+        def mutate_during_copy(source, destination):
+            original_copy(source, destination)
+            entry.write_text('modified bytes')
+            os.utime(entry, ns=(observed.st_atime_ns, observed.st_mtime_ns))
+            actual = entry.stat()
+            self.assertEqual((actual.st_dev, actual.st_ino, actual.st_size, actual.st_mtime_ns),
+                             (observed.st_dev, observed.st_ino, observed.st_size, observed.st_mtime_ns))
+            self.assertNotEqual(actual.st_ctime_ns, observed.st_ctime_ns)
+        with patch.object(pack.shutil, 'copyfileobj', side_effect=mutate_during_copy):
+            with self.assertRaisesRegex(ValueError, 'changed while copying'):
+                pack.package_runtime(self.root)
+        self.assertEqual((self.root / 'artifact.zip').read_bytes(), old)
+        self.assertEqual(list(self.root.glob('.artifact-*.zip')), [])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

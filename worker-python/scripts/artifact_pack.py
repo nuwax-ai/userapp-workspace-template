@@ -223,11 +223,11 @@ def copy_checked(path: Path, observed: os.stat_result, destination) -> None:
             raise ValueError(f'Artifact input identity changed: {path.name}')
         if not stat.S_ISREG(actual.st_mode):
             raise ValueError(f'Artifact input must remain a regular file: {path.name}')
-        if (actual.st_size, actual.st_mtime_ns, actual.st_mode) != (observed.st_size, observed.st_mtime_ns, observed.st_mode):
+        if (actual.st_size, actual.st_mtime_ns, actual.st_ctime_ns, actual.st_mode) != (observed.st_size, observed.st_mtime_ns, observed.st_ctime_ns, observed.st_mode):
             raise ValueError(f'Artifact input changed before copying: {path.name}')
         shutil.copyfileobj(source, destination)
         after = os.fstat(source.fileno())
-        if (after.st_size, after.st_mtime_ns, after.st_mode) != (actual.st_size, actual.st_mtime_ns, actual.st_mode):
+        if (after.st_size, after.st_mtime_ns, after.st_ctime_ns, after.st_mode) != (actual.st_size, actual.st_mtime_ns, actual.st_ctime_ns, actual.st_mode):
             raise ValueError(f'Artifact input changed while copying: {path.name}')
 
 
