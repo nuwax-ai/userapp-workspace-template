@@ -38,6 +38,8 @@ app_id = my-app
 
 已有 ZIP 解压内容、Git 项目或业务代码需要接入 UserApp 时，**先读本技能的[导入适配指引](references/import-existing-project.md)**。根 manifest 已存在但新增模块尚未接入时，同样使用该流程。
 
+模板提供初始化起点，用户项目可以自由演进。沿用其实际语言、框架、目录和构建命令，只适配平台运行契约；不要求与模板同构，也不因新增模块或改动构建入口而重建项目。
+
 先盘点实际服务和依赖 → 保留原结构并安排一级服务目录 → 补齐真实构建、产物、启动、探测和路由 → 核对 `app-cli validate --help` 后用 `app-cli validate --workspace "$SOURCE_WORKSPACE"` 对原根只读校验（旧版兼容检查见导入指引） → 实际构建和访问验证。不要在业务目录使用 `init --force`，不改写技术栈或覆盖用户 AGENTS。没有业务代码的新项目才交给 scaffold；元数据或预建空目录不代表已有业务。
 
 找不到本地 reference 时执行 `template-cli docs`，阅读列出的 `07-import-existing-project.md`；平台草稿检测仅是辅助，不代表项目已经适配。
@@ -86,7 +88,7 @@ enabled = true                      # 可选,默认true
 
 [build]
 command = ["sh", "scripts/build.sh"]  # 必填,argv数组
-artifact = "artifact.zip"           # 必填,产物相对路径
+artifact = "artifact.zip"           # 必填,服务内相对路径；进程服务为部署 ZIP，static 为内容目录
 
 [devbuild]                          # 可选,dev阶段编译/准备命令(依赖安装/type-check等,不要求产artifact)
 command = ["pnpm", "run", "type-check"]  # 仅配了[devrun]的源码态dev链路生效。缺省三分派:只配[devrun]
@@ -122,6 +124,8 @@ multiline_start_pattern = "^\\d+"   # 仅text可用
 [env]                               # 不能用保留键
 LOG_LEVEL = "debug"
 ```
+
+进程服务的部署 ZIP 会被展开到服务运行目录，`run.command` 的相对路径须对应 ZIP 内路径。当前平台尚不支持把原生 JAR 直接声明为部署 artifact：JAR 本身也是 ZIP，会被展开为类文件，`java -jar` 所需的文件便不在运行目录。保留自定义 Maven 构建和 `target/...jar` 启动路径时，将这个 JAR 按原路径放进外层部署 ZIP；见[Java 包装示例](references/import-existing-project.md#java-保留原生构建与启动路径)。
 
 ### 枚举速查
 
@@ -287,6 +291,8 @@ workspace 级桥接(可选):`[health].bridge_service = "api"` 让 app-cli `/read
 ---
 
 ## 构建与启动失败
+
+业务启动失败先查看实际 `service_id` 的 stdout/stderr 和服务日志，核对本次部署目录、启动命令及入口文件。`Unable to access jarfile` 等明确文件错误应追踪真实新 ZIP 的布局，不能仅凭源码目录内文件存在判断运行产物完整。
 
 平台返回结构化诊断时，先按 `repair_target` 决定修复归属：`project` 按文件/字段增量修正；`platform` 使用平台恢复入口并保留原操作身份。原根与服务配置正确、owner 错指子目录时，不搬源码或改平台环境变量，不删除 owner 状态/锁、不用 pkill 解锁。常规非破坏性项目修正自行完成，保留用户代码、Git、依赖锁、共享依赖及平台状态。
 
@@ -594,7 +600,7 @@ Python 后端沿用模板 `scripts/build-standalone.sh`（调用配套 Python �
 
 新增模块、`scripts/`、运行资源时核对实际生产 ZIP/目录，不能仅在源码态运行成功。模板 Python/worker 默认收集未排除资源；编译型与 Next 保留其编译/standalone 运行边界并收集资源，static 只使用 dist。共享 helper 依赖 Python 3.11+，存量应用须一起更新 helper 和构建入口。`.artifactignore` 仅增加相对 glob 排除，私有文件不允许包含回退；构建失败保留旧有效 ZIP。默认排除私有环境/凭据、VCS/agent 状态、缓存、日志、临时和旧制品；已知编译源码树不作为运行资源，新增资源应进入真实输出边界。
 
-构建后在隔离解压目录验证生产 run/migrate 入口及其依赖，使用安全测试数据库，核对真实页面/API/worker 行为；不要因 run.migrate 为告警策略而接受缺失脚本的发布包。
+修改 build/run 后，从本次真实新 ZIP 或目录制品组装隔离运行目录，核对生产 run/migrate 入口及其依赖，再使用安全测试数据库执行必要迁移和启动，验证真实页面/API/worker 行为。源码态成功、ZIP 存在或历史制品通过不能替代这一步；不要因 run.migrate 为告警策略而接受缺失脚本的发布包。这是开发验证要求，不新增历史状态、模板版本或验证记录的启动门禁。
 
 Next 生产构建依据显式 `packageManager` 或唯一现有 npm/pnpm 锁选择已安装工具；有锁时 npm ci 或 pnpm frozen install，双锁未选或所选锁缺失但存在其他有效锁明确诊断。两种锁均缺失时保留原首次初始化，明确记录生成锁并在后续构建复用。React/Vue 保留原 pnpm 安装契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与入口；不自动升级管理器。
 

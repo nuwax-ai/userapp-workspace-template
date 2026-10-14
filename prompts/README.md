@@ -22,9 +22,8 @@
 ## 修改与同步
 
 1. 直接修改 `sandbox-system-prompt.md` 并 commit（本仓库即唯一正源）。
-2. 修改后需**同步到平台注入链路**（rcoder 侧的 agent system prompt 配置 / 请求级
-   `system_prompt_override`），沙箱不会拉取本仓库。
-3. 同步平台 agent-store 中实际安装的两份 skills 及完整 references，并核对会话是否加载了新内容；npm 发布不会刷新 agent-store，CLI 新生成的 AGENTS 也不会替换存量技能。
+2. 修改后需**同步到平台实际使用的 agent 系统提示词配置和 chat 请求注入链路**。记录实际注入内容的版本或摘要；沙箱不会拉取本仓库，不能仅凭仓库或 npm 版本认定提示词已生效。
+3. 同步平台已发布的两份 skills 及完整 references，再核对 agent-store 中各文件内容与会话加载情况；npm 发布不会刷新技能快照，CLI 新生成的 AGENTS 也不会替换存量技能。
 4. 铁律/规则类变更请同步检查 `skills/`、根 `README.md` 与 `cli/src/manifest.ts`
    （generateAgentsMd）中的对应表述，避免多处漂移。
 
@@ -41,6 +40,16 @@
 导入适配扩展已有 `userapp-dev-guide`，没有第三个 skill。其 `references/import-existing-project.md` 是详细指引的唯一正文；安装/复制该技能时必须包含整个 references 目录。`make build-skills` 的 ZIP 包含它，平台只复制 SKILL.md 不足以启用完整流程。
 
 CLI pack 将这份正文导出为随 npm 分发的 `docs/07-import-existing-project.md`；仓库 docs 下同名文件仅作导航。两份分发物须核对正文一致，缺正文不得发布。只有更新 npm 不会更新已安装 skill 或平台实际注入的系统提示词；项目 ZIP 导入也不是安装技能的替代方式。存量 workspace 只合并接入说明，不重生成覆盖用户 AGENTS/CLAUDE。
+
+发布技能时优先使用 `make build-skills` 生成的完整 ZIP，保持 `userapp-dev-guide/SKILL.md` 与 `userapp-dev-guide/references/import-existing-project.md` 各自的路径和正文。导入 reference 应以“导入已有项目”为主题，不能把主 `SKILL.md` 复制到 reference 路径；引用路径存在不代表内容正确。
+
+发布前逐文件对照仓库来源与 ZIP entry，记录来源 commit、文件路径及内容 SHA-256；发布后对照平台已发布快照和实际 agent-store 文件。每个文件应与其对应来源匹配，不能只检查文件名、修改时间或 template-cli 版本。更新 main guide 时也同步检查 references，避免主指南与旧参考正文混装；不覆盖用户应用自有说明。这是维护材料的发布核对，不新增应用启动/停止门禁。
+
+### 生产制品约定同步
+
+模板负责初始化，用户项目可按需求演进。提示词和 skills 应说明当前平台把进程服务的 `build.artifact` 作为部署 ZIP 展开，`run`/`migrate` 路径对应解压后的服务目录。Java JAR 属于应用运行文件，不因其内部也是 ZIP 格式就等同于部署 ZIP；自定义构建应明确包装并保留运行路径。模板默认 `artifact.zip` 内包含 `app.jar`，也允许用户保留 `target/...jar` 等自己的运行布局。
+
+修改指导文字不会修复平台将单文件 JAR 误展开的行为，也不会补回已发布包中缺失的 JAR。平台产物支持需单独修复；项目在当前契约下补齐包装后，应重新构建发布，并检查真实制品隔离运行的结果，不能只做 Pod 重启。
 
 配置检查优先使用只读 `validate`，通过 `app-cli validate --help` 核对实际二进制能力，不能仅凭版本号认定已发布。旧版未提供该命令时可按导入正文使用已有 gen-lock，并明确会写派生 lock、失败不能沿用旧结果；不自行替换沙箱工具，不新增启动/停止门禁。
 

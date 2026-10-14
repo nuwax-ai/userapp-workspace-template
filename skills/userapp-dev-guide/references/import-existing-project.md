@@ -2,7 +2,7 @@
 
 本指引用于将已有 ZIP 解压内容、Git 项目或业务目录接入 UserApp workspace，也适用于新增未接入模块，以及完整工程误放在平台 `code/` 等子目录的情况；不要求用户曾手动导入。
 
-目标是保留原业务和技术栈，补齐平台构建、运行及路由契约。**不要求项目来自模板，不要求改成模板的分层结构，也不把用户项目替换成新脚手架。**
+目标是保留原业务和技术栈，补齐平台构建、运行及路由契约。**模板只提供初始化起点，用户项目可以自由演进；不要求项目来自模板，不要求改成模板的分层结构，也不把用户项目替换成新脚手架。**
 
 ## 1. 先判断当前状态
 
@@ -89,7 +89,7 @@ workspace/
 |---|---|
 | 身份 | service_id 使用唯一 DNS-1123 标识；保留已接入服务的身份，不从用户/会话 ID 推导 |
 | 构建 | 复用真实构建命令；命令是 argv，需要 shell 时显式用 sh；不默认套模板脚本名 |
-| 产物 | static 是静态目录；进程服务是包含完整运行文件的 ZIP，解包根对应运行 cwd |
+| 产物 | static 是静态目录；进程服务是包含完整运行文件的部署 ZIP，平台展开其条目，解包根对应运行 cwd；原生 JAR 不能直接充当这个外层 ZIP |
 | dev | 有 devrun 时明确安装/准备步骤是否已由 devbuild 或原工具完成；仅有 devrun 不会自动执行生产 build |
 | prod | 生产 run 在发布服务目录执行，不能依赖未打包的根源码、共享包或开发机依赖 |
 | 监听 | HTTP/TCP 进程读取注入 PORT，监听 0.0.0.0；不要静默换端口 |
@@ -101,6 +101,45 @@ workspace/
 保留原 lock 文件与增量依赖缓存。生产安装按原工程的可重复构建规则执行；不要统一换 npm/pnpm，也不要无条件删 node_modules、Python deps 或缓存。重新生成 ZIP 时避免把已删除的旧文件留在包中。
 
 **发布包必须自包含。** 运行需要的共享模块、依赖、资源、启动/迁移程序要进入各服务制品；平台不会自动把整个源码仓和根 lock/package.json 一起部署。静态案例优先归集为服务内 `artifact="dist"`；嵌套产物路径必须实测目标平台组包和运行布局，不能以配置通过证明路径完整。
+
+### Java 保留原生构建与启动路径
+
+当前平台将进程服务的 `[build].artifact` 当部署 ZIP 展开，尚未支持原生 JAR 直接作为 artifact。JAR 本身也是 ZIP；直接填写 `target/my-app-0.1.0.jar` 会把 `BOOT-INF/`、`META-INF/` 等内容展开，启动命令指向的 JAR 文件却缺失。Maven 编译成功和源码目录中存在 JAR 都不能证明发布目录能启动。
+
+可以保留原业务和 `java -jar target/...jar` 路径，仅给原构建补一层包装。例如服务目录的 manifest：
+
+```toml
+[build]
+command = ["sh", "scripts/build-release.sh"]
+artifact = "artifact.zip"
+
+[run]
+command = ["java", "-jar", "target/my-app-0.1.0.jar"]
+```
+
+`scripts/build-release.sh` 在服务目录执行，示例只包装一个自包含的可执行 JAR：
+
+```sh
+#!/bin/sh
+set -eu
+mvn package -DskipTests
+python3 - <<'PY'
+from pathlib import Path
+import tempfile
+import zipfile
+
+jar = Path("target/my-app-0.1.0.jar")
+with tempfile.TemporaryDirectory(prefix=".artifact-", dir=".") as temporary:
+    staged = Path(temporary) / "artifact.zip"
+    with zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(jar, jar.as_posix())
+    staged.replace("artifact.zip")
+PY
+```
+
+JAR 名称按原项目的实际 Maven 输出修改，脚本与 `run.command` 使用同一路径；不要把 `target/*.jar` 通配符直接写进不经过 shell 的启动 argv。外部配置、依赖和运行资源按实际需要收录，不能把整个 `target/` 缓存当运行资源。也可复用模板的构建脚本和 `artifact_pack.py`，选择将 JAR 收敛为 `app.jar` 的布局并同步运行命令；该 helper 默认排除 `target/`，不能直接套用后假定原路径仍在包内。无需为复用打包工具改写业务代码或目录分层。
+
+修改构建或启动入口后，将本次新 `artifact.zip` 解压到独立空目录，确认 `target/my-app-0.1.0.jar` 等真实入口存在，从该目录执行生产启动命令和必要业务检查，数据库使用安全测试配置。不要借用源码目录的 JAR、开发依赖或旧 ZIP；不因历史验证记录缺失而拦截后续启动。
 
 ## 5. 路由、数据库与入口
 
@@ -137,13 +176,15 @@ app-cli validate --workspace "$SOURCE_WORKSPACE" --json
 配置通过不证明实际构建、服务启动或数据库连接。继续验证：
 
 1. **dev**：按真实 devbuild/build 准备并通过平台启动/重启服务，验证修改后的业务。不要只看 build_ok、owner PID 或任务 accepted。
-2. **prod**：执行完整 build 并检查产物，使用隔离发布目录运行；确认没有借用原源码树、开发 node_modules 或共享包。
+2. **prod**：修改 build/run 后执行完整 build，从本次真实新 ZIP 或目录制品组装隔离发布目录，核对入口与依赖，并执行必要迁移、生产启动和业务检查；确认没有借用原源码树、开发 node_modules、共享包或历史制品。构建退出码和 ZIP 存在不代表这一步完成。
 3. **访问**：检查实际页面/API/任务结果。前端检查真实 JS/CSS Content-Type、资源、深链接及 HMR，多前端用不同页面内容确认不串路由；首页 200 不能代替这些检查。
 4. **回归**：增量导入时旧服务、导航和业务仍正常；再次接入不重复建服务或改旧 ID。
 
 独立本地环境可按 dev-guide 的本地运行章节使用 `build --dev` 与源码态 serve，或 `build --deploy-dir .local-deploy` 与产物态 serve；两种方式分别验证，不同时启动。平台有 owner 时优先使用平台控制，不通过 kill/pkill、删除记录/锁文件或换管理端口绕过所有权保护。
 
 ### 失败任务与诊断
+
+业务启动失败先看实际服务的 stdout/stderr 和服务日志，核对本次部署目录与入口；缺少 JAR、脚本等文件时检查新制品内容和包装路径。修正后通过原入口重建、启动，不要求用户清理历史状态，也不把模板版本或旧验证记录设成新门禁。
 
 平台构建、启动或重启的失败响应仍可能含可回查任务，不能只看 HTTP 状态或顶层 message。保留原 `code`、`message`、`data.diagnostics` 和 `data.task_id`；工具封装响应时相应数据可能位于 `error.data`。使用平台提供的 app_id：
 

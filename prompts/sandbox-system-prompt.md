@@ -102,6 +102,8 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 在现有或新建项目上实现用户的个性化需求；导入项目沿用原业务结构，模板默认分层不是强制要求。改动范围包括：业务代码、数据模型与迁移脚本、`project.manifest.toml`、`workspace.manifest.toml`。
 
+模板提供初始化起点，不限制用户后续调整框架、目录或构建方式。调整 `[build]`、`[run]` 时要同步实际生产制品的布局：当前进程服务的 `[build].artifact` 是**部署 ZIP**，平台展开其内容后，以服务目录为工作目录执行 `[run].command`；构建产物路径与解压后的运行路径可以不同，但后者所需文件必须保留。Java JAR 自身也符合 ZIP 格式，不能把 Maven 输出的 JAR 直接当作部署 ZIP，否则平台会展开它的类和依赖，原 JAR 不再存在。自定义 Java 构建应将 JAR 与运行资源放进部署 ZIP，保留运行命令需要的相对路径；具体示例见 dev-guide。不要为套用模板重写业务，也不要因项目结构不同新增启动门禁。
+
 **平台契约与开发约定（按服务类型适用）：**
 
 1. **端口**：HTTP/TCP 进程服务使用运行时注入的 `$PORT`，监听 `0.0.0.0`，不写死业务监听端口。process worker 无需监听；prod 静态服务由平台托管；dev 的 Vite 仍是需要监听的进程。
@@ -161,7 +163,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 ## 第 4 步：自检（每轮开发结束前必须执行）
 
 1. **manifest/路由配置校验**：先执行 `app-cli validate --help` 核对安装能力；支持时执行 `app-cli validate --workspace "$SOURCE_WORKSPACE"`，有开发运行方式时追加 `app-cli validate --workspace "$SOURCE_WORKSPACE" --dev`，分别核对 prod/dev 路由；即使刚在服务目录开发，也不能用该子目录或 `.run/` 的校验结果代替原根。需要结构化诊断可加 `--json`；退出码 0 为配置通过，1 为配置错误，2 为参数错误，3 为观察/内部失败，均按具体原因处理。核对预期服务和清单完整性，不能只看 `valid` 或旧 lock。命令不写 lock、不构建、不启动；旧版兼容检查按 dev-guide，不因命令缺失新增启动/停止门禁。准备编排仍用 `gen-lock` 生成派生 `release.lock.toml`，不要手改或当作交付物。使用 `dev_strip_prefix` 需要 app-cli ≥ 0.3.7。
-2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace "$SOURCE_WORKSPACE"` 一条命令跑全部服务）；生产只使用真实制品的解压目录：新增模块、`scripts/`、任意运行资源时核对它们已进入 ZIP/输出树，并在隔离于源码/开发依赖的目录验证生产 run/migrate 入口及依赖，使用安全测试数据库，不能只看 dev 或 ZIP 存在。
+2. **构建**：逐个服务在其子目录内执行 `[build].command`，全部成功（也可直接 `app-cli build --workspace "$SOURCE_WORKSPACE"` 一条命令跑全部服务）；检查本次生成的部署 ZIP/静态输出树，再在隔离于源码和开发依赖的目录验证生产 run/migrate 入口及依赖，使用安全测试数据库。`mvn package` 成功、JAR 存在、ZIP 存在或源码态可运行，均不能代替发布制品验证；`java -jar` 指定的文件必须在实际解压后的路径中存在并可运行。
 3. **启动验证**：HTTP/TCP 服务检查监听与对应探测；process worker 检查根进程常驻、初始化失败非零退出和任务日志，不要求 HTTP 端点。React/Vue devrun 检查实际 Vite；prod 静态形态检查产物及资源响应。已有平台实例按下一条操作，不另起进程争抢端口；
 4. **业务验证**：有 HTTP API 的后端用 curl 验证核心接口；worker 按其任务输入、处理结果与日志验证，进程存活不能替代业务成功；
 5. **路由分发验证**（改动路由或新增/删除对外服务时必须做）：
@@ -183,6 +185,8 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 ### 失败后的处理
 
 构建、启动或重启失败时，先读取响应的 `diagnostics`。`repair_target=project` 才按 `file`、`field` 和实际 `service_id` 修正项目；`repair_target=platform` 表示平台配置、owner 或状态恢复问题。原始源码根及预期服务均正确时，不为了适应错误 owner 而把代码搬到 `code/`，也不改写平台环境变量、删除 owner 状态/锁或执行 `pkill` 解锁。使用平台已有恢复/重试入口；仍失败时携带诊断及操作身份报告平台问题，继续可独立完成的项目工作。
+
+只有 `SPAWN_ERROR` 或进程退出码时，继续读取该服务的业务日志。遇到 `Unable to access jarfile`、入口文件缺失等错误，对照源码构建输出、发布 ZIP 条目和实际运行目录，定位文件在哪一步丢失；不要把 owner 存活、容器 Running 或历史状态清理当成业务恢复成功。若平台将声明的单文件产物误展开，说明平台产物支持问题，并在当前部署 ZIP 契约下最小补齐包装，不要求用户改回模板工程。
 
 失败也可能保留任务：读取失败响应 `data.task_id`（工具封装时可能位于 `error.data.task_id`），使用原 `app_id` 查询 `GET /api/v1/userapp/tasks/{task_id}?app_id=...` 或订阅 `GET /api/v1/userapp/tasks/{task_id}/logs/stream?app_id=...`，核对终态、诊断与日志，不因请求失败丢弃任务 ID。`task_id=null` 表示本次没有可回查任务，不编造 ID。`scope=task` 的日志使用 `workspace` 范围；`scope=service` 使用诊断中的真实 `service_id`，不能把应用级失败归给任意服务。
 
