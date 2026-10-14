@@ -102,7 +102,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 在现有或新建项目上实现用户的个性化需求；导入项目沿用原业务结构，模板默认分层不是强制要求。改动范围包括：业务代码、数据模型与迁移脚本、`project.manifest.toml`、`workspace.manifest.toml`。
 
-模板提供初始化起点，不限制用户后续调整框架、目录或构建方式。调整 `[build]`、`[run]` 时要同步实际生产制品的布局：当前进程服务的 `[build].artifact` 是**部署 ZIP**，平台展开其内容后，以服务目录为工作目录执行 `[run].command`；构建产物路径与解压后的运行路径可以不同，但后者所需文件必须保留。Java JAR 自身也符合 ZIP 格式，不能把 Maven 输出的 JAR 直接当作部署 ZIP，否则平台会展开它的类和依赖，原 JAR 不再存在。自定义 Java 构建应将 JAR 与运行资源放进部署 ZIP，保留运行命令需要的相对路径；具体示例见 dev-guide。不要为套用模板重写业务，也不要因项目结构不同新增启动门禁。
+模板提供初始化起点，不限制用户后续调整框架、目录或构建方式。调整 `[build]`、`[run]` 时要同步实际生产制品的布局：当前进程服务的 `[build].artifact` 是**部署 ZIP**，平台展开其内容后，以服务目录为工作目录执行 `[run].command`；构建产物路径与解压后的运行路径可以不同，但后者所需文件必须保留。Java JAR 自身也是 ZIP，当前平台会展开其条目：使用 `java -jar` 时，需在外层部署 ZIP 中保留运行命令指定的完整 JAR；有意采用展开式部署时，也可使用该项目实际支持的 Spring Boot Launcher，或明确的主类、classpath 和依赖入口。按既定运行布局验证后保留正常方案，不按 `.jar` 扩展名判错，也不把某个 Launcher 当作所有 Java 项目的通用修复；具体示例见 dev-guide。不要为套用模板重写业务，也不要因项目结构不同新增启动门禁。
 
 **平台契约与开发约定（按服务类型适用）：**
 
@@ -186,7 +186,7 @@ npx @nuwax-ai/template-cli add backend-python --service-id report-worker --kind 
 
 构建、启动或重启失败时，先读取响应的 `diagnostics`。`repair_target=project` 才按 `file`、`field` 和实际 `service_id` 修正项目；`repair_target=platform` 表示平台配置、owner 或状态恢复问题。原始源码根及预期服务均正确时，不为了适应错误 owner 而把代码搬到 `code/`，也不改写平台环境变量、删除 owner 状态/锁或执行 `pkill` 解锁。使用平台已有恢复/重试入口；仍失败时携带诊断及操作身份报告平台问题，继续可独立完成的项目工作。
 
-只有 `SPAWN_ERROR` 或进程退出码时，继续读取该服务的业务日志。遇到 `Unable to access jarfile`、入口文件缺失等错误，对照源码构建输出、发布 ZIP 条目和实际运行目录，定位文件在哪一步丢失；不要把 owner 存活、容器 Running 或历史状态清理当成业务恢复成功。若平台将声明的单文件产物误展开，说明平台产物支持问题，并在当前部署 ZIP 契约下最小补齐包装，不要求用户改回模板工程。
+只有 `SPAWN_ERROR` 或进程退出码时，继续读取该服务的业务日志。遇到 `Unable to access jarfile`、入口文件缺失等错误，对照源码构建输出、发布 ZIP 条目和实际运行目录，定位文件在哪一步丢失；不要把 owner 存活、容器 Running 或历史状态清理当成业务恢复成功。先区分 `java -jar` 所需的单文件与有意展开的 Java 部署目录，再最小修正包装或启动命令；入口、类和依赖已匹配且运行正常时保留现有方案，不要求用户改回模板工程。
 
 失败也可能保留任务：读取失败响应 `data.task_id`（工具封装时可能位于 `error.data.task_id`），使用原 `app_id` 查询 `GET /api/v1/userapp/tasks/{task_id}?app_id=...` 或订阅 `GET /api/v1/userapp/tasks/{task_id}/logs/stream?app_id=...`，核对终态、诊断与日志，不因请求失败丢弃任务 ID。`task_id=null` 表示本次没有可回查任务，不编造 ID。`scope=task` 的日志使用 `workspace` 范围；`scope=service` 使用诊断中的真实 `service_id`，不能把应用级失败归给任意服务。
 

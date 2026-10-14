@@ -89,7 +89,7 @@ workspace/
 |---|---|
 | 身份 | service_id 使用唯一 DNS-1123 标识；保留已接入服务的身份，不从用户/会话 ID 推导 |
 | 构建 | 复用真实构建命令；命令是 argv，需要 shell 时显式用 sh；不默认套模板脚本名 |
-| 产物 | static 是静态目录；进程服务是包含完整运行文件的部署 ZIP，平台展开其条目，解包根对应运行 cwd；原生 JAR 不能直接充当这个外层 ZIP |
+| 产物 | static 是静态目录；进程服务的部署 ZIP 包含完整运行文件，平台展开其条目，解包根对应运行 cwd；Java 可保留包内 JAR，也可采用与启动入口匹配的展开式 JAR 布局 |
 | dev | 有 devrun 时明确安装/准备步骤是否已由 devbuild 或原工具完成；仅有 devrun 不会自动执行生产 build |
 | prod | 生产 run 在发布服务目录执行，不能依赖未打包的根源码、共享包或开发机依赖 |
 | 监听 | HTTP/TCP 进程读取注入 PORT，监听 0.0.0.0；不要静默换端口 |
@@ -104,9 +104,11 @@ workspace/
 
 ### Java 保留原生构建与启动路径
 
-当前平台将进程服务的 `[build].artifact` 当部署 ZIP 展开，尚未支持原生 JAR 直接作为 artifact。JAR 本身也是 ZIP；直接填写 `target/my-app-0.1.0.jar` 会把 `BOOT-INF/`、`META-INF/` 等内容展开，启动命令指向的 JAR 文件却缺失。Maven 编译成功和源码目录中存在 JAR 都不能证明发布目录能启动。
+当前平台会展开 ZIP 格式的进程服务 `[build].artifact`，包括 JAR。采用 `java -jar target/my-app-0.1.0.jar` 时，直接填写这个 JAR 会把 `BOOT-INF/`、`META-INF/` 等内容展开，运行命令需要的原 JAR 文件却未被保留。这里的问题是产物布局与启动入口不一致，不是 JAR 扩展名本身非法；Maven 编译成功和源码目录中存在 JAR 都不能证明发布目录能启动。
 
-可以保留原业务和 `java -jar target/...jar` 路径，仅给原构建补一层包装。例如服务目录的 manifest：
+另一种可用方案是有意将 JAR 作为展开式 archive，使用该 Spring Boot 版本实际包含的 Launcher（例如适用版本中的 `org.springframework.boot.loader.launch.JarLauncher`），或按展开产物明确主类、classpath 和依赖入口。先核对真实新制品的类与依赖布局，再从隔离目录实际启动；不能把 JarLauncher 当成所有 Java 项目的通用替换。源码、配置、制品一致且已正常工作的项目保留原方案，不强迫改回模板布局或另加外层 ZIP。
+
+需要保留原业务和 `java -jar target/...jar` 路径时，推荐只给原构建补一层包装。例如服务目录的 manifest：
 
 ```toml
 [build]

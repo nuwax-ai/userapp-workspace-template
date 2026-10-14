@@ -88,7 +88,7 @@ init 在 workspace 根自动生成:`workspace.manifest.toml`、`index.html`(入�
 
 模板是初始工程，用户可以继续调整技术栈、目录和构建命令，不要求应用长期与模板相同。修改 `[build]` 或 `[run]` 时同时保持生产制品布局：当前进程服务的 `build.artifact` 指向部署 ZIP，平台将其内容展开到服务运行目录；static 仍使用构建输出目录。
 
-Java 默认脚本完成 Maven 编译后，把 JAR 和运行资源包装进 `artifact.zip`，生产命令执行其中的 `app.jar`。替换为自定义 Maven 构建时，保留或补齐部署包装步骤；直接把 Maven 生成的 JAR 路径写入 `build.artifact` 会使 JAR 被当作 ZIP 展开，无法继续按原 JAR 路径启动。可保留用户现有 `java -jar target/...jar` 命令，在部署 ZIP 中保留同一相对路径，具体做法见 dev-guide 的生产制品章节。
+Java 默认脚本完成 Maven 编译后，把 JAR 和运行资源包装进 `artifact.zip`，生产命令执行其中的 `app.jar`。替换为自定义 Maven 构建时，先明确运行布局：`java -jar target/...jar` 需要外层部署 ZIP 保留该文件和相对路径；有意展开 JAR 的项目则使用其版本支持的 Launcher 或明确的主类、classpath 和依赖入口。两种方案都应从真实制品验证，已正常工作的展开式方案无需改回模板包装；具体做法见 dev-guide 的生产制品章节。
 
 初始化成功与编译成功不代表可发布。检查真实新制品的条目，并从隔离解压目录验证生产入口与必要依赖；不要用源码目录或开发命令的成功代替这一步。存量应用只做必要适配，不重新初始化或覆盖用户代码。
 

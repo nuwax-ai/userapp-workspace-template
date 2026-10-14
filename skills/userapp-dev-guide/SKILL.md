@@ -125,7 +125,7 @@ multiline_start_pattern = "^\\d+"   # 仅text可用
 LOG_LEVEL = "debug"
 ```
 
-进程服务的部署 ZIP 会被展开到服务运行目录，`run.command` 的相对路径须对应 ZIP 内路径。当前平台尚不支持把原生 JAR 直接声明为部署 artifact：JAR 本身也是 ZIP，会被展开为类文件，`java -jar` 所需的文件便不在运行目录。保留自定义 Maven 构建和 `target/...jar` 启动路径时，将这个 JAR 按原路径放进外层部署 ZIP；见[Java 包装示例](references/import-existing-project.md#java-保留原生构建与启动路径)。
+进程服务的部署 ZIP 会被展开到服务运行目录，`run.command` 须与展开后的布局一致。Java 使用 `java -jar target/...jar` 时，需要保留该 JAR 文件；直接把它声明为 artifact 会展开其内容而不保留原文件，推荐按原路径放进外层部署 ZIP。也可有意使用展开式 JAR 布局，以该 Spring Boot 版本实际包含的 Launcher 或明确的主类、classpath 和依赖入口启动。已有项目的源码、配置、制品一致且实际可运行时保留其方案，不按 `.jar` 扩展名一概判错或强制包装；见[Java 布局与包装示例](references/import-existing-project.md#java-保留原生构建与启动路径)。
 
 ### 枚举速查
 
