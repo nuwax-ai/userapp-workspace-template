@@ -1,0 +1,58 @@
+{
+  "name": "@nuwax-ai/template-cli",
+  "version": "0.1.28",
+  "description": "UserApp workspace 模板脚手架 CLI — 按需组合多语言前后端模板",
+  "type": "module",
+  "bin": {
+    "template-cli": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "pack": "node scripts/pack-templates.mjs",
+    "prepublishOnly": "npm run build && npm run pack",
+    "dev": "tsc --watch",
+    "test": "node --test scripts/test-init.mjs scripts/test-pack.mjs && node scripts/test-local.mjs",
+    "test:init": "node --test scripts/test-init.mjs",
+    "release:beta": "node scripts/release.mjs beta",
+    "release": "node scripts/release.mjs release"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "docs",
+    "README.md"
+  ],
+  "keywords": [
+    "userapp",
+    "rcoder",
+    "workspace",
+    "scaffold",
+    "cli",
+    "template",
+    "fullstack",
+    "go",
+    "java",
+    "python",
+    "rust",
+    "react",
+    "vue",
+    "nextjs"
+  ],
+  "author": "XAGI Team",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "fs-extra": "^11.2.0",
+    "kolorist": "^1.8.0",
+    "smol-toml": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

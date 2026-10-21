@@ -1,0 +1,86 @@
+name: CI CLI
+
+# 日常 CI:push / PR 时跑编译 + pack + E2E 测试(不发布)
+on:
+  push:
+    branches: [main, 'fix/**', 'feat/**']
+    paths:
+      - 'cli/**'
+      - 'skills/**'
+      - 'docs/**'
+      - 'prompts/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'database/**'
+      - 'backend-go/**'
+      - 'backend-java/**'
+      - 'backend-python/**'
+      - 'worker-python/**'
+      - 'backend-rust/**'
+      - 'frontend-react-vite/**'
+      - 'frontend-vue3-vite/**'
+      - 'userapp-next-template/**'
+      - '.github/workflows/ci-cli.yml'
+      - '.github/workflows/release-cli.yml'
+  pull_request:
+    paths:
+      - 'cli/**'
+      - 'skills/**'
+      - 'docs/**'
+      - 'prompts/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'database/**'
+      - 'backend-go/**'
+      - 'backend-java/**'
+      - 'backend-python/**'
+      - 'worker-python/**'
+      - 'backend-rust/**'
+      - 'frontend-react-vite/**'
+      - 'frontend-vue3-vite/**'
+      - 'userapp-next-template/**'
+      - '.github/workflows/ci-cli.yml'
+      - '.github/workflows/release-cli.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python for artifact packaging tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Pack templates
+        working-directory: cli
+        run: npm run pack
+
+      - name: Build
+        working-directory: cli
+        run: npm run build
+
+      - name: Test generated workspaces
+        working-directory: cli
+        run: npm test
+
+      - name: Test runtime artifact packaging and isolated entrypoints
+        run: |
+          export TEMPLATE_NODE_BIN="$(node -p 'process.execPath')"
+          python3 -m unittest discover -s backend-python/tests -p test_artifact_pack.py -v
+
+      - name: Test Python dependency cache with local wheels
+        run: python3 -m unittest discover -s backend-python/tests -p test_build_cache.py -v

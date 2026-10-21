@@ -1,0 +1,34 @@
+schema_version = 1
+
+[project]
+service_id = "backend-java"
+name = "Java Backend"
+type = "java"
+
+[build]
+command = ["sh", "scripts/build-standalone.sh"]
+artifact = "artifact.zip"
+
+[run]
+command = ["java", "-jar", "app.jar"]
+
+# Spring Boot Actuator 三件套（均非默认 /health，需显式声明）。
+# startup 用 /liveness（只含 livenessState，DB 宕仍 UP，避免启动探针被 DB 拖死反复重启）；
+# readiness 用 /readiness（含 db，DB 宕摘流）。与 go/python/rust 的 /health 恒 200 语义对齐。
+# startup_timeout_seconds：dev 启动就绪探测窗口（默认 25s）——Spring Boot 冷启动
+# 常超默认，显式放大到 60。
+[health]
+startup_path = "/actuator/health/liveness"
+readiness_path = "/actuator/health/readiness"
+liveness_path = "/actuator/health/liveness"
+startup_timeout_seconds = 60
+
+[proxy]
+path = "/api/java/"
+strip_prefix = true
+
+[[logs.sources]]
+id = "application"
+glob = "backend-java*"
+format = "text"
+multiline_start_pattern = "^\\d{4}-\\d{2}-\\d{2}"

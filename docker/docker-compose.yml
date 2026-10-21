@@ -1,0 +1,94 @@
+# UserApp workspace 模板 — 本地验证容器
+#
+# 用法（Makefile 封装）：make docker-verify / docker-dev / docker-shell / docker-down
+# 前置：@nuwax-ai/app-cli npm 包已发布（版本对齐 Dockerfile APP_CLI_VERSION）。
+#
+# verify 与 userapp-dev 两服务端口互斥（同用 9080/3010），Make 目标显式指定服务名；
+# 切换前先 make docker-down。
+name: userapp-local
+
+x-app-build: &app-build
+  # context = docker/ 目录本身：镜像只 COPY entrypoint.sh，无需整个仓库作
+  # context（仓库内容经 bind mount 进容器，不走镜像）
+  context: .
+  dockerfile: Dockerfile
+  args:
+    APP_CLI_VERSION: "${APP_CLI_VERSION:-}" # 构建时必填；留空不阻止 down/config
+    # 切官方源示例（默认走国内镜像加速）：
+    # NPM_REGISTRY: "https://registry.npmjs.org"
+    # GOPROXY_URL: "https://proxy.golang.org,direct"
+    # GO_DOWNLOAD_URL: "https://go.dev/dl"
+    # PIP_INDEX_URL: "https://pypi.org/simple"
+    # MAVEN_ALIYUN: "false"
+    # CARGO_CN: "false"
+    # GITHUB_PROXY: ""
+
+x-app-volumes: &app-volumes
+  # 仓库根 bind mount：产物落宿主树（已被 .gitignore 覆盖）
+  - ..:/app/code
+  # PG 数据（named volume：重启不重 initdb）
+  - userapp-pgdata:/data/pg
+  # macOS bind mount 性能：重目录用卷影（不落宿主树，gitignored 无损）。
+  # 注意：不能卷影会被构建工具整目录删除的路径（如 mvn clean 删 target/——
+  # 挂载点 rmdir EBUSY）；node_modules 安全（pnpm install/npm ci 只清内容）。
+  - userapp-node-next:/app/code/userapp-next-template/node_modules
+  - userapp-node-react:/app/code/frontend-react-vite/node_modules
+  - userapp-node-vue:/app/code/frontend-vue3-vite/node_modules
+  - userapp-rust-target:/app/code/backend-rust/target
+  # 依赖/工具缓存卷（跨轮次复用，二次构建分钟级）
+  - userapp-m2:/root/.m2                  # mvnw 下载的 maven 发行版 + 全部依赖
+  - userapp-pnpm-store:/cache/pnpm
+  - userapp-go-cache:/root/.cache         # GOCACHE（pip 缓存子目录也在其下）
+  - userapp-gopath:/root/go               # GOPATH module cache
+  - userapp-cargo-registry:/usr/local/cargo/registry
+
+services:
+  userapp: # 默认：产物态验证（全量构建 + .docker-run 部署布局 + serve）
+    build: *app-build
+    image: userapp-local:latest
+    container_name: userapp-local
+    init: false # entrypoint 自管信号链
+    working_dir: /app/code
+    command: ["verify"]
+    stop_grace_period: 60s # app-cli 级联停服务 + PG 优雅停预算
+    ports:
+      - "9080:9080" # pingap 应用入口
+      - "3010:3010" # app-cli 管理 API（/ready 等）
+    environment: &app-env
+      APP_CLI_WORKSPACE: /app/code
+      APP_CLI_LOG_DIR: /app/logs
+      PGHOST: localhost
+      PGPORT: "5432"
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes: *app-volumes
+
+  userapp-dev: # dev 源码态（vite/next 热加载）；make docker-dev 专用
+    profiles: ["dev"]
+    build: *app-build # 与 userapp 同 build（锚点）：无先验镜像时 make docker-dev 也能独立起
+    image: userapp-local:latest # 同 tag，两服务自动共享
+    container_name: userapp-local-dev
+    working_dir: /app/code
+    command: ["dev"]
+    stop_grace_period: 60s
+    ports:
+      - "9080:9080"
+      - "3010:3010"
+    environment:
+      <<: *app-env
+      APP_CLI_RUN_PROFILE: dev
+      CHOKIDAR_USEPOLLING: "1" # macOS bind mount 上 vite 文件监听需轮询，否则 HMR 不触发
+    volumes: *app-volumes
+
+volumes:
+  userapp-pgdata: {}
+  userapp-node-next: {}
+  userapp-node-react: {}
+  userapp-node-vue: {}
+  userapp-rust-target: {}
+  userapp-m2: {}
+  userapp-pnpm-store: {}
+  userapp-go-cache: {}
+  userapp-gopath: {}
+  userapp-cargo-registry: {}

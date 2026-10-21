@@ -1,0 +1,535 @@
+/**
+ * manifest 生成器 —— 根据模板元数据 + 用户参数,生成 project.manifest.toml 和 workspace.manifest.toml。
+ *
+ * 不拷贝模板源里的原 manifest,而是重新生成,确保 service_id / proxy.path / logs.glob 一致。
+ */
+
+import type { TemplateMeta } from './templates.js';
+
+export interface ProjectManifestOptions {
+  template: TemplateMeta;
+  serviceId: string;
+  proxyPath: string;
+  /** 是否生成 [proxy] 段(worker 不需要)。默认 web = true */
+  includeProxy?: boolean;
+}
+
+/**
+ * 生成单个 service 的 project.manifest.toml。
+ * 格式与各模板源里的 manifest 保持一致(缩进、字段顺序)。
+ */
+export function generateProjectManifest(opts: ProjectManifestOptions): string {
+  const { template, serviceId, proxyPath, includeProxy = true } = opts;
+  const d = template.defaults;
+  if (d.startupProbe === 'process' && (template.kind !== 'worker' || template.type === 'static')) {
+    throw new Error('process startup probe requires a non-static worker');
+  }
+
+  const lines: string[] = [
+    'schema_version = 1',
+    '',
+    '[project]',
+    `service_id = "${serviceId}"`,
+    `name = "${template.name}"`,
+    `type = "${template.type}"`,
+  ];
+
+  // worker 显式输出 kind；web 是默认值,省略。
+  if (template.kind === 'worker') {
+    lines[lines.length - 1] += `\nkind = "worker"`;
+  }
+
+  // build 段 —— 各模板的构建命令和产物路径不同,从模板类型推断
+  const buildInfo = getBuildInfo(template);
+  lines.push(
+    '',
+    '[build]',
+    `command = ${formatArgv(buildInfo.command)}`,
+    `artifact = "${buildInfo.artifact}"`,
+  );
+
+  // devbuild 段 —— dev 阶段编译/准备命令(依赖安装/type-check 等,不要求产出 artifact)
+  if (buildInfo.devbuild) {
+    lines.push('', '[devbuild]', `command = ${formatArgv(buildInfo.devbuild)}`);
+  }
+
+  // run 段 —— static 的 prod 形态（无业务进程，内置静态托管承载）省略整段
+  if (buildInfo.run.length > 0) {
+    const runLines: string[] = ['', '[run]', `command = ${formatArgv(buildInfo.run)}`];
+    if (buildInfo.migrate) {
+      runLines.push(`migrate = ${formatArgv(buildInfo.migrate)}`);
+    }
+    lines.push(...runLines);
+  }
+
+  // devrun 段 —— dev 阶段热加载启动命令（配置即声明 dev 态自足：未配 devbuild
+  // 则跳过编译，dev 命令跑源码不消费构建产物）
+  if (buildInfo.devrun) {
+    lines.push('', '[devrun]', `command = ${formatArgv(buildInfo.devrun)}`);
+  }
+
+  // health 段 —— 模板显式声明的路径都输出(即使等于默认 /health,保持与源 manifest 一致)
+  const healthParts: string[] = [];
+  if (d.startupProbe) {
+    healthParts.push(`startup_probe = "${d.startupProbe}"`);
+  }
+  if (d.startupPath) {
+    healthParts.push(`startup_path = "${d.startupPath}"`);
+  }
+  if (d.readinessPath) {
+    healthParts.push(`readiness_path = "${d.readinessPath}"`);
+  }
+  if (d.livenessPath) {
+    healthParts.push(`liveness_path = "${d.livenessPath}"`);
+  }
+  if (healthParts.length > 0) {
+    lines.push('', '[health]', ...healthParts);
+  }
+
+  // proxy 段(worker 禁止)
+  if (includeProxy && template.kind === 'web') {
+    const proxyLines = ['', '[proxy]', `path = "${proxyPath}"`];
+    if (d.stripPrefix) {
+      proxyLines.push('strip_prefix = true');
+    }
+    if (d.devStripPrefix !== undefined) {
+      proxyLines.push(`dev_strip_prefix = ${d.devStripPrefix}`);
+    }
+    lines.push(...proxyLines);
+  }
+
+  // logs 段 —— static 的 prod 形态（无业务进程）不生成（无运行时文件日志）；
+  // 其余模板替换 logGlob 里的 __SERVICE_ID__ 占位符
+  const logLines: string[] = [];
+  if (template.type !== 'static') {
+    const logGlob = d.logGlob.replaceAll('__SERVICE_ID__', serviceId);
+    logLines.push(
+      '',
+      '[[logs.sources]]',
+      `id = "${d.logSourceId}"`,
+      `glob = "${logGlob}"`,
+      `format = "${d.logFormat}"`,
+    );
+  }
+  if (d.multilineStartPattern) {
+    // TOML basic string 不接受 \d 等未定义转义——正则里的反斜杠须翻倍转义
+    const escaped = d.multilineStartPattern.replace(/\\/g, '\\\\');
+    logLines.push(`multiline_start_pattern = "${escaped}"`);
+  }
+  lines.push(...logLines);
+
+  let result = lines.join('\n') + '\n';
+
+  // 替换 manifest 内的占位符(如 Next.js 的 __ARTIFACT_NAME__)
+  for (const [k, v] of Object.entries(template.variables)) {
+    const placeholder = `__${k}__`;
+    if (result.includes(placeholder)) {
+      result = result.split(placeholder).join(v);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 生成 workspace.manifest.toml(根目录)。
+ * 包含生效的 workspace 声明 + 可选配置段的注释模板,
+ * 让用户拿到 workspace 后就知道有哪些可选项。
+ */
+export function generateWorkspaceManifest(workspaceName: string, description?: string): string {
+  const lines: string[] = [
+    'schema_version = 1',
+    '',
+    '[workspace]',
+    `name = "${workspaceName}"`,
+  ];
+  if (description) {
+    lines.push(`description = "${description}"`);
+  }
+  lines.push(
+    '',
+    '# [pingap] 默认即为 managed(平台按各 web 服务的 [proxy] 自动生成路由),无需声明。',
+    '# 需要切 extend/custom 反代模式、或把 /ready 桥接到某后端时,再按需打开下面的段:',
+    '#',
+    '# [pingap]',
+    '# mode = "managed"              # managed / extend / custom',
+    '# config = "pingap/"            # 仅 extend/custom',
+    '#',
+    '# [health]',
+    '# bridge_service = "backend-go" # 可选:把整个 workspace 的 /ready 桥接到该后端深检查',
+    '#                               # （/ready 是 app-cli 管理端口 :3010 的容器探针,不是业务域名的路径）',
+    '',
+  );
+  return lines.join('\n');
+}
+
+/**
+ * 生成 workspace 根目录的 AGENTS.md。
+ *
+ * 内容原则——只放两类内容:
+ * ①生成时刻的结构事实(项目结构:目录↔类型↔路由);
+ * ②manifest 契约级约束($PORT/两级 manifest/Fail-Fast/service_id/迁移约定等)——
+ *   平台对契约长期向后兼容,冻结进快照不会过时。
+ * 不写可变策略(默认技术选型、工具用法细则、维护义务细则)——AGENTS.md 会被 agent 以
+ * 更高优先级读取且在 init 时冻结;策略烧进来后,一旦 skills/系统提示词更新,旧 workspace
+ * 里的快照就会压过新策略(历史教训:旧默认 Go+React 与新默认 Python+React 冲突)。
+ * 策略归 skills / 系统提示词;过时平台说明需更新,不能据此覆盖用户补充的业务规则。
+ * @param hasIndexHtml workspace 根是否生成了 index.html 导航页(catch-all 服务
+ *   独占 / 时 init 不生成,结构表也不列该行)。默认 true。
+ */
+export function generateAgentsMd(
+  workspaceName: string,
+  services: Array<{ name: string; dir: string; type: string; proxyPath?: string }>,
+  hasIndexHtml = true,
+): string {
+  const serviceLines = services
+    .map((s) => `| ${s.dir}/ | ${s.type} | ${s.proxyPath ?? '—'} |`)
+    .join('\n');
+  const indexRow = hasIndexHtml ? '\n| `index.html` | 入口导航页 | 根路径/未匹配路径兜底 |' : '';
+  const tableNote = hasIndexHtml
+    ? [
+        '> `index.html` 是应用的入口首页——开发完成后记得把它更新为应用真实首页',
+        '> (标题=应用名,卡片=真实功能名与描述,替换 init 的模板默认文案);',
+        '> 用 `add` 追加服务后,此表与 `index.html` 的导航卡片**都不会自动更新**;各服务实际路由',
+        '> 以其 `project.manifest.toml` 的 `[proxy]` 为准,追加/删除对外服务后记得同步维护导航卡片。',
+      ].join('\n')
+    : '> 用 `add` 追加服务后此表不会自动更新;各服务实际路由以其 `project.manifest.toml` 的 `[proxy]` 为准。';
+
+  return `# ${workspaceName} — Agent Guide
+
+> 本 workspace 由 \`@nuwax-ai/template-cli\` 生成。**本文件只是生成时刻的结构快照**:
+> 当前结构以实际文件为准;过时的平台说明按实际工具能力与新版规范修正。
+> 保留用户补充的业务规则和明确选择,不因脚手架默认值迁移或重建应用。
+
+## Skills(按任务读取)
+
+若运行环境已预置这些 skills(如平台沙箱),直接使用即可,**跳过安装**;
+本地开发可安装以获得完整规范指引:
+
+\`\`\`bash
+npx skills add https://github.com/nuwax-ai/userapp-workspace-template/tree/main
+\`\`\`
+
+- **userapp-scaffold**: CLI 脚手架使用(init/add/list 命令)
+- **userapp-dev-guide**: 平台开发规范(导入已有项目/manifest 字段/路由/健康检查/日志/部署/排错)
+
+创建/追加模块前读取 scaffold；修改路由/manifest 或排查预览前读取 dev-guide 的对应章节，
+并阅读目标子项目的 AGENTS.md。导入现有业务前先读 dev-guide 的“导入已有项目”，
+并查阅 \`docs/07-import-existing-project.md\`（用 \`template-cli docs\` 定位随包正文）。
+保留已有业务结构、技术栈与 AGENTS.md，不要求重新生成。找不到 skill 时用
+\`template-cli docs\` 查同一契约。
+
+## 项目结构
+
+| 目录 | 类型 | 对外路由 |
+|---|---|---|
+${serviceLines}${indexRow}
+
+${tableNote}
+
+## 平台核心约束(manifest 契约，新增能力需核对运行时版本)
+
+1. **HTTP/TCP 进程服务保留 \`0.0.0.0:$PORT\` 监听与健康接口** — \`PORT\` 由平台注入,不能硬编码端口。\`kind=worker\` 表示不公开代理路由,不表示无 HTTP；保留模板的健康服务,让后台任务与其共同运行,不能仅因名称或自建文档把入口改成无监听循环；无监听 worker 必须显式声明 startup_probe="process" 且运行时 app-cli >= 0.3.9 支持 startup-probe-v1
+2. **两级 manifest** — 根 \`workspace.manifest.toml\` + 各一级服务目录的 \`project.manifest.toml\`,
+   文件名必须完全一致;平台只扫描一级子目录。共享库、工具、文档等非服务目录无需添加 manifest
+   平台工作区契约实际返回的 \`workspace_root\` 是唯一源码权威，先核对 cwd 与其一致再记录 \`SOURCE_WORKSPACE=$PWD\`；不能因进入服务子目录改变根。manifest 和服务直接放在该根，不要另建 \`code/\` 或应用名目录。
+   仅有 Git/agent 元数据和用户说明时，在此根执行 \`template-cli init .\`；已有业务或嵌套 workspace 按导入指引适配
+3. **严格校验,Fail Fast** — manifest 写错(未知字段、非法枚举、重复路由、依赖环)构建立即失败
+4. **service_id 是稳定身份** — 不是目录名;决定日志目录、路由 upstream、依赖引用,上线后不要改
+5. **回滚不执行 down migration** — \`[run].migrate\` 必须幂等,遵循 expand/contract
+6. **\`type = "static"\` 的 prod 不启动业务进程** — 禁止 \`[run]\` 段,\`[build].artifact\` 为静态内容目录;
+   dev 配了 \`[devrun]\` 时仍要启动、检查 Vite 等实际进程
+7. **database/ 目录的 SQL 执行规则** — 详见 workspace 根 \`database/README.md\`(init 已生成)
+8. **生产制品必须包含实际入口与资源** — 新增模块、\`scripts/\`、运行资源时核对真实 ZIP/输出树；模板 helper 使用 Python 3.11+，明确排除源码工具链/缓存/私有文件，存量应用同步更新 helper 和构建入口。隔离于源码验证 prod run/migrate，不能只验证 dev。
+9. **静态输出与入口校验** — React/Vue 构建用 \`--prepare-dir dist\` 排除私有/忽略项并物化安全内链，再用只读 \`--check-dir dist\` 检查实际包装目录。运行入口/JAR/解释器脚本必须是普通文件，本地可执行入口须有执行位；生成脚本保留原权限。准备期间输入变化则失败并保留当前原输出；发布失败保留必要备份，不搬迁业务源码。
+
+## 规范与工具入口
+
+- **app-cli >= 0.3.16 的运行控制**：\`serve\` 是持久 owner，\`run\` 通过统一 owner 控制链提交操作，不能另起一套编排。业务 Stop 确认退出后保留管理面；父取消及旧回调不能重启业务，清理或不可逆写入结果未知仍受保护。交互退出宽限上限为 3 秒，不是整个构建/RPC/恢复预算。迁移告警语义见根 \`database/README.md\`，旧运行时能力须单独核验。
+- **完整开发规范**(manifest 字段/路由/健康检查/日志/部署/排错/铁律):参考
+  **userapp-dev-guide** skill,或 \`npx @nuwax-ai/template-cli docs\` 查阅随 CLI 分发的
+  开发者文档;\`database/\` 目录的 SQL 执行规则见该目录下的 README。
+- **导入已有项目**:按导入指引适配现有业务后，先用 \`app-cli validate --help\` 核对安装能力，
+  支持时在 workspace 根运行 \`app-cli validate --workspace .\`，dev 另加 \`--dev\` 做只读配置检查。
+  旧版兼容检查见同一指引；\`app-cli gen-lock --workspace .\` 仍负责生成派生 lock。
+  配置通过不等于构建或运行成功，不新增启动/停止门禁。
+- **追加 service** 用 template-cli:\`npx @nuwax-ai/template-cli list backend\` 查看后端模板,\`template-cli list\` 查看全部模板,
+  在 workspace 根执行 \`npx @nuwax-ai/template-cli add <模板id>\`;同类模板的第二个实例
+  使用唯一身份。web 实例还需唯一公共路径,如
+  \`add frontend-vue3-vite --service-id portal-web --path /portal/\`;
+  worker 不传 \`--path\`,如 \`add backend-python --kind worker --service-id audit-worker\`。
+- **React/Vue 公共路径**以子项目 TOML 的 \`[proxy].path\` 为准。新模板的 Vite 配置自动读取它,
+  不用改 base 或添加路径环境变量。改后重启 dev、重新构建 prod,并更新导航卡片;细节见路由 skill。
+`;
+}
+
+/**
+ * workspace 根 CLAUDE.md 内容:Claude Code 的 @import 指令,展开读取 AGENTS.md。
+ * 不用软链——Windows 创建软链需开发者权限,且本仓库 pack/release 链路会丢弃软链;
+ * 单行导入零维护成本,与 userapp-next-template 子项目的既有做法一致。
+ */
+export const CLAUDE_MD_CONTENT = '@AGENTS.md\n';
+
+/**
+ * workspace 根 .gitignore:忽略 app-cli / 平台构建发布流程在**根目录**产生的派生产物。
+ *
+ * 只管根级别;各服务目录内的构建产物由各模板自带的 .gitignore 覆盖(生成的用户
+ * workspace 没有别的根 ignore 兜底,服务级缺口会直接暴露,test-local 的
+ * gitignoreCoverage 断言防回归)。init 对已存在的根 .gitignore 做并集合并
+ * (mergeRootGitignore),不覆盖手工条目。
+ */
+export const ROOT_GITIGNORE_ENTRIES = [
+  // app-cli 本地编排产物(gen-lock 生成;独立本地 serve 的部署与日志目录)
+  '/release.lock.toml',
+  '/.local-deploy/',
+  '/.local-logs/',
+  // 平台构建/发布流程在 workspace 根产生的目录(本地开发通常不出现,出现即忽略)
+  '/builds/',
+  '/.run/',
+  '/.previous/',
+  '/.staging/',
+] as const;
+
+export function generateRootGitignore(): string {
+  return `# UserApp workspace 根 .gitignore(@nuwax-ai/template-cli init 生成)
+# 只忽略根级别的派生产物;各服务目录内的构建产物由服务自带的 .gitignore 覆盖。
+# 重新 init 会做并集合并,手工追加的条目不会被覆盖。
+
+${ROOT_GITIGNORE_ENTRIES.join('\n')}
+`;
+}
+
+/**
+ * 已存在根 .gitignore 时做并集合并:保留全部既有行(含手工条目),只追加缺失的
+ * 根产物规则;全部已覆盖时返回原文(不写文件,保持幂等)。
+ * 逐行 trim 精确匹配,同时接受去掉前导 / 的等价写法(如 .local-deploy/)。
+ */
+export function mergeRootGitignore(existing: string): string {
+  const present = new Set(
+    existing
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('#')),
+  );
+  const missing = ROOT_GITIGNORE_ENTRIES.filter(
+    (entry) => !present.has(entry) && !present.has(entry.replace(/^\//, '')),
+  );
+  if (missing.length === 0) return existing;
+  const base = existing.replace(/\s+$/, '');
+  return `${base}\n\n# --- template-cli 追加:workspace 根产物 ignore(并集合并,不覆盖上方手工条目) ---\n${missing.join('\n')}\n`;
+}
+
+/**
+ * 生成 workspace 根 database/README.md(SQL 约定目录的说明)。
+ *
+ * 内容必须与模板仓库根 `database/README.md` **逐字一致**(test-local.mjs 强校验相等,
+ * 防两处漂移):改任一侧时必须同步另一侧。
+ */
+export function generateDatabaseReadme(): string {
+  return `# database 目录 —— 平台自动执行的 SQL 约定
+
+发布（activate）成功后，平台会自动按序执行包内 \`database/\` 目录下的 \`.sql\` 文件。
+
+> ⚠️ **开发阶段不会自动执行**：本地 devrun / 沙箱调试时，本目录里的 SQL 不会被跑——
+> schema 变更需先手动执行（dbx / psql 连开发库），再同步放入本目录随发布生效。
+
+## 执行规则
+
+- **执行顺序**：workspace 根 \`database/\` 先执行（适合建库、扩展、初始化类 SQL），
+  之后各子项目 \`{项目目录}/database/\` 按**目录名字典序**执行；
+  每个目录内按**文件名字典序**（建议用 \`001_\`、\`002_\` 前缀显式控制顺序）。
+- **只扫一层**：仅 \`database/\` 的直接子文件，子目录不递归；非 \`.sql\` 文件
+  （如本 README）不执行也不进发布包。
+- **文件名白名单**：\`[A-Za-z0-9._-]\`（平台防注入校验）——**中文/空格/特殊字符的
+  文件名会被静默跳过**（仅 warn 日志），如 \`建表.sql\` 不会执行。
+- **目标数据库**：app 运行容器内的 PG（\`$POSTGRES_USER\` / \`$POSTGRES_DB\`，容器 ENV）；
+  执行前平台会等 PG 就绪（≤60s），未就绪则本轮整体跳过。
+- **幂等性要求**：每次发布都会重新执行全部 SQL 文件（无执行记录表）——
+  SQL 必须自带幂等性（如 \`CREATE TABLE IF NOT EXISTS\`、\`ON CONFLICT DO NOTHING\`）。
+- **失败语义**：单文件执行失败（语法/约束错误）只记录日志并跳过，**不阻断发布**——
+  \`ON_ERROR_STOP=on\` 只中止当前文件，不自动回滚先前已提交的语句。先核对已生效部分，再修复并重新发布。
+  （部署请求可用 \`auto_execute_sql=false\` 关闭本机制，缺省开。）
+- **事务边界**：需要原子性的 SQL 显式使用事务；\`CREATE DATABASE\` 等不能在事务中执行的命令单独处理。
+  发布接口成功不代表本目录每个文件执行成功，应核对 SQL 执行报告与实际数据库状态。
+
+## 与 \`run.migrate\` 的边界
+
+| | \`database/\` 目录（本约定） | \`run.migrate\`（project.manifest） |
+|---|---|---|
+| 执行者 | 平台（发布 activate 后，rcoder exec psql） | app-cli（服务启动前，应用自管迁移命令） |
+| 失败 | 已确认单文件执行失败时记录日志并跳过 | app-cli >= 0.3.16 在迁移进程/后代退出与清理已确认后记录告警并继续启动；应用作者负责迁移幂等性 |
+| 适用 | 建库/扩展/平台侧初始化 | 应用自身的 schema 迁移（如 drizzle） |
+
+迁移输出保留在服务日志和原任务日志中。上述应用迁移告警策略需要实际 app-cli >= 0.3.16；旧版不能仅靠更新模板说明获得此行为。历史 \`run.migrate\` 回执仅用于诊断，不是启动准入门禁，工作区执行锁仍保持互斥。
+
+父 Stop/取消、旧进程或后代清理未确认时不能继续拉起业务；数据迁移或平台 DBAdmin 的不可逆写入结果未知时，保留对应执行保护，先查询原操作与实际结果，不自动重放未知写入。应用迁移告警不改变这些安全边界，也不代表数据库已经迁移成功。
+
+## 示例
+
+\`\`\`
+database/
+├── 001_create_schema.sql
+└── 002_seed_data.sql
+backend-go/database/
+└── 001_orders_table.sql
+\`\`\`
+`;
+}
+
+/** HTML 文本节点转义(workspace 名/服务名是用户输入,防意外破坏页面结构) */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * 生成 workspace 根目录的 index.html(访问入口默认页)。
+ *
+ * 平台编排(app-cli)会在 workspace 根存在 index.html 且无服务占用 `/` 路由时,
+ * 把入口根路径兜底到该页面。按 init 所选服务生成导航卡片;用户可自行修改,
+ * 改完刷新即生效(每次请求实时读文件)。add 命令追加服务时不会自动更新此文件。
+ */
+export function generateIndexHtml(
+  workspaceName: string,
+  services: Array<{ name: string; proxyPath: string }>,
+): string {
+  const cards = services
+    .map((s) => {
+      const href = s.proxyPath.endsWith('/') ? `${s.proxyPath}` : `${s.proxyPath}/`;
+      return `      <a class="card" href="${href}">
+        <div class="card-title">${escapeHtml(s.name)}</div>
+        <div class="card-path">${escapeHtml(s.proxyPath)}</div>
+      </a>`;
+    })
+    .join('\n');
+
+  return `<!DOCTYPE html>
+<!--
+  ${escapeHtml(workspaceName)} — 访问入口默认页(可自行修改,改完刷新即生效)。
+
+  - 本页是脚手架占位页:开发完成后请把它更新为应用首页——标题改为真实应用名,
+    卡片改为真实功能名与描述(链接保持各服务 [proxy].path 不变);
+  - 服务路由前缀(如 /api/xxx、/react)由各服务 project.manifest.toml [proxy] 决定,恒优先;
+  - 本页面仅作为入口根路径(/)与未匹配路径的兜底展示;
+  - 追加服务后想加导航卡片,直接编辑下方 cards 区域即可。
+-->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(workspaceName)}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f6f7f9; margin: 0; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+    main { text-align: center; padding: 2rem; }
+    h1 { color: #1f2328; font-size: 1.6rem; margin-bottom: .4rem; }
+    p.hint { color: #6a737d; font-size: .9rem; margin-top: 0; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 2rem; max-width: 640px; }
+    .card { display: block; background: #fff; border: 1px solid #e1e4e8; border-radius: 10px; padding: 1.1rem 1.3rem; text-decoration: none; transition: box-shadow .15s, transform .15s; }
+    .card:hover { box-shadow: 0 4px 14px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .card-title { color: #24292f; font-weight: 600; }
+    .card-path { color: #0969da; font-size: .82rem; margin-top: .25rem; font-family: ui-monospace, monospace; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${escapeHtml(workspaceName)}</h1>
+    <p class="hint">UserApp workspace — 服务入口导航(可编辑此页面)</p>
+    <div class="cards">
+${cards}
+    </div>
+  </main>
+</body>
+</html>
+`;
+}
+
+/* ── 内部:构建命令/产物/运行命令的 per-type 推断 ─────────── */
+
+interface BuildInfo {
+  command: string[];
+  artifact: string;
+  run: string[];
+  migrate?: string[];
+  /** dev 阶段编译/准备命令([devbuild] 段;依赖安装/type-check 等前端模板配) */
+  devbuild?: string[];
+  /** dev 阶段热加载启动命令([devrun] 段;前端模板配) */
+  devrun?: string[];
+}
+
+function getBuildInfo(template: TemplateMeta): BuildInfo {
+  switch (template.id) {
+    case 'worker-python':
+      return {
+        command: ['python3', 'scripts/build.py'], artifact: 'artifact.zip', run: ['python3', 'main.py'],
+        devbuild: ['python3', '-m', 'py_compile', 'main.py'], devrun: ['python3', 'main.py'],
+      };
+    case 'backend-go':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'artifact.zip',
+        run: ['./server'],
+      };
+    case 'backend-java':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'artifact.zip',
+        run: ['java', '-jar', 'app.jar'],
+      };
+    case 'backend-python':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'artifact.zip',
+        run: ['python3', 'main.py'],
+      };
+    case 'backend-rust':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'artifact.zip',
+        run: ['./server'],
+      };
+    case 'frontend-react-vite':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        // static 形态：artifact = 静态内容目录（构建产 dist；无 [run] 段——
+        // 平台内置静态托管承载）
+        artifact: 'dist',
+        run: [],
+        // dev 准备/检查：依赖安装前置（vite/tsc 都在 node_modules）+ type-check。
+        // --no-frozen-lockfile：dev 安装允许生成/更新 lockfile（新项目无 lockfile
+        // 时 frozen 直接 ERR_PNPM_NO_LOCKFILE）
+        devbuild: ['sh', '-c', 'pnpm install --no-frozen-lockfile && pnpm run type-check'],
+        devrun: ['pnpm', 'exec', 'vite'],
+      };
+    case 'frontend-vue3-vite':
+      return {
+        command: ['sh', 'scripts/build-standalone.sh'],
+        artifact: 'dist',
+        run: [],
+        // dev 准备：依赖安装（vite dev 跑源码不消费 dist，未配则跳过编译但依赖没人装）。
+        // --no-frozen-lockfile：dev 安装允许生成/更新 lockfile（新项目无 lockfile
+        // 时 frozen 直接 ERR_PNPM_NO_LOCKFILE）
+        devbuild: ['pnpm', 'install', '--no-frozen-lockfile'],
+        devrun: ['pnpm', 'exec', 'vite'],
+      };
+    case 'userapp-next':
+      return {
+        command: ['npm', 'run', 'build:standalone'],
+        artifact: '__ARTIFACT_NAME__.zip',
+        run: ['node', 'server.js'],
+        migrate: ['node', 'migrate.js'],
+        // dev 准备：依赖安装（next dev 跑源码，不消费 standalone 产物）
+        devbuild: ['npm', 'install'],
+        devrun: ['npm', 'run', 'dev'],
+      };
+    default:
+      throw new Error(`Unknown template: ${template.id}`);
+  }
+}
+
+/** 把 argv 数组格式化为 TOML 内联数组 */
+function formatArgv(arr: string[]): string {
+  return '[' + arr.map((s) => `"${s}"`).join(', ') + ']';
+}

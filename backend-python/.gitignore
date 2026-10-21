@@ -1,0 +1,16 @@
+artifact.zip
+deps/
+__pycache__/
+logs/
+*.pyc
+
+
+.pip-cache/
+.deps-stamp*
+.deps-build.lock
+.deps-install-*/
+.artifact-*.zip
+
+# 测试/本地调试缓存（README 指引用 pytest 跑 tests/）
+.pytest_cache/
+.venv/

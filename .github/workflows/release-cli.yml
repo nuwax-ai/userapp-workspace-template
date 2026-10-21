@@ -1,0 +1,169 @@
+name: Release CLI
+
+# ─── Tag 规则 ──────────────────────────────────────────────
+# 正式版:  v0.1.0          → npm publish --tag latest
+# 测试版:  v0.1.0-beta.1   → npm publish --tag beta
+#
+# tag 必须与已提交的 cli/package.json / package-lock.json 版本一致。
+# 正式版升级先 npm version patch --no-git-tag-version，再提交并创建对应 tag。
+#
+# 常用流程:
+#   git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1   # 发测试版
+#   # 验证没问题后:
+#   git tag v0.1.0 && git push origin v0.1.0                 # 发正式版
+# ───────────────────────────────────────────────────────────
+
+on:
+  push:
+    tags:
+      # 正式版: v1.0.0 / v0.2.3
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      # 测试版: v1.0.0-beta.1 / v0.2.0-alpha.3 / v1.0.0-rc.1
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号(如 0.1.0 或 0.1.0-beta.1)'
+        required: true
+        default: '0.1.0-beta.1'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      prerelease: ${{ steps.parse.outputs.prerelease }}
+      dist_tag: ${{ steps.parse.outputs.dist_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@nuwax-ai'
+
+      # ── 从 tag 名或手动输入解析版本号 + 判断是否 prerelease ──
+      - name: Parse version from tag
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # tag 推送:GITHUB_REF = refs/tags/v0.1.0-beta.1
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            # 手动触发:用 inputs.version
+            TAG="v${{ inputs.version }}"
+            # 去掉可能重复的 v 前缀
+            TAG="v${TAG#v}"
+          fi
+
+          VERSION="${TAG#v}"                    # 去掉 v 前缀 → 0.1.0-beta.1
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📝 版本号: $VERSION"
+
+          # 判断是否 prerelease(含 - 的就是)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+            # 提取 prerelease 标识: 0.1.0-beta.1 → beta
+            PRE_ID=$(echo "$VERSION" | sed -n 's/.*-\([a-zA-Z]*\).*/\1/p')
+            echo "dist_tag=${PRE_ID:-beta}" >> $GITHUB_OUTPUT
+            echo "🏷️  dist-tag: ${PRE_ID:-beta} (测试版)"
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "dist_tag=latest" >> $GITHUB_OUTPUT
+            echo "🏷️  dist-tag: latest (正式版)"
+          fi
+
+      # ── 校验/同步版本号 ────────────────────────────────────
+      # tag 推送时,两个版本文件已在本地同步提交,再在该 commit 上打 tag,
+      # 这里只需校验一致;手动触发时才需要写入。
+      - name: Verify/sync version
+        working-directory: cli
+        run: |
+          TAG_VERSION="${{ steps.parse.outputs.version }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "tag 版本: $TAG_VERSION"
+          echo "package.json 版本: $PKG_VERSION"
+
+          if [ "$TAG_VERSION" = "$PKG_VERSION" ]; then
+            echo "✓ 版本一致"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "⚠ 手动触发,版本不一致,写入..."
+            npm version "$TAG_VERSION" --no-git-tag-version --allow-pre-releases
+          else
+            echo "✗ tag 版本($TAG_VERSION)和 package.json 版本($PKG_VERSION)不一致!"
+            echo "  请先同步并提交 cli/package.json 与 package-lock.json，再创建匹配版本的 tag。"
+            exit 1
+          fi
+
+      - name: Setup Python for artifact packaging tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        working-directory: cli
+        run: npm ci
+
+      - name: Pack templates
+        working-directory: cli
+        run: npm run pack
+
+      - name: Verify packed templates
+        run: |
+          echo "=== 打包结果 ==="
+          for d in cli/templates/*/; do
+            count=$(find "$d" -type f | wc -l | tr -d ' ')
+            echo "  $(basename $d): ${count} 文件"
+          done
+
+      - name: Build CLI
+        working-directory: cli
+        run: npm run build
+
+      - name: Test generated workspaces
+        working-directory: cli
+        run: npm test
+
+      - name: Test runtime artifact packaging and isolated entrypoints
+        run: |
+          export TEMPLATE_NODE_BIN="$(node -p 'process.execPath')"
+          python3 -m unittest discover -s backend-python/tests -p test_artifact_pack.py -v
+
+      # ── 发布到 npm ─────────────────────────────────────────
+      - name: Publish to npm
+        working-directory: cli
+        run: npm publish --access public --tag ${{ steps.parse.outputs.dist_tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # ── 发布摘要 ───────────────────────────────────────────
+      - name: Summary
+        working-directory: cli
+        run: |
+          VERSION="${{ steps.parse.outputs.version }}"
+          DIST_TAG="${{ steps.parse.outputs.dist_tag }}"
+          PRERELEASE="${{ steps.parse.outputs.prerelease }}"
+
+          if [ "$PRERELEASE" = "true" ]; then
+            BADGE="🧪 测试版"
+            INSTALL="npm install @nuwax-ai/template-cli@$DIST_TAG"
+          else
+            BADGE="🚀 正式版"
+            INSTALL="npm install @nuwax-ai/template-cli"
+          fi
+
+          echo "### $BADGE \`@nuwax-ai/template-cli@$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 属性 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| npm dist-tag | \`$DIST_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 安装命令 | \`$INSTALL\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| 使用 | \`npx @nuwax-ai/template-cli@$DIST_TAG list\` |" >> $GITHUB_STEP_SUMMARY

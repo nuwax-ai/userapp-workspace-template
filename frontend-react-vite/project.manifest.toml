@@ -1,0 +1,35 @@
+schema_version = 1
+
+[project]
+service_id = "frontend-react-vite"
+name = "React Vite Frontend"
+type = "static"
+
+[build]
+command = ["sh", "scripts/build-standalone.sh"]
+# static 形态：artifact = 静态内容目录（构建产出 dist，无需打包 zip）
+artifact = "dist"
+
+# dev 阶段编译（可选，dev 准备/检查命令，不要求产出 artifact）：依赖安装前置
+# （增量，秒级；vite/tsc 都在 node_modules）+ 轻量类型检查，替代全量构建。
+# --no-frozen-lockfile：dev 安装允许生成/更新 lockfile（无 lockfile 时 frozen
+# 直接 ERR_PNPM_NO_LOCKFILE）。仅在配了 [devrun] 的源码态 dev 链路生效；
+# 可部署性检查走 /api/v1/userapp/build。
+[devbuild]
+command = ["sh", "-c", "pnpm install --no-frozen-lockfile && pnpm run type-check"]
+
+# dev 阶段启动（可选）：vite dev server 热加载跑源码，改码即生效。static 服务
+# 配了 [devrun] 时 dev 源码态端口让给 dev server（托管跳过）；产物态恒由平台
+# 内置静态托管承载（无进程，启动恒成功）。见 vite.config.ts server 段（PORT 对接）。
+[devrun]
+command = ["pnpm", "exec", "vite"]
+
+# static 托管内置 /health 探针端点（固定 200）。
+[health]
+readiness_path = "/health"
+
+[proxy]
+path = "/react"
+strip_prefix = true
+# dev 的 Vite 处理 /react/；prod 静态托管接收剥前缀后的 /assets/。
+dev_strip_prefix = false

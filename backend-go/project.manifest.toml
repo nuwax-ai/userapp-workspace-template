@@ -1,0 +1,26 @@
+schema_version = 1
+
+[project]
+service_id = "backend-go"
+name = "Go Backend"
+type = "go"
+
+[build]
+command = ["sh", "scripts/build-standalone.sh"]
+artifact = "artifact.zip"
+
+[run]
+command = ["./server"]
+
+# startup/liveness 用默认 /health；readiness 走更深的 /ready（DB 等依赖检查）。
+[health]
+readiness_path = "/ready"
+
+[proxy]
+path = "/api/go/"
+strip_prefix = true
+
+[[logs.sources]]
+id = "application"
+glob = "backend-go*.log*"
+format = "jsonl"

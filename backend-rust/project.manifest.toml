@@ -1,0 +1,26 @@
+schema_version = 1
+
+[project]
+service_id = "backend-rust"
+name = "Rust Backend"
+type = "rust"
+
+[build]
+command = ["sh", "scripts/build-standalone.sh"]
+artifact = "artifact.zip"
+
+[run]
+command = ["./server"]
+
+# startup/liveness 用默认 /health；readiness 走更深的 /ready。
+[health]
+readiness_path = "/ready"
+
+[proxy]
+path = "/api/rust/"
+strip_prefix = true
+
+[[logs.sources]]
+id = "application"
+glob = "backend-rust.log*"
+format = "jsonl"

@@ -1,0 +1,76 @@
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  datasource:
+    # 缺省凭据=平台 PG 初始账号 dev/dev（env 注入的常规链路不会用到缺省；
+    # 改过 PG 密码后必须显式传 POSTGRES_* 环境变量，静默回落会表现为密码错误）
+    url: jdbc:postgresql://${PGHOST:localhost}:${PGPORT:5432}/${POSTGRES_DB:dev}?sslmode=disable
+    username: ${POSTGRES_USER:dev}
+    password: ${POSTGRES_PASSWORD:dev}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: backend-java-pool
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:10}
+      minimum-idle: ${HIKARI_MIN_IDLE:2}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: ${HIKARI_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${HIKARI_MAX_LIFETIME_MS:1800000}
+      validation-timeout: 5000
+      keepalive-time: 300000
+  application:
+    name: backend-java
+  lifecycle:
+    # 平台 SIGTERM 后给 25s 排空 in-flight（< app-cli 30s force-kill），避免被强杀丢请求。
+    timeout-per-shutdown-phase: 25s
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # 显式启用 liveness/readiness 探针组：否则非 K8s 环境下
+      # /actuator/health/readiness 与 /liveness 不注册（404），平台永远判不了健康。
+      probes:
+        enabled: true
+      show-details: when_authorized
+      group:
+        # readiness 覆盖必需依赖（数据库）：DB 异常时 readiness 降级，摘除流量。
+        # liveness 维持只含 livenessState，避免 DB 抖动触发 pod 重启风暴。
+        readiness:
+          include: readinessState, db
+
+logging:
+  level:
+    root: INFO
+    com.example.backendjava: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{36} - %msg%n"
+    # 文件日志复用 console pattern，确保落盘行带 traceId（平台采集的是文件）。
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [%X{traceId:-}] %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java.log}
+  logback:
+    rollingpolicy:
+      # 不压缩（无 .gz 后缀）：manifest logs.glob 会匹配轮转文件，
+      # 压缩产物会以二进制乱码进日志采集查询面。
+      file-name-pattern: ${LOG_FILE:${APP_LOG_DIR:logs}/backend-java}.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 50MB
+      max-history: 14
+      total-size-cap: 1GB
