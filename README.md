@@ -549,3 +549,11 @@ React/Vue 新模板的 Vite dev/build base 自动读取子项目 `[proxy].path`�
 Next 生产构建尊重显式 `packageManager`（已安装的 npm/pnpm 精确版本）或唯一现有锁文件：npm 使用 `npm ci`，pnpm 使用 `pnpm install --frozen-lockfile`。双锁未声明选择时明确报歧义；声明的管理器缺少对应锁而存在其他锁时，不忽略有效锁或静默切换。两种锁均缺失时，保留模板原有首次安装初始化流程，明确记录本轮无锁输入、生成的锁及摘要，后续构建复用该锁。React/Vue 保留既有 pnpm 安装/首次初始化契约。存量 Next 项目同步 `scripts/install-locked.mjs` 与构建入口；CLI pack 随 Next 模板复制安装器，不自动升级管理器或改锁版本。
 
 共享 helper 的维护源是 `backend-python/scripts/artifact_pack.py`；改动后同步各模板副本，CLI pack 会把这份源文件复制进每个生成模板的 `scripts/`。存量应用需一起更新构建入口与 helper，CLI/模板升级不自动改写旧项目。
+
+---
+
+## 12. 许可证
+
+本项目采用 [Apache License 2.0](LICENSE) 开源。
+
+在遵守该协议(保留版权声明、注明修改、随分发附带 LICENSE 副本)的前提下,你可以自由地使用、修改和再分发本仓库的模板与 CLI 源码,包括用于商业用途。第三方模板/依赖(如 shadcn/ui 组件)保留其各自的许可证,不随本协议改变。

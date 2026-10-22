@@ -61,7 +61,5 @@
     "typescript",
     "template",
     "starter"
-  ],
-  "author": "XAGI Team",
-  "license": "MIT"
+  ]
 }
